@@ -105,6 +105,15 @@ class LiveLatencySettingsTest {
     }
 
     @Test
+    fun maxIvsCatchupSpeedIgnoresNaN() {
+        assertEquals(
+            1.08f,
+            LiveLatencySettings.maxIvsCatchupSpeed(LiveLatencySettings.PROFILE_BALANCED, Float.NaN),
+            0.001f
+        )
+    }
+
+    @Test
     fun toLiveConfigurationWithCatchupEnabledSetsConfiguredSpeeds() {
         val config = LiveLatencySettings.preset(LiveLatencySettings.PROFILE_LOWEST)
         val liveConfig = LiveLatencySettings.toLiveConfiguration(config, catchupEnabled = true)

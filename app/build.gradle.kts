@@ -220,10 +220,10 @@ android {
 }
 
 dependencies {
-    implementation("com.google.guava:guava:33.7.1-android") // exoplayer
+    implementation("com.google.guava:guava:33.7.2-android") // exoplayer
     implementation("com.google.android.gms:play-services-cronet:18.1.1")
     implementation("androidx.credentials:credentials:1.3.0")
-    implementation("com.google.android.libraries.identity.googleid:googleid:1.1.1")
+    implementation("com.google.android.libraries.identity.googleid:googleid:1.2.1")
     implementation("androidx.credentials:credentials-play-services-auth:1.3.0")
     implementation(libs.material)
     implementation(libs.markwon.core)

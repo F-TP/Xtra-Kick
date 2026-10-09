@@ -83,16 +83,6 @@
                 android:textColor="?android:attr/textColorSecondary"
                 tools:text="Duration 69:13:37" />
 
-            <TextView
-                android:id="@+id/sizeEstimate"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_gravity="center"
-                android:layout_marginTop="5dp"
-                android:textAppearance="?attr/textAppearanceBodyMedium"
-                android:textColor="?android:attr/textColorSecondary"
-                tools:text="Estimated size: ~1.2 GB" />
-
             <LinearLayout
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
@@ -149,6 +139,22 @@
             </LinearLayout>
         </LinearLayout>
 
+        <TextView
+            android:id="@+id/sizeEstimate"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="5dp"
+            android:textAppearance="?attr/textAppearanceBodyMedium"
+            android:textColor="?android:attr/textColorSecondary"
+            android:visibility="gone"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintLeft_toLeftOf="parent"
+            app:layout_constraintRight_toRightOf="parent"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toBottomOf="@id/timeLayout"
+            tools:text="Estimated size: ~1.2 GB"
+            tools:visibility="visible" />
+
         <include
             android:id="@+id/storageSelectionContainer"
             layout="@layout/storage_selection"
@@ -159,7 +165,7 @@
             app:layout_constraintLeft_toLeftOf="parent"
             app:layout_constraintEnd_toEndOf="parent"
             app:layout_constraintRight_toRightOf="parent"
-            app:layout_constraintTop_toBottomOf="@id/timeLayout"
+            app:layout_constraintTop_toBottomOf="@id/sizeEstimate"
             tools:visibility="visible" />
 
         <CheckBox

@@ -949,7 +949,8 @@ class SettingsActivity : AppCompatActivity() {
                 AppConstants.PLAYER_PICTURE_IN_PICTURE,
                 AppConstants.PIP_SHOW_AUDIO_ONLY,
                 AppConstants.PIP_SHOW_MUTE,
-                AppConstants.PIP_REDUCED_VOLUME_LEVEL
+                AppConstants.PIP_REDUCED_VOLUME_LEVEL,
+                AppConstants.PIP_UNMUTE_ON_FULLSCREEN
             ).forEach { key ->
                 findPreference<Preference>(key)?.apply {
                     isVisible = isPipSupported
@@ -1336,10 +1337,7 @@ class SettingsActivity : AppCompatActivity() {
     class BufferSettingsFragment : MaterialPreferenceFragment() {
         override fun onCreatePreferences(savedInstanceState: Bundle?, rootKey: String?) {
             val prefs = requireContext().prefs()
-            if (LiveLatencySettings.materializeProfileValues(prefs)) {
-                (requireActivity() as? SettingsActivity)?.setResult()
-                stopPlaybackServices()
-            }
+            LiveLatencySettings.materializeProfileValues(prefs)
             setPreferencesFromResource(R.xml.buffer_preferences, rootKey)
             bindLatencyPreferences()
         }
@@ -1375,24 +1373,18 @@ class SettingsActivity : AppCompatActivity() {
 
         private fun bindLatencyPreferences() {
             val prefs = requireContext().prefs()
-            val settingsActivity = requireActivity() as? SettingsActivity
             syncLatencyPreferenceValues()
             findPreference<ListPreference>(AppConstants.PLAYER_LATENCY_PROFILE)?.onPreferenceChangeListener = Preference.OnPreferenceChangeListener { _, newValue ->
                 val profile = newValue?.toString() ?: LiveLatencySettings.DEFAULT_PROFILE
                 LiveLatencySettings.applyPreset(prefs, profile)
-                settingsActivity?.setResult()
                 syncLatencyPreferenceValues()
-                stopPlaybackServices()
                 true
             }
             findPreference<SwitchPreferenceCompat>(AppConstants.PLAYER_IVS_LATENCY_CATCHUP)?.onPreferenceChangeListener = Preference.OnPreferenceChangeListener { _, _ ->
-                settingsActivity?.setResult()
                 true
             }
             latencyEditKeys.forEach { key ->
                 findPreference<EditTextPreference>(key)?.onPreferenceChangeListener = Preference.OnPreferenceChangeListener { _, _ ->
-                    settingsActivity?.setResult()
-                    stopPlaybackServices()
                     true
                 }
             }
@@ -1403,11 +1395,6 @@ class SettingsActivity : AppCompatActivity() {
             latencyEditKeys.forEach { key ->
                 findPreference<EditTextPreference>(key)?.text = prefs.getString(key, "")
             }
-        }
-
-        private fun stopPlaybackServices() {
-            requireContext().stopService(Intent(requireContext(), PlaybackService::class.java))
-            requireContext().stopService(Intent(requireContext(), IvsPlayerService::class.java))
         }
 
         companion object {

@@ -814,10 +814,26 @@ class MainViewModel @Inject constructor(
                     path
                 }
             }
+            // Prefer Kick's prepared clip MP4 over the source HLS playlist
+            // (~130MB vs ~660MB for the same clip). Null falls back to [url].
+            val resolvedUrl = runCatching { kickRepository.getClipDownloadUrl(clipId.orEmpty()) }.getOrNull() ?: url
+            val vodOffsetMs = vodOffset?.toLong()?.times(1000L)
+            val durationMs = duration?.toLong()?.times(1000L)
+            // VOD-backed HLS variants span the whole stream: trim the download
+            // to the clip window (same basis the chat replay already uses).
+            // Self-contained clip assets (clips.kick.com playlists, prepared
+            // MP4s) already are exactly the clip — trimming them by the VOD
+            // offset would collapse the range to a single segment.
+            val clipRange = if (!resolvedUrl.substringBefore('?').endsWith(".mp4", ignoreCase = true) &&
+                !url.substringBefore('?').contains("clips.kick.com", ignoreCase = true) &&
+                vodOffsetMs != null && durationMs != null && durationMs > 0
+            ) {
+                Pair(vodOffsetMs, vodOffsetMs + durationMs)
+            } else null
             val videoId = offlineRepository.saveVideo(
                 OfflineVideo(
-                    sourceUrl = url,
-                    sourceStartPosition = vodOffset?.toLong()?.times(1000L),
+                    sourceUrl = resolvedUrl,
+                    sourceStartPosition = vodOffsetMs,
                     name = title,
                     channelId = channelId,
                     channelLogin = channelLogin,
@@ -827,7 +843,9 @@ class MainViewModel @Inject constructor(
                     gameId = gameId,
                     gameSlug = gameSlug,
                     gameName = gameName,
-                    duration = duration?.toLong()?.times(1000L),
+                    duration = durationMs,
+                    fromTime = clipRange?.first,
+                    toTime = clipRange?.second,
                     uploadDate = uploadDate?.let { KickApiHelper.parseIso8601DateUTC(it) },
                     downloadDate = System.currentTimeMillis(),
                     downloadPath = downloadPath,

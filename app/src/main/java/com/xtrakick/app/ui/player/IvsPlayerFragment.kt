@@ -6,6 +6,7 @@ import android.content.Intent
 import android.content.ServiceConnection
 import android.net.Uri
 import android.os.Build
+import android.os.Bundle
 import android.os.IBinder
 import android.os.SystemClock
 import android.util.Log
@@ -49,6 +50,7 @@ class IvsPlayerFragment : PlayerFragment() {
     private var sameUrlRetryAttempted = false
     private var resumeOnStart = false
     private var backgroundAudioTransitionRequested = false
+    private var backgroundSaverApplied = false
     private var isCatchingUp = false
     private var pendingAutomaticQualityLog: String? = null
     private var pendingAutomaticQualityTransport: NetworkMonitor.NetworkType? = null
@@ -59,6 +61,12 @@ class IvsPlayerFragment : PlayerFragment() {
     private var lastBandwidthKbps: Long? = null
     private var pendingQualityNudge: Quality? = null
     private var qualityNudgeSafetyRunnable: Runnable? = null
+    private var downscaleRecoveryTicks = 0
+    private var lastQualityNudgeTimeMs = 0L
+
+    private fun isQualityLockEnabled(): Boolean {
+        return prefs.getBoolean(AppConstants.PLAYER_LOCK_QUALITY, false)
+    }
 
     private fun playerDebugLog(message: String) {
         if (BuildConfig.DEBUG && prefs.getBoolean(AppConstants.DEBUG_PLAYER_BUFFER_LOGS, false)) {
@@ -89,12 +97,53 @@ class IvsPlayerFragment : PlayerFragment() {
         }
     }
 
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        if (savedInstanceState != null) {
+            resumeOnStart = savedInstanceState.getBoolean(KEY_RESUME_ON_START, false)
+        }
+    }
+
+    override fun onSaveInstanceState(outState: Bundle) {
+        super.onSaveInstanceState(outState)
+        outState.putBoolean(KEY_RESUME_ON_START, resumeOnStart)
+    }
+
+    override fun onResume() {
+        super.onResume()
+        if (player != null && viewModel.quality != null && viewModel.quality != AUTO_QUALITY && !backgroundSaverApplied) {
+            val lockQuality = isQualityLockEnabled()
+            if (lockQuality && player?.isAutoQualityMode == true) {
+                changeQuality(viewModel.quality)
+            } else if (!lockQuality && player?.isAutoQualityMode == false) {
+                applyQualityCeiling("quality-unlock", qualitiesByKey[viewModel.quality])
+            }
+        }
+        if (surfaceCreated && viewModel.quality != AUDIO_ONLY_QUALITY) {
+            attachSurfaceIfAvailable()
+        }
+        val boundService = playbackService
+        if (boundService?.isPlaybackRequested() == true && player?.state != Player.State.PLAYING) {
+            boundService.play()
+            clearFreezeFrame()
+            updatePlayingState()
+        }
+    }
+
     override fun onStart() {
         super.onStart()
         val callback = object : SurfaceHolder.Callback {
             override fun surfaceCreated(holder: SurfaceHolder) {
                 surfaceCreated = true
-                playbackService?.attachSurface(holder.surface)
+                val service = playbackService
+                if (viewModel.quality != AUDIO_ONLY_QUALITY) {
+                    service?.attachSurface(holder.surface)
+                }
+                if (service?.isPlaybackRequested() == true && player?.state != Player.State.PLAYING) {
+                    service.play()
+                }
+                clearFreezeFrame()
+                updatePlayingState()
             }
 
             override fun surfaceChanged(holder: SurfaceHolder, format: Int, width: Int, height: Int) = Unit
@@ -130,9 +179,16 @@ class IvsPlayerFragment : PlayerFragment() {
                 // its own resolve instead of briefly resuming the previous stream.
                 currentUrl = currentUrl ?: requireArguments().getString(KEY_RESOLVED_STREAM_URL) ?: boundService.currentUrl
                 boundService.setBackgroundPlaybackEnabled(false)
-                if (surfaceCreated) {
+                if (surfaceCreated && viewModel.quality != AUDIO_ONLY_QUALITY) {
                     boundService.attachSurface(binding.playerSurface.holder.surface)
                 }
+                if (viewModel.quality == AUDIO_ONLY_QUALITY) {
+                    binding.playerSurface.visibility = View.GONE
+                    applyAudioSaverCeiling()
+                } else {
+                    binding.playerSurface.visibility = View.VISIBLE
+                }
+                restoreForegroundCeiling()
                 val listener = object : Player.Listener() {
                     override fun onCue(cue: Cue) = Unit
 
@@ -147,6 +203,8 @@ class IvsPlayerFragment : PlayerFragment() {
                             resetCatchupState()
                         }
                         if (state == Player.State.BUFFERING) {
+                            downscaleRecoveryTicks = 0
+                            cancelQualityNudge()
                             val bufferingPlayer = player
                             if (bufferingPlayer != null) {
                                 playerDebugLog(
@@ -198,6 +256,8 @@ class IvsPlayerFragment : PlayerFragment() {
                     override fun onRebuffering() {
                         binding.bufferingIndicator.isVisible = true
                         resetCatchupState()
+                        downscaleRecoveryTicks = 0
+                        cancelQualityNudge()
                     }
 
                     override fun onSeekCompleted(position: Long) {
@@ -213,13 +273,16 @@ class IvsPlayerFragment : PlayerFragment() {
                             playerDebugLog("IVS quality nudge fulfilled: reached ${quality.name}, re-arming auto ceiling")
                             runIvsOp("quality-nudge-rearm") {
                                 it.setAutoQualityMode(true)
-                                it.setAutoMaxQuality(nudgeTarget)
+                                val autoMax = if (viewModel.quality == AUTO_QUALITY) null else nudgeTarget
+                                it.setAutoMaxQuality(autoMax)
                             }
                         }
                         if (player?.isAutoQualityMode == false && nudgeTarget == null) {
                             val key = qualitiesByKey.entries.find { it.value == quality }?.key
                             if (key != null) {
-                                viewModel.quality = key
+                                if (!isQualityLockEnabled() || viewModel.quality == null) {
+                                    viewModel.quality = key
+                                }
                                 setQualityText()
                                 if (pendingAutomaticQualityLog == key) {
                                     val transport = pendingAutomaticQualityTransport
@@ -238,10 +301,13 @@ class IvsPlayerFragment : PlayerFragment() {
                 }
                 player?.addListener(listener)
                 playerListener = listener
-                if (resumeOnStart && player?.state != Player.State.PLAYING) {
+                if ((resumeOnStart || boundService.isPlaybackRequested()) && player?.state != Player.State.PLAYING) {
                     boundService.play()
                     resumeOnStart = false
+                    clearFreezeFrame()
                     updatePlayingState()
+                } else if (player?.state == Player.State.PLAYING) {
+                    clearFreezeFrame()
                 }
                 recoverEmptyIvsServiceIfNeeded()
                 if (player?.state == Player.State.READY || player?.state == Player.State.PLAYING || player?.state == Player.State.BUFFERING) {
@@ -389,7 +455,10 @@ class IvsPlayerFragment : PlayerFragment() {
                 viewModel.quality = previousQuality
             }
             changePlayerMode()
-            if (viewModel.quality != previousQuality || !qualitiesByKey.containsKey(previousQuality)) {
+            val shouldApply = viewModel.quality != previousQuality ||
+                !qualitiesByKey.containsKey(previousQuality) ||
+                (isQualityLockEnabled() && ivsPlayer.isAutoQualityMode && viewModel.quality != AUTO_QUALITY)
+            if (shouldApply) {
                 changeQuality(viewModel.quality)
             } else {
                 setQualityText()
@@ -401,7 +470,9 @@ class IvsPlayerFragment : PlayerFragment() {
         val resolvedUrl = url?.takeIf { it.isNotBlank() } ?: return
         hideOfflineOverlay()
         recoveryInProgress = false
+        backgroundSaverApplied = false
         cancelQualityNudge()
+        lastQualityNudgeTimeMs = 0L
         if (currentUrl != resolvedUrl) {
             sameUrlRetryAttempted = false
         }
@@ -515,8 +586,8 @@ class IvsPlayerFragment : PlayerFragment() {
         with(binding.playerControls) {
             val latency = player?.liveLatency?.takeIf { it > 0L }
             val catchupEnabled = prefs.getBoolean(AppConstants.PLAYER_IVS_LATENCY_CATCHUP, true)
-            val latencyConfig = if (catchupEnabled) LiveLatencySettings.resolve(prefs) else null
-            val targetOffsetMs = latencyConfig?.targetOffsetMs
+            val latencyConfig = LiveLatencySettings.resolve(prefs)
+            val targetOffsetMs = latencyConfig.targetOffsetMs
             updateLatency(latency, targetOffsetMs)
 
             val ivsPlayer = player
@@ -529,9 +600,46 @@ class IvsPlayerFragment : PlayerFragment() {
                 val forwardBufferMs = (bufferedPosition - currentPosition).coerceAtLeast(0L)
                 val now = SystemClock.uptimeMillis()
 
-                val isDownscaled = isDownscaled(ivsPlayer.quality, getTargetQuality())
+                val targetQuality = getTargetQuality()
+                val isDownscaled = isDownscaled(ivsPlayer.quality, targetQuality)
 
-                if (catchupEnabled && latency != null && targetOffsetMs != null) {
+                // Option A: Auto-recovery watchdog when downscaled in adaptive mode
+                if (ivsPlayer.isAutoQualityMode &&
+                    isDownscaled &&
+                    targetQuality != null &&
+                    !backgroundSaverApplied &&
+                    !isQualityLockEnabled()
+                ) {
+                    val minRecoveryBufferMs = KickLivePlayback.minRecoveryBufferMs(latencyConfig.rebufferMs)
+                    val isBufferHealthy = forwardBufferMs >= minRecoveryBufferMs
+                    val hasSufficientBandwidth = KickLivePlayback.hasSufficientBandwidth(
+                        bandwidthEstimateBps = ivsPlayer.bandwidthEstimate,
+                        targetBitrateBps = targetQuality.bitrate
+                    )
+
+                    if (isBufferHealthy && hasSufficientBandwidth) {
+                        downscaleRecoveryTicks++
+                        val cooldownElapsed = (now - lastQualityNudgeTimeMs) >= QUALITY_RECOVERY_COOLDOWN_MS
+                        if (downscaleRecoveryTicks >= DOWNSCALE_RECOVERY_REQUIRED_TICKS &&
+                            cooldownElapsed &&
+                            pendingQualityNudge == null
+                        ) {
+                            downscaleRecoveryTicks = 0
+                            lastQualityNudgeTimeMs = now
+                            playerDebugLog(
+                                "IVS auto-recovery: buffer=${forwardBufferMs}ms (min ${minRecoveryBufferMs}ms), " +
+                                    "bw=${ivsPlayer.bandwidthEstimate / 1000}kbps -> nudging up to ${targetQuality.name}"
+                            )
+                            nudgeQualityToTarget(targetQuality)
+                        }
+                    } else {
+                        downscaleRecoveryTicks = 0
+                    }
+                } else {
+                    downscaleRecoveryTicks = 0
+                }
+
+                if (catchupEnabled && latency != null) {
                     val isInGracePeriod = (now - lastBufferRecoveryTimeMs) < LiveLatencySettings.REBUFFER_GRACE_PERIOD_MS
                     // Only the lowest-latency profile may exceed 1.08x (max 1.12x).
                     val profile = prefs.getString(AppConstants.PLAYER_LATENCY_PROFILE, LiveLatencySettings.DEFAULT_PROFILE)
@@ -543,12 +651,22 @@ class IvsPlayerFragment : PlayerFragment() {
                         forwardBufferMs = forwardBufferMs,
                         isInGracePeriod = isInGracePeriod,
                         maxSpeedLimit = maxSpeed,
-                        isCurrentlyCatchingUp = isCatchingUp
+                        isCurrentlyCatchingUp = isCatchingUp,
+                        minSpeedLimit = latencyConfig.minPlaybackSpeed
                     )
 
-                    // Coordinate catch-up with resolution recovery: do NOT accelerate playback
-                    // while playing below the target resolution, so the buffer is not depleted.
-                    val speedToApply = if (isDownscaled) null else desiredSpeed
+                    // Coordinate catch-up with resolution recovery:
+                    // Avoid depleting thin buffers while downscaled from a manual target quality.
+                    // However, if forward buffer is comfortably deep (at least 2x rebuffer threshold, min 3000ms),
+                    // or if playing on Auto, catch-up can safely run.
+                    val shouldHoldCatchupForResolution = viewModel.quality != AUTO_QUALITY &&
+                        isDownscaled &&
+                        !KickLivePlayback.isBufferSafeForDownscaledCatchup(forwardBufferMs, latencyConfig.rebufferMs)
+                    val speedToApply = if (shouldHoldCatchupForResolution) {
+                        null
+                    } else {
+                        desiredSpeed
+                    }
 
                     if (speedToApply != null) {
                         if (ivsPlayer.playbackRate != speedToApply) {
@@ -566,6 +684,7 @@ class IvsPlayerFragment : PlayerFragment() {
                     resetCatchupState()
                 }
             } else {
+                downscaleRecoveryTicks = 0
                 resetCatchupState()
             }
 
@@ -682,24 +801,22 @@ class IvsPlayerFragment : PlayerFragment() {
         // instead of stalling on a locked rendition.
         when (selectedQuality) {
             AUTO_QUALITY -> {
-                cancelQualityNudge()
-                runIvsOp("quality-auto") {
-                    it.setAutoQualityMode(true)
-                    it.setAutoMaxQuality(null)
-                }
+                applyQualityCeiling("quality-auto", null)
             }
             else -> qualitiesByKey[selectedQuality]?.let { targetQuality ->
-                val activeQuality = player?.quality
-                val isDownscaled = activeQuality != null && isDownscaled(activeQuality, targetQuality)
-                if (isDownscaled) {
-                    // Active resolution nudge: player is currently below targetQuality.
-                    // Step up to targetQuality, then re-arm adaptive ceiling upon reaching it.
-                    nudgeQualityToTarget(targetQuality)
+                if (isQualityLockEnabled()) {
+                    applyQualityCeiling("quality-lock", targetQuality)
                 } else {
-                    cancelQualityNudge()
-                    runIvsOp("quality-ceiling") {
-                        it.setAutoQualityMode(true)
-                        it.setAutoMaxQuality(targetQuality)
+                    val activeQuality = player?.quality
+                    val isDownscaled = activeQuality != null && isDownscaled(activeQuality, targetQuality)
+                    if (isDownscaled && !wasAudioOnly) {
+                        // Active resolution nudge: player is currently below targetQuality.
+                        // Step up to targetQuality, then re-arm adaptive ceiling upon reaching it.
+                        // Skipped after audio-only: the forced jump outruns the 480p buffer
+                        // and rebuffers. Ceiling-only lets ABR climb smoothly instead.
+                        nudgeQualityToTarget(targetQuality)
+                    } else {
+                        applyQualityCeiling("quality-ceiling", targetQuality)
                     }
                 }
             }
@@ -779,17 +896,66 @@ class IvsPlayerFragment : PlayerFragment() {
     }
 
     override fun startAudioOnly() {
-        if (viewModel.quality == AUDIO_ONLY_QUALITY) {
-            return
+        if (viewModel.quality != AUDIO_ONLY_QUALITY) {
+            backgroundAudioTransitionRequested = true
+            viewModel.restoreQuality = true
+            viewModel.previousQuality = viewModel.quality
+            viewModel.quality = AUDIO_ONLY_QUALITY
+            playbackService?.attachSurface(null)
+            binding.playerSurface.visibility = View.GONE
         }
-        backgroundAudioTransitionRequested = true
-        viewModel.restoreQuality = true
-        viewModel.previousQuality = viewModel.quality
-        viewModel.quality = AUDIO_ONLY_QUALITY
-        playbackService?.attachSurface(null)
-        binding.playerSurface.visibility = View.GONE
+        applyAudioSaverCeiling()
         changePlayerMode()
         setQualityText()
+    }
+
+    /**
+     * Applies quality ceiling or hard-locks quality if player_lock_quality is enabled.
+     * Audio-saver ceiling always stays in ABR to conserve bandwidth in the background.
+     */
+    private fun applyQualityCeiling(opName: String, target: Quality?) {
+        cancelQualityNudge()
+        val shouldLock = isQualityLockEnabled() &&
+            target != null &&
+            viewModel.quality != AUTO_QUALITY &&
+            !backgroundSaverApplied &&
+            opName != "audio-saver-ceiling"
+
+        if (shouldLock) {
+            playerDebugLog("IVS quality hard-lock ($opName): setting ${target.name} (${target.bitrate} bps)")
+            runIvsOp(opName) {
+                it.setAutoQualityMode(false)
+                it.setQuality(target, true)
+            }
+        } else {
+            runIvsOp(opName) {
+                it.setAutoQualityMode(true)
+                it.setAutoMaxQuality(target)
+            }
+        }
+    }
+
+    /** Caps IVS ABR at the 480p saver rung: same source, so no reload or rebuffer. */
+    private fun applyAudioSaverCeiling(): Boolean {
+        val saver = KickLivePlayback.selectAudioSaverKey(
+            qualitiesByKey.map { (key, quality) ->
+                KickLivePlayback.AudioSaverCandidate(key, quality.height, quality.bitrate)
+            }
+        )?.let { qualitiesByKey[it] } ?: return false
+        applyQualityCeiling("audio-saver-ceiling", saver)
+        return true
+    }
+
+    /** Restores the user's ceiling after a background saver stint, climbing smoothly. */
+    private fun restoreForegroundCeiling() {
+        if (!backgroundSaverApplied) return
+        backgroundSaverApplied = false
+        if (viewModel.quality == AUDIO_ONLY_QUALITY) {
+            applyAudioSaverCeiling()
+            return
+        }
+        val target = if (viewModel.quality == AUTO_QUALITY) null else qualitiesByKey[viewModel.quality]
+        applyQualityCeiling("foreground-ceiling-restore", target)
     }
 
     override fun toggleAudioCompressor() {
@@ -821,6 +987,8 @@ class IvsPlayerFragment : PlayerFragment() {
     override fun close() {
         clearFreezeFrame()
         cancelQualityNudge()
+        lastQualityNudgeTimeMs = 0L
+        backgroundSaverApplied = false
         cancelNetworkLossGrace()
         networkPauseApplied = false
         binding.playerControls.root.removeCallbacks(updateProgressAction)
@@ -864,6 +1032,9 @@ class IvsPlayerFragment : PlayerFragment() {
                 lastBackgroundPauseAtMs = 0L
                 playbackService?.setBackgroundPlaybackEnabled(true)
                 playbackService?.attachSurface(null)
+                backgroundSaverApplied =
+                    prefs.getBoolean(AppConstants.PLAYER_DISABLE_BACKGROUND_VIDEO, true) &&
+                        applyAudioSaverCeiling()
                 resumeOnStart = false
             } else {
                 playbackService?.setBackgroundPlaybackEnabled(false)
@@ -992,7 +1163,7 @@ class IvsPlayerFragment : PlayerFragment() {
             "retryIvsPlayback showMessage=$showMessage stream=${requireArguments().getString(KEY_CHANNEL_LOGIN)} resolvedUrlPresent=true"
         )
         if (reloadIvsLiveStreamWithFreshUrl("IVS error")) {
-            DiagnosticLogger.w(
+            DiagnosticLogger.i(
                 TAG,
                 "IVS playback error recovery: retrying IVS with fresh Kick URL stream=${requireArguments().getString(KEY_CHANNEL_LOGIN)}"
             )
@@ -1000,7 +1171,7 @@ class IvsPlayerFragment : PlayerFragment() {
         }
         if (!sameUrlRetryAttempted && !resolvedUrl.isNullOrBlank()) {
             sameUrlRetryAttempted = true
-            DiagnosticLogger.w(
+            DiagnosticLogger.i(
                 TAG,
                 "IVS playback error recovery: retrying same URL in IVS stream=${requireArguments().getString(KEY_CHANNEL_LOGIN)}"
             )
@@ -1027,12 +1198,17 @@ class IvsPlayerFragment : PlayerFragment() {
         if (!viewModel.started || viewModel.loaded.value || player?.state != Player.State.IDLE) {
             return
         }
+        val url = currentUrl ?: requireArguments().getString(KEY_RESOLVED_STREAM_URL)
         DiagnosticLogger.w(
             TAG,
             "IVS resumed with empty service stream=${requireArguments().getString(KEY_CHANNEL_LOGIN)} " +
-                "urlPresent=${!currentUrl.isNullOrBlank()}"
+                "urlPresent=${!url.isNullOrBlank()}"
         )
-        updatePlayingState()
+        if (!url.isNullOrBlank()) {
+            startStream(url)
+        } else {
+            updatePlayingState()
+        }
     }
 
     private fun reloadIvsLiveStreamWithFreshUrl(reason: String): Boolean {
@@ -1091,7 +1267,9 @@ class IvsPlayerFragment : PlayerFragment() {
         pendingQualityNudge = targetQuality
         playerDebugLog("IVS quality nudge: stepping up to ${targetQuality.name} (${targetQuality.bitrate} bps)")
         runIvsOp("quality-nudge") {
-            it.setQuality(targetQuality)
+            // Adaptive step-up: switches at the end of the buffer instead
+            // of clearing it, so forcing a higher rendition doesn't stall.
+            it.setQuality(targetQuality, true)
         }
         val runnable = Runnable {
             qualityNudgeSafetyRunnable = null
@@ -1100,7 +1278,8 @@ class IvsPlayerFragment : PlayerFragment() {
                 pendingQualityNudge = null
                 runIvsOp("quality-nudge-safety-timeout") {
                     it.setAutoQualityMode(true)
-                    it.setAutoMaxQuality(targetQuality)
+                    val autoMax = if (viewModel.quality == AUTO_QUALITY) null else targetQuality
+                    it.setAutoMaxQuality(autoMax)
                 }
             }
         }
@@ -1112,10 +1291,12 @@ class IvsPlayerFragment : PlayerFragment() {
         qualityNudgeSafetyRunnable?.let { view?.removeCallbacks(it) }
         qualityNudgeSafetyRunnable = null
         pendingQualityNudge = null
+        downscaleRecoveryTicks = 0
     }
 
     companion object {
         private const val TAG = "IvsPlayerFragment"
+        private const val KEY_RESUME_ON_START = "resume_on_start"
         // Reloads start a couple segments back; skip when already near-live.
         private const val GO_LIVE_SKIP_THRESHOLD_MS = 2_000L
         // Brief VALIDATED-capability flaps recover on their own; only pause the
@@ -1125,6 +1306,8 @@ class IvsPlayerFragment : PlayerFragment() {
         // estimate into a readable trend.
         private const val SMOOTHED_BANDWIDTH_OLD_WEIGHT = 0.7f
         private const val QUALITY_NUDGE_SAFETY_TIMEOUT_MS = 5_000L
+        private const val DOWNSCALE_RECOVERY_REQUIRED_TICKS = 5
+        private const val QUALITY_RECOVERY_COOLDOWN_MS = 8_000L
 
         fun newInstance(item: Stream, resolvedUrl: String?, forceStandardLiveEngine: Boolean): IvsPlayerFragment {
             return IvsPlayerFragment().apply {

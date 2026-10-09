@@ -835,8 +835,40 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                     chatWidthLandscape > 0
             }
 
+            // Decided once per DOWN; re-checking per MOVE would redo
+            // getLocationOnScreen at 60Hz for a deterministic answer.
+            var chatDownOnTimeline = false
+
+            fun isTimelineTouch(rawX: Float, rawY: Float): Boolean {
+                if (!playerControls.root.isVisible) return false
+                val bar = playerControls.progressBar
+                if (!bar.isVisible) return false
+                // Live streams hide the timeline; no conflict there.
+                if (bar.width <= 0 || bar.height <= 0) return false
+                val loc = IntArray(2)
+                bar.getLocationOnScreen(loc)
+                if (loc[0] == 0 && loc[1] == 0) return false
+                // TimeBar is a thin strip; expand generously so fat-finger scrubs
+                // starting just above/below it still count as timeline touches.
+                val expansionH = touchSlop * 2
+                val expansionV = (touchSlop * 3 + TypedValue.applyDimension(
+                    TypedValue.COMPLEX_UNIT_DIP, 16f, resources.displayMetrics
+                )).toInt()
+                val left = loc[0] - expansionH
+                val right = loc[0] + bar.width + expansionH
+                val top = loc[1] - expansionV
+                val bottom = loc[1] + bar.height + expansionV
+                return rawX >= left && rawX <= right && rawY >= top && rawY <= bottom
+            }
+
             fun beginChatDragIfNeeded(event: MotionEvent, pointerIndex: Int): Boolean {
                 if (!chatDragCandidate || chatDragActive || !canInteractiveChatDrag()) {
+                    return false
+                }
+                // Timeline scrub owns its gesture: never steal a scrub that already
+                // started, or one whose DOWN landed on the timeline strip.
+                if (chatDownOnTimeline || playerControls.progressBar.isPressed) {
+                    chatDragCandidate = false
                     return false
                 }
                 // Use raw/screen coords so resizing/translating the player mid-drag can't
@@ -918,6 +950,13 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                     chatDragStartX = event.rawX
                     chatDragStartY = event.rawY
                     chatDragStartProgress = chatOpenProgress
+                    // DOWN landed on the timeline scrub strip; let the TimeBar
+                    // own this gesture so horizontal seeks don't toggle chat.
+                    chatDownOnTimeline = chatDragCandidate &&
+                        isTimelineTouch(chatDragStartX, chatDragStartY)
+                    if (chatDownOnTimeline) {
+                        chatDragCandidate = false
+                    }
                     if (offlineOverlay.isVisible) {
                         offlineOverlay.dispatchTouchEvent(event)
                     } else if (playerControls.root.isVisible) {
@@ -935,6 +974,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                 } else {
                     chatDragActive = false
                     chatDragCandidate = false
+                    chatDownOnTimeline = false
                     velocityTracker?.clear()
                     if (velocityTracker == null) {
                         velocityTracker = VelocityTracker.obtain()
@@ -1594,12 +1634,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                                         requireArguments().putString(KEY_CHANNEL_LOGO, logo)
                                         updateChannelLogo(logo)
                                     }
-                                    if (prefs.getBoolean(AppConstants.CHAT_DISABLE, false) ||
-                                        !prefs.getBoolean(AppConstants.CHAT_PUBSUB_ENABLED, true) ||
-                                        viewersText.text.isNullOrBlank()
-                                    ) {
-                                        updateViewerCount(stream.viewerCount)
-                                    }
+                                    updateViewerCount(stream.viewerCount)
                                     if (prefs.getBoolean(AppConstants.CHAT_DISABLE, false) ||
                                         !prefs.getBoolean(AppConstants.CHAT_PUBSUB_ENABLED, true) ||
                                         title.text.isNullOrBlank() ||
@@ -1616,6 +1651,15 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                                             }
                                         }
                                     }
+                                }
+                            }
+                        }
+                    }
+                    viewLifecycleOwner.lifecycleScope.launch {
+                        repeatOnLifecycle(Lifecycle.State.STARTED) {
+                            viewModel.viewerCountUpdate.collectLatest { count ->
+                                if (count != null) {
+                                    updateViewerCount(count)
                                 }
                             }
                         }
@@ -3626,6 +3670,9 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                 setPipActions(lastPipPlaying)
             } else {
                 useController = true
+                if (prefs.getBoolean(AppConstants.PIP_UNMUTE_ON_FULLSCREEN, false) && isVolumeReduced) {
+                    toggleMute()
+                }
                 // System PiP hides chat while active; restore the user's landscape preference on exit.
                 if (isMaximized && !isPortrait) {
                     restoreLandscapeChatIfNeeded(animate = false)

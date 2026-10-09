@@ -75,6 +75,8 @@ class PlayerViewModel @Inject constructor(
     val streamError = MutableStateFlow<Int?>(null)
     val stream = MutableStateFlow<Stream?>(null)
     private var streamJob: Job? = null
+    val viewerCountUpdate = MutableStateFlow<Int?>(null)
+    private var viewerCountJob: Job? = null
     var useCustomProxy = false
 
     val videoResult = MutableStateFlow<String?>(null)
@@ -223,6 +225,7 @@ class PlayerViewModel @Inject constructor(
     }
 
     fun loadStream(channelId: String?, channelLogin: String?, viewerCount: Int?, loop: Boolean, networkLibrary: String?, kickPublicApiHeaders: Map<String, String>, kickWebHeaders: Map<String, String>, enableIntegrity: Boolean) {
+        startViewerCountPolling(channelLogin)
         if (loop) {
             streamJob?.cancel()
             streamJob = viewModelScope.launch {
@@ -257,6 +260,29 @@ class PlayerViewModel @Inject constructor(
         }
     }
 
+    /** 60s polling fallback keeping viewer count live when chat WS is unavailable. */
+    private fun startViewerCountPolling(channelLogin: String?) {
+        viewerCountJob?.cancel()
+        viewerCountUpdate.value = null
+        val login = channelLogin?.trim()?.takeIf { it.isNotBlank() } ?: return
+        viewerCountJob = viewModelScope.launch {
+            while (isActive) {
+                try {
+                    val count = runCatching {
+                        kickRepository.getChannelLivestream(login, forceRefresh = true)?.viewerCount
+                    }.getOrNull() ?: runCatching {
+                        kickRepository.getChannel(login, forceRefresh = true).livestream?.viewerCount
+                    }.getOrNull()
+                    if (count != null && count >= 0) {
+                        viewerCountUpdate.value = count
+                    }
+                } catch (_: Exception) {
+                }
+                delay(60_000L)
+            }
+        }
+    }
+
     fun loadVideo(
         networkLibrary: String?,
         kickWebHeaders: Map<String, String>,
@@ -268,6 +294,7 @@ class PlayerViewModel @Inject constructor(
         supportedCodecs: String?,
         enableIntegrity: Boolean
     ) {
+        viewerCountJob?.cancel()
         if (videoResult.value == null) {
             viewModelScope.launch {
                 try {

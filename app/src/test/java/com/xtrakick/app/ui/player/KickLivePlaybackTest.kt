@@ -85,4 +85,84 @@ class KickLivePlaybackTest {
             KickLivePlayback.clearBitrateCache()
         }
     }
+
+    @Test
+    fun selectAudioSaverPrefers480p() {
+        val key = KickLivePlayback.selectAudioSaverKey(
+            listOf(
+                KickLivePlayback.AudioSaverCandidate("1080p60", 1080, 8_000_000),
+                KickLivePlayback.AudioSaverCandidate("720p60", 720, 4_500_000),
+                KickLivePlayback.AudioSaverCandidate("480p30", 480, 1_500_000),
+                KickLivePlayback.AudioSaverCandidate("360p30", 360, 800_000),
+                KickLivePlayback.AudioSaverCandidate("160p30", 160, 350_000),
+            )
+        )
+        assertEquals("480p30", key)
+    }
+
+    @Test
+    fun selectAudioSaverPicksBest480pVariant() {
+        val key = KickLivePlayback.selectAudioSaverKey(
+            listOf(
+                KickLivePlayback.AudioSaverCandidate("480p30", 480, 1_300_000),
+                KickLivePlayback.AudioSaverCandidate("480p30 1.5 Mbps", 480, 1_500_000),
+                KickLivePlayback.AudioSaverCandidate("360p30", 360, 700_000),
+            )
+        )
+        assertEquals("480p30 1.5 Mbps", key)
+    }
+
+    @Test
+    fun selectAudioSaverFallsBackBelow480p() {
+        val key = KickLivePlayback.selectAudioSaverKey(
+            listOf(
+                KickLivePlayback.AudioSaverCandidate("720p60", 720, 4_500_000),
+                KickLivePlayback.AudioSaverCandidate("360p30", 360, 800_000),
+                KickLivePlayback.AudioSaverCandidate("160p30", 160, 350_000),
+            )
+        )
+        assertEquals("360p30", key)
+    }
+
+    @Test
+    fun selectAudioSaverReturnsNullWhenEmpty() {
+        assertEquals(null, KickLivePlayback.selectAudioSaverKey(emptyList()))
+    }
+
+    @Test
+    fun minRecoveryBufferMsEnforces1500Floor() {
+        assertEquals(1_500L, KickLivePlayback.minRecoveryBufferMs(1_000))
+        assertEquals(1_500L, KickLivePlayback.minRecoveryBufferMs(1_500))
+        assertEquals(2_000L, KickLivePlayback.minRecoveryBufferMs(2_000))
+        assertEquals(1_500L, KickLivePlayback.minRecoveryBufferMs(null))
+    }
+
+    @Test
+    fun hasSufficientBandwidthRequiresTwentyFivePercentOverhead() {
+        val targetBitrate = 8_000_000 // 8 Mbps
+        // Needs 10 Mbps (8 * 1.25)
+        assertFalse(KickLivePlayback.hasSufficientBandwidth(9_900_000L, targetBitrate))
+        assertTrue(KickLivePlayback.hasSufficientBandwidth(10_000_000L, targetBitrate))
+        assertTrue(KickLivePlayback.hasSufficientBandwidth(250_000_000L, targetBitrate))
+
+        // Unknown or zero estimate passes
+        assertTrue(KickLivePlayback.hasSufficientBandwidth(0L, targetBitrate))
+        assertTrue(KickLivePlayback.hasSufficientBandwidth(-1L, targetBitrate))
+        assertTrue(KickLivePlayback.hasSufficientBandwidth(5_000_000L, 0))
+    }
+
+    @Test
+    fun isBufferSafeForDownscaledCatchupRequiresDoubleRebufferAndThreeSecondsFloor() {
+        // Balanced (1500ms): 2x = 3000ms
+        assertFalse(KickLivePlayback.isBufferSafeForDownscaledCatchup(2_900L, 1_500))
+        assertTrue(KickLivePlayback.isBufferSafeForDownscaledCatchup(3_000L, 1_500))
+
+        // Lowest (1000ms): 2x = 2000ms, but floor is 3000ms
+        assertFalse(KickLivePlayback.isBufferSafeForDownscaledCatchup(2_500L, 1_000))
+        assertTrue(KickLivePlayback.isBufferSafeForDownscaledCatchup(3_000L, 1_000))
+
+        // Stable (2000ms): 2x = 4000ms
+        assertFalse(KickLivePlayback.isBufferSafeForDownscaledCatchup(3_500L, 2_000))
+        assertTrue(KickLivePlayback.isBufferSafeForDownscaledCatchup(4_000L, 2_000))
+    }
 }

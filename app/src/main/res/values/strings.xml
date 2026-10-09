@@ -648,6 +648,8 @@
     <string name="pip_show_mute_summary">Show Mute/Unmute quick action in PiP</string>
     <string name="pip_reduced_volume_level">Reduced volume level</string>
     <string name="pip_reduced_volume_level_summary">Lower volume to this percentage instead of muting (0% = mute)</string>
+    <string name="pip_unmute_on_fullscreen">Unmute on fullscreen</string>
+    <string name="pip_unmute_on_fullscreen_summary">Restore volume muted via PiP when returning to fullscreen</string>
     <string name="lower_volume">Lower volume</string>
     <string name="restore_volume">Restore volume</string>
     <string name="search_user">Get user by ID/login</string>
@@ -903,6 +905,8 @@ These are downloads you removed while keeping the files. Android hides this fold
     <string name="player_latency_profile_stable">Maximum stability (higher delay)</string>
     <string name="player_ivs_latency_catchup">IVS live latency catch-up</string>
     <string name="player_ivs_latency_catchup_summary">Automatically increase playback speed (up to ~1.08x, inaudible) when live stream latency drifts behind the live edge.</string>
+    <string name="player_lock_quality">Lock selected video quality</string>
+    <string name="player_lock_quality_summary">Disables adaptive bitrate (ABR) downscaling for manual quality selections, keeping the chosen resolution.</string>
     <string name="syncing_to_live">Syncing to live edge…</string>
     <string name="ivs_already_live">Already at the live edge</string>
     <string name="max_buffer">Maximum buffer</string>

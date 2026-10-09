@@ -1,6 +1,7 @@
 package com.xtrakick.app.repository
 
 import android.content.Context
+import android.net.Uri
 import android.util.Base64
 import android.util.Log
 import android.webkit.CookieManager
@@ -263,6 +264,7 @@ class KickRepository @Inject constructor(
     private val channelPointRewardsCache = boundedCache<Pair<Long, ChannelPointRewardsResult>>()
     private val kickBadgeSourceStats = ConcurrentHashMap<KickBadgeSource, Int>()
     private val kickChunkBodyCache = ConcurrentHashMap<String, String>()
+    private val clipDownloadUrlCache = ConcurrentHashMap<String, String>()
     private val kickCanonicalBadgeTypes = listOf(
         "moderator",
         "vip",
@@ -1769,6 +1771,51 @@ class KickRepository @Inject constructor(
         }.getOrNull()
     }
 
+    /** Viewer count pushed via `App\Events\LivestreamUpdated` (official `useViewCountWSHandler`). */
+    fun parseKickLivestreamViewerCount(eventName: String?, messageJson: String): Int? {
+        val normalized = eventName?.trim().orEmpty()
+        if (normalized.isBlank()) return null
+        val lower = normalized.lowercase(Locale.ROOT)
+        val isLivestreamEvent = lower == "app\\events\\livestreamupdated" ||
+            lower == "livestreamupdated" ||
+            lower == "livestream.updated" ||
+            lower == "livestream_update" ||
+            lower == "livestream.viewer_count.updated"
+        if (!isLivestreamEvent) return null
+        return extractViewerCountFromRealtimeJson(messageJson)
+    }
+
+    private fun extractViewerCountFromRealtimeJson(messageJson: String): Int? {
+        val root = runCatching { json.parseToJsonElement(messageJson) }.getOrNull() ?: return null
+        val queue = ArrayDeque<JsonElement>()
+        queue.add(root)
+        var visits = 0
+        while (queue.isNotEmpty() && visits++ < 8) {
+            val element = queue.removeFirst() as? JsonObject ?: continue
+            directViewerCount(element)?.let { return it }
+            element["livestream"]?.let(queue::add)
+            for (key in listOf("data", "payload", "message")) {
+                val child = element[key] ?: continue
+                val inner = (child as? JsonPrimitive)?.contentOrNull?.let { raw ->
+                    runCatching { json.parseToJsonElement(raw) }.getOrNull()
+                }
+                if (inner != null) queue.add(inner) else if (child is JsonObject) queue.add(child)
+            }
+        }
+        return null
+    }
+
+    private fun directViewerCount(obj: JsonObject?): Int? {
+        if (obj == null) return null
+        for (key in listOf("viewer_count", "viewers_count", "viewers", "view_count", "viewerCount", "total_viewers")) {
+            (obj[key] as? JsonPrimitive)?.let { primitive ->
+                val parsed = primitive.intOrNull ?: primitive.contentOrNull?.toIntOrNull()
+                if (parsed != null && parsed >= 0) return parsed
+            }
+        }
+        return null
+    }
+
     fun parseKickWebPollResponse(raw: String): Poll? {
         val root = runCatching { json.parseToJsonElement(raw).jsonObject }.getOrNull() ?: return null
         val data = root.objOrNull("data") ?: root
@@ -3205,6 +3252,7 @@ class KickRepository @Inject constructor(
                 providers = providers,
             )
         }.onFailure {
+            if (it is CancellationException) throw it
             DiagnosticLogger.w("KickCentrifugo", "failed to resolve Centrifugo chat connection: ${it.message}")
         }.getOrNull()
     }
@@ -3223,6 +3271,7 @@ class KickRepository @Inject constructor(
             val root = JSONObject(raw)
             root.optJSONObject("data")?.optString("token")?.takeIf { it.isNotBlank() }
         }.onFailure {
+            if (it is CancellationException) throw it
             DiagnosticLogger.w("KickCentrifugo", "failed to fetch Centrifugo token: ${it.message}")
         }.getOrNull()
     }
@@ -3238,6 +3287,7 @@ class KickRepository @Inject constructor(
             val root = JSONObject(raw)
             root.optJSONObject("data")?.optString("token")?.takeIf { it.isNotBlank() }
         }.onFailure {
+            if (it is CancellationException) throw it
             DiagnosticLogger.w("KickCentrifugo", "failed to fetch Centrifugo channel token: ${it.message}")
         }.getOrNull()
     }
@@ -3345,216 +3395,113 @@ class KickRepository @Inject constructor(
 
     data class KickClipPlayback(
         val sourceUrl: String?,
-        val qualities: List<KickClipQuality>,
+        val qualities: List<KickClipQuality> = emptyList(),
     )
 
     /**
-     * Resolve Kick clip playback from Kick web APIs: the original MP4 (source)
-     * plus the IVS HLS variants the Kick web player receives from the playback
-     * endpoint. Kick gates the top HLS qualities behind a logged-in session, so
-     * logged-out users may only get a partial ladder; the MP4 is always included.
+     * Resolve Kick clip playback from Kick web APIs: clips are hosted as a
+     * self-contained playlist/asset on clips.kick.com. They do not have multi-quality ladders.
      */
     suspend fun getClipPlayback(clipIdOrSlug: String): KickClipPlayback? = withContext(Dispatchers.IO) {
         val clip = getClip(clipIdOrSlug) ?: return@withContext null
-        val sourceUrl = clip.clipUrl?.takeIf { it.isNotBlank() }
-        val videoUuid = clip.videoId?.trim()?.takeIf { it.isNotBlank() }
-        val qualities = if (videoUuid != null) {
-            runCatching { getClipHlsQualities(videoUuid, clip.channelLogin) }.getOrDefault(emptyList())
-        } else {
-            emptyList()
-        }
-        if (sourceUrl == null && qualities.isEmpty()) {
-            null
-        } else {
-            KickClipPlayback(sourceUrl, qualities)
-        }
+        val sourceUrl = clip.clipUrl?.takeIf { it.isNotBlank() } ?: return@withContext null
+        KickClipPlayback(sourceUrl, emptyList())
     }
 
-    // Both playback endpoints require a Kick session and currently 404 for every clip
-    // even when logged in. Remember the dead round for a day, persisted, so later clips
-    // and cold starts skip the POSTs entirely; if Kick revives the endpoints we
-    // self-heal within a day.
-    private val clipPlaybackDeadAtKey = "kick_clip_playback_dead_at"
-    private val clipPlaybackDeadTtlMs = 24L * 60L * 60L * 1000L
-
-    private fun clipPlaybackEndpointsRecentlyDead(): Boolean {
-        val last = context.prefs().getLong(clipPlaybackDeadAtKey, 0L)
-        return last > 0L && System.currentTimeMillis() - last < clipPlaybackDeadTtlMs
-    }
-
-    private suspend fun getClipHlsQualities(videoUuid: String, channelSlug: String?): List<KickClipQuality> = withContext(Dispatchers.IO) {
-        if (clipPlaybackEndpointsRecentlyDead()) {
-            return@withContext emptyList()
-        }
-        val payload = buildJsonObject {
-            put("video_player", buildJsonObject {
-                put("player", buildJsonObject {
-                    put("player_name", JsonPrimitive("web"))
-                    put("player_version", JsonPrimitive("web_95f0e436"))
-                    put("player_software", JsonPrimitive("IVS Player"))
-                    put("player_software_version", JsonPrimitive("1.54.1"))
-                })
-                put("mux_sdk", buildJsonObject {
-                    put("sdk_available", JsonPrimitive(true))
-                })
-                put("pal_sdk", buildJsonObject {
-                    put("sdk_available", JsonPrimitive(false))
-                    put("nonce", JsonPrimitive(""))
-                })
-                put("datazoom_sdk", buildJsonObject {
-                    put("sdk_available", JsonPrimitive(true))
-                    put("datazoom_sdk_version", JsonPrimitive("2.32.0"))
-                    put("om_sdk_version", JsonPrimitive("1.6.6"))
-                })
-                put("google_ads_sdk", buildJsonObject {
-                    put("sdk_available", JsonPrimitive(false))
-                })
-            })
-            put("video_session", buildJsonObject {
-                put("page_type", JsonPrimitive("video"))
-                put("player_remote_played", JsonPrimitive(false))
-                put("enable_sampling", JsonPrimitive(false))
-                put("url_path", JsonPrimitive("${channelSlug?.takeIf { it.isNotBlank() } ?: "channel"}/videos/$videoUuid"))
-                put("autoplay_behaviour", JsonPrimitive("click"))
-                put("play_muted", JsonPrimitive(false))
-                put("viewer_connection_type", JsonPrimitive(""))
-            })
-            put("user_session", buildJsonObject {
-                put("session_id", JsonPrimitive(UUID.randomUUID().toString()))
-                put("player_device_id", JsonPrimitive(UUID.randomUUID().toString()))
-                put("browser_lang", JsonPrimitive(Locale.getDefault().language))
-                put("non_personalised_ads", JsonPrimitive(true))
-            })
-        }
-        // The official Kick app resolves clip playback via the mobile subdomain
-        // (authenticated); web.kick.com is kept as a fallback since the web
-        // player uses it too. Both endpoints work anonymously and only 404 when
-        // the video has no IVS playback entity (e.g. clips cut from a VOD after
-        // the stream ended), which degrades gracefully to the single-quality
-        // source playlist.
-        val endpoints = listOf(
-            "https://mobile.kick.com/api/v1/stream/${urlEncode(videoUuid)}/playback",
-            "https://web.kick.com/api/v1/stream/${urlEncode(videoUuid)}/playback",
-        )
-        for (endpoint in endpoints) {
-            val manifestUrl = runCatching {
-                okHttpClient.newCall(
-                    createRequestBuilder(endpoint, isKickWeb = true)
-                        .header("User-Agent", "KickMobile/40.29.0 (com.kick.mobile; platform: android; build:40290)")
-                        .post(payload.toString().toRequestBody("application/json".toMediaTypeOrNull()))
-                        .build()
-                ).execute().use { response ->
-                    if (!response.isSuccessful) {
-                        if (isKickFeatureDebugEnabled()) {
-                            Log.d(featureDebugTag, "clip playback $endpoint -> ${response.code}")
-                        }
-                        return@runCatching null
-                    }
-                    val root = runCatching { json.parseToJsonElement(response.body.string()) }.getOrNull()
-                        ?: return@runCatching null
-                    (root as? JsonObject)
-                        ?.objOrNull("playback_url")
-                        ?.primitiveOrNull("vod")
-                        ?.takeIf { it.isNotBlank() }
+    /**
+     * Resolve Kick's prepared clip MP4 via the authenticated download endpoint
+     * (the same one the web Download button uses, without watermark/outro).
+     * Returns null when logged out, when the session is rejected, or when the
+     * response carries no MP4 — callers fall back to the source HLS download.
+     */
+    suspend fun getClipDownloadUrl(clipIdOrSlug: String): String? = withContext(Dispatchers.IO) {
+        val id = clipIdOrSlug.trim().takeIf { it.isNotBlank() } ?: return@withContext null
+        clipDownloadUrlCache[id]?.let { return@withContext it }
+        val raw = runCatching {
+            executeKickWebSessionRequest("https://kick.com/api/v2/clips/${urlEncode(id)}/download")
+        }.getOrNull() ?: return@withContext null
+        val root = runCatching { json.parseToJsonElement(raw) }.getOrNull()
+        // Preferred: an explicit .mp4. Otherwise the endpoint's own download
+        // URL as-is — it need not carry an extension (signed links).
+        val candidate = root?.let { findMp4Url(it) }
+            ?: (root as? JsonObject)?.let { obj ->
+                listOf("download_url", "url", "video_url").firstNotNullOfOrNull { key ->
+                    (obj[key] as? JsonPrimitive)?.contentOrNull
+                        ?.takeIf { it.startsWith("http", ignoreCase = true) }
                 }
-            }.getOrNull() ?: continue
-            val qualities = fetchClipMasterPlaylist(manifestUrl)
-            if (qualities.isNotEmpty()) {
-                context.prefs().edit { putLong(clipPlaybackDeadAtKey, 0L) }
-                return@withContext qualities
             }
+        if (candidate == null) {
+            val keys = (root as? JsonObject)?.keys?.joinToString(",") ?: root?.javaClass?.simpleName
+            DiagnosticLogger.i(tag, "clip download endpoint returned no usable URL (keys=$keys)")
+            return@withContext null
         }
-        context.prefs().edit { putLong(clipPlaybackDeadAtKey, System.currentTimeMillis()) }
-        emptyList()
+        DiagnosticLogger.i(tag, "clip download endpoint url shape: ${redactedUrlShape(candidate)}")
+        if (!isDownloadableFileUrl(candidate)) {
+            DiagnosticLogger.i(tag, "clip download endpoint url rejected by HEAD check")
+            return@withContext null
+        }
+        DiagnosticLogger.i(tag, "clip download endpoint resolved a prepared file")
+        clipDownloadUrlCache[id] = candidate
+        candidate
     }
 
-    private suspend fun fetchClipMasterPlaylist(playlistUrl: String): List<KickClipQuality> = withContext(Dispatchers.IO) {
-        okHttpClient.newCall(
-            createRequestBuilder(playlistUrl, isKickWeb = true).build()
-        ).execute().use { response ->
-            if (!response.isSuccessful) {
-                return@withContext emptyList()
-            }
-            val text = response.body.string()
-            parseHlsMasterQualities(text, response.request.url.toString())
-        }
+    private fun redactedUrlShape(url: String): String {
+        return runCatching {
+            val uri = Uri.parse(url)
+            val path = uri.path?.takeLast(40).orEmpty()
+            val params = uri.queryParameterNames.joinToString(",")
+            "${uri.host}$path[$params]"
+        }.getOrDefault("<unparseable>")
     }
 
-    private fun parseHlsMasterQualities(playlistText: String, playlistUrl: String): List<KickClipQuality> {
-        if (!playlistText.contains("#EXT-X-STREAM-INF", ignoreCase = true)) {
-            return emptyList()
-        }
-        val mediaNames = mutableMapOf<String, String>()
-        val qualities = mutableListOf<KickClipQuality>()
-        var pendingAttributes: Map<String, String>? = null
-        for (rawLine in playlistText.lineSequence()) {
-            val line = rawLine.trim()
-            when {
-                line.startsWith("#EXT-X-MEDIA:", ignoreCase = true) -> {
-                    val attributes = parseHlsAttributes(line.substringAfter(':'))
-                    if (attributes["TYPE"]?.equals("VIDEO", ignoreCase = true) == true) {
-                        val groupId = attributes["GROUP-ID"]
-                        val name = attributes["NAME"]?.takeIf { it.isNotBlank() }
-                        if (groupId != null && name != null) {
-                            mediaNames[groupId] = name
+    private fun isDownloadableFileUrl(url: String): Boolean {
+        // Reject login pages / HTML shells, accept everything else: the
+        // download endpoint's own URL is authoritative for the file itself.
+        // An inconclusive HEAD (exception, no content type) still accepts —
+        // the worker follows redirects and the file plays or it doesn't.
+        return runCatching {
+            okHttpClient.newCall(Request.Builder().url(url).head().build()).execute().use { response ->
+                if (!response.isSuccessful) return false
+                val contentType = response.header("Content-Type").orEmpty()
+                contentType.isBlank() ||
+                        !contentType.startsWith("text/", ignoreCase = true) ||
+                        contentType.contains("mp4", ignoreCase = true)
+            }
+        }.getOrDefault(true)
+    }
+
+    private fun findMp4Url(element: JsonElement): String? {
+        when (element) {
+            is JsonPrimitive -> {
+                val text = element.contentOrNull ?: return null
+                if (text.startsWith("http", ignoreCase = true) &&
+                    text.substringBefore('?').endsWith(".mp4", ignoreCase = true)
+                ) {
+                    return text
+                }
+            }
+            is JsonObject -> {
+                // Prefer explicit download/url fields before a blind scan.
+                val preferred = element.entries
+                    .sortedBy { (key, _) ->
+                        when {
+                            key.contains("download", ignoreCase = true) -> 0
+                            key.contains("video", ignoreCase = true) -> 1
+                            key.contains("url", ignoreCase = true) -> 2
+                            else -> 3
                         }
                     }
+                for ((_, value) in preferred) {
+                    findMp4Url(value)?.let { return it }
                 }
-                line.startsWith("#EXT-X-STREAM-INF:", ignoreCase = true) -> {
-                    pendingAttributes = parseHlsAttributes(line.substringAfter(':'))
-                }
-                line.isNotBlank() && !line.startsWith("#") -> {
-                    val attributes = pendingAttributes
-                    pendingAttributes = null
-                    if (attributes != null) {
-                        val url = runCatching { URI(playlistUrl).resolve(line).toString() }.getOrNull() ?: continue
-                        val resolutionHeight = attributes["RESOLUTION"]
-                            ?.substringAfter('x')?.trim()
-                            ?.takeIf { it.isNotBlank() && it.all { it.isDigit() } }
-                        val name = attributes["VIDEO"]?.let { mediaNames[it] }?.takeIf { it.isNotBlank() }
-                            ?: resolutionHeight?.let { "${it}p" }
-                            ?: url.substringBefore('?').substringAfterLast('/').substringBefore('.').takeIf { it.isNotBlank() }
-                            ?: continue
-                        qualities.add(
-                            KickClipQuality(
-                                name = name,
-                                codec = attributes["CODECS"]
-                                    ?.split(',')
-                                    ?.map { it.trim() }
-                                    ?.firstOrNull { it.isNotBlank() },
-                                bitrate = attributes["BANDWIDTH"]?.trim()?.toIntOrNull()?.takeIf { it > 0 },
-                                url = url,
-                            )
-                        )
-                    }
+            }
+            is JsonArray -> {
+                for (value in element) {
+                    findMp4Url(value)?.let { return it }
                 }
             }
         }
-        // disambiguate variants that share a display name but differ in bitrate,
-        // so one doesn't silently replace the other (mirrors upstream Xtra)
-        val nameCounts = qualities.groupingBy { it.name }.eachCount()
-        return qualities.map { quality ->
-            if ((nameCounts[quality.name] ?: 0) > 1) {
-                val suffix = quality.bitrate?.let { bitrate ->
-                    " (${(bitrate / 1_000_000f).let { mbps -> "%.1f".format(mbps) }} Mbps)"
-                } ?: ""
-                quality.copy(name = "${quality.name}$suffix")
-            } else {
-                quality
-            }
-        }
-    }
-
-    private fun parseHlsAttributes(line: String): Map<String, String> {
-        val attributes = mutableMapOf<String, String>()
-        Regex("([A-Za-z0-9-]+)=(\"[^\"]*\"|[^,]*)").findAll(line).forEach { match ->
-            var value = match.groupValues[2]
-            if (value.length >= 2 && value.startsWith("\"") && value.endsWith("\"")) {
-                value = value.substring(1, value.length - 1)
-            }
-            attributes[match.groupValues[1].uppercase(Locale.ROOT)] = value
-        }
-        return attributes
+        return null
     }
 
     /**

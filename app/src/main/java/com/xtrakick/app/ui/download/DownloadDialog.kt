@@ -161,6 +161,7 @@ class DownloadDialog : DialogFragment(), IntegrityDialog.CallbackListener {
     private var sharedPath: String? = null
     private var directoryResultLauncher: ActivityResultLauncher<Intent>? = null
     private var sizeEstimateJob: Job? = null
+    private var sizeEstimateSeq = 0
 
     override fun onCreateDialog(savedInstanceState: Bundle?): Dialog {
         _binding = DialogVideoDownloadBinding.inflate(layoutInflater)
@@ -294,6 +295,8 @@ class DownloadDialog : DialogFragment(), IntegrityDialog.CallbackListener {
                         viewModel.qualities.collectLatest {
                             if (!it.isNullOrEmpty()) {
                                 init(it)
+                                binding.selectQuality.isVisible = false
+                                binding.spinner.isVisible = false
                             }
                         }
                     }
@@ -319,7 +322,9 @@ class DownloadDialog : DialogFragment(), IntegrityDialog.CallbackListener {
     private fun init(qualities: Map<String, Pair<String, String>>, totalDuration: Long = 0, currentPosition: Long = 0) {
         val type = requireArguments().getString(KEY_TYPE)
         binding.layout.children.forEach {
-            it.isVisible = it.id != R.id.progressBar && it.id != R.id.timeLayout && it.id != R.id.sharedStorageLayout && it.id != R.id.appStorageLayout
+            // sizeEstimate stays gone until updateSizeEstimate() shows it;
+            // otherwise stream dialogs get an empty blank row.
+            it.isVisible = it.id != R.id.progressBar && it.id != R.id.timeLayout && it.id != R.id.sharedStorageLayout && it.id != R.id.appStorageLayout && it.id != R.id.sizeEstimate
         }
         val storageLocations = resources.getStringArray(R.array.spinnerStorage)
         val storage = requireContext().getExternalFilesDirs(".downloads").mapIndexedNotNull { index, file ->
@@ -356,6 +361,9 @@ class DownloadDialog : DialogFragment(), IntegrityDialog.CallbackListener {
                 addTextChangeListener(timeTo.editText)
                 timeFrom.editText?.doOnTextChanged { _, _, _, _ -> updateSizeEstimate(qualities, totalDuration) }
                 timeTo.editText?.doOnTextChanged { _, _, _, _ -> updateSizeEstimate(qualities, totalDuration) }
+                updateSizeEstimate(qualities, totalDuration)
+            }
+            if (type == CLIP) {
                 updateSizeEstimate(qualities, totalDuration)
             }
             with(storageSelectionContainer) {
@@ -480,6 +488,7 @@ class DownloadDialog : DialogFragment(), IntegrityDialog.CallbackListener {
             cancel.setOnClickListener { dismiss() }
             download.setOnClickListener {
                 val quality = qualities.entries.find { it.value.first == spinner.editText?.text.toString() }
+                    ?: qualities.entries.firstOrNull()
                 val location = storageLocations.indexOf(storageSelectionContainer.storageSpinner.editText?.text.toString())
                 val path = when (location) {
                     0 -> sharedPath
@@ -637,14 +646,19 @@ class DownloadDialog : DialogFragment(), IntegrityDialog.CallbackListener {
     }
 
     private fun updateSizeEstimate(qualities: Map<String, Pair<String, String>>, totalDuration: Long) {
-        val url = qualities.entries.find { it.value.first == binding.spinner.editText?.text.toString() }?.value?.second
+        val url = (qualities.entries.find { it.value.first == binding.spinner.editText?.text.toString() }
+            ?: qualities.entries.firstOrNull())?.value?.second
         if (url.isNullOrBlank()) {
             binding.sizeEstimate.isVisible = false
             return
         }
         val fromText = binding.timeFrom.editText?.text?.toString()?.trim().orEmpty()
         val toText = binding.timeTo.editText?.text?.toString()?.trim().orEmpty()
+        val isClipDialog = requireArguments().getString(KEY_TYPE) == CLIP
         val rangeSeconds = when {
+            // Clips have no time fields: estimate the clip window itself, not
+            // the multi-hour playlist VOD-backed variants come from.
+            isClipDialog -> clipDurationSeconds()
             fromText.isEmpty() && toText.isEmpty() -> null
             else -> {
                 val from = if (fromText.isNotEmpty()) parseTime(fromText) else 0L
@@ -655,11 +669,19 @@ class DownloadDialog : DialogFragment(), IntegrityDialog.CallbackListener {
         sizeEstimateJob?.cancel()
         binding.sizeEstimate.isVisible = true
         binding.sizeEstimate.text = getString(R.string.estimated_size, "…")
+        // Rapid quality taps overlap in-flight lookups; only the latest may
+        // write, otherwise a slow stale job overwrites the fresh result.
+        val estimateSeq = ++sizeEstimateSeq
         // Fragment lifecycleScope: init() runs from onCreateDialog before the
         // fragment view exists, so viewLifecycleOwner would throw here. The binding
         // is already inflated by then and is nulled in onDestroyView.
         sizeEstimateJob = lifecycleScope.launch {
-            val bytes = viewModel.estimateDownloadSize(url, rangeSeconds)
+            val bytes = if (isClipDialog) {
+                viewModel.estimateClipSize(requireArguments().getString(KEY_CLIP_ID), url, rangeSeconds)
+            } else {
+                viewModel.estimateDownloadSize(url, rangeSeconds)
+            }
+            if (estimateSeq != sizeEstimateSeq) return@launch
             val currentBinding = _binding ?: return@launch
             if (bytes == null || bytes <= 0L) {
                 currentBinding.sizeEstimate.isVisible = false
@@ -670,6 +692,14 @@ class DownloadDialog : DialogFragment(), IntegrityDialog.CallbackListener {
                 )
             }
         }
+    }
+
+    private fun clipDurationSeconds(): Long? {
+        val args = arguments ?: return null
+        val durationDouble = runCatching { args.getDouble(KEY_DURATION, 0.0) }.getOrNull()?.takeIf { it > 0.0 }
+        if (durationDouble != null) return durationDouble.toLong()
+        return runCatching { args.getString(KEY_DURATION) }.getOrNull()
+            ?.let { KickApiHelper.getDuration(it) }?.takeIf { it > 0 }
     }
 
     private fun parseTime(text: CharSequence): Long? {

@@ -336,6 +336,7 @@ class ChatViewModel @Inject constructor(
     val updateUserMessages = MutableSharedFlow<String>()
     val updateMessage = MutableSharedFlow<Pair<Int, ChatMessage>>()
     val liveLatencyMs = MutableStateFlow(0L)
+    val kickViewerCount = MutableStateFlow<Int?>(null)
 
     fun setLiveLatency(ms: Long) {
         liveLatencyMs.value = ms
@@ -2807,6 +2808,7 @@ class ChatViewModel @Inject constructor(
 
     fun startLiveChat(channelId: String?, channelLogin: String) {
         stopLiveChat()
+        kickViewerCount.value = null
         val sessionGeneration = chatSessionGeneration
         val kickPublicApiHeaders = KickApiHelper.getKickPublicApiHeaders(applicationContext)
         val networkLibrary = applicationContext.prefs().getString(AppConstants.NETWORK_LIBRARY, "OkHttp")
@@ -3179,6 +3181,10 @@ class ChatViewModel @Inject constructor(
 
         override suspend fun onChatEvent(eventName: String, channelName: String?, messageJson: String) {
             if (sessionGeneration != chatSessionGeneration) return
+            kickRepository.parseKickLivestreamViewerCount(eventName, messageJson)?.let { count ->
+                kickViewerCount.value = count
+                return
+            }
             val normalizedEvent = eventName.trim().lowercase(Locale.ROOT)
             if (eventName.equals("App\\Events\\PollDeleteEvent", ignoreCase = true)) {
                 pollTimer?.cancel()

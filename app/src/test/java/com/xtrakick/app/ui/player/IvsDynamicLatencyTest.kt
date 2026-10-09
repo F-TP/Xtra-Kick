@@ -136,4 +136,67 @@ class IvsDynamicLatencyTest {
 
         assertNull("Catch-up must immediately disengage if forward buffer dips below safe threshold", speed)
     }
+
+    @Test
+    fun slowsDownWhenAheadOfTargetEdge() {
+        // Ahead threshold is target (850) - 500 = 350ms; latency 200ms is too close to the edge
+        val speed = LiveLatencySettings.calculateIvsCatchupSpeed(
+            latencyMs = 200L,
+            targetOffsetMs = targetOffsetMs,
+            forwardBufferMs = healthyBufferMs,
+            isInGracePeriod = false,
+            maxSpeedLimit = 1.08f,
+            isCurrentlyCatchingUp = false,
+            minSpeedLimit = 0.97f
+        )
+
+        assertNotNull("Should ease off when ahead of the target edge", speed)
+        assertEquals(0.97f, speed!!, 0.001f)
+    }
+
+    @Test
+    fun ignoresMinSpeedFloorAtOrAboveOne() {
+        val speed = LiveLatencySettings.calculateIvsCatchupSpeed(
+            latencyMs = 200L,
+            targetOffsetMs = targetOffsetMs,
+            forwardBufferMs = healthyBufferMs,
+            isInGracePeriod = false,
+            maxSpeedLimit = 1.08f,
+            isCurrentlyCatchingUp = false,
+            minSpeedLimit = 1.0f
+        )
+
+        assertNull("Default 1.00 floor must keep previous behavior", speed)
+    }
+
+    @Test
+    fun gracePeriodBlocksSlowdown() {
+        val speed = LiveLatencySettings.calculateIvsCatchupSpeed(
+            latencyMs = 200L,
+            targetOffsetMs = targetOffsetMs,
+            forwardBufferMs = healthyBufferMs,
+            isInGracePeriod = true,
+            maxSpeedLimit = 1.08f,
+            isCurrentlyCatchingUp = false,
+            minSpeedLimit = 0.97f
+        )
+
+        assertNull("Post-rebuffer grace must block all rate changes", speed)
+    }
+
+    @Test
+    fun clampsAbsurdMinSpeedFloor() {
+        val speed = LiveLatencySettings.calculateIvsCatchupSpeed(
+            latencyMs = 200L,
+            targetOffsetMs = targetOffsetMs,
+            forwardBufferMs = healthyBufferMs,
+            isInGracePeriod = false,
+            maxSpeedLimit = 1.08f,
+            isCurrentlyCatchingUp = false,
+            minSpeedLimit = 0.1f
+        )
+
+        assertNotNull(speed)
+        assertEquals(0.5f, speed!!, 0.001f)
+    }
 }

@@ -42,10 +42,43 @@ class DownloadViewModel @Inject constructor(
 
     private val bitrateCache = java.util.concurrent.ConcurrentHashMap<String, Long>()
 
+    // Size for a clip: measure what will actually download. When the
+    // authenticated endpoint resolves a prepared MP4, HEAD it for the exact
+    // size; a null HEAD hides the row rather than showing the HLS estimate,
+    // which describes a different (much larger) asset. Logged out, or when
+    // the endpoint has no MP4, fall back to estimating the selected HLS URL.
+    suspend fun estimateClipSize(clipId: String?, fallbackUrl: String?, rangeSeconds: Long?): Long? = withContext(Dispatchers.IO) {
+        val mp4 = resolveClipMp4(clipId)
+        if (mp4 != null) {
+            return@withContext headContentLength(mp4)
+        }
+        fallbackUrl?.let { estimateDownloadSize(it, rangeSeconds) }
+    }
+
+    suspend fun resolveClipMp4(clipId: String?): String? = withContext(Dispatchers.IO) {
+        clipId.takeIf { !it.isNullOrBlank() }?.let {
+            runCatching { kickRepository.getClipDownloadUrl(it) }.getOrNull()
+        }
+    }
+
+    private suspend fun headContentLength(url: String): Long? = withContext(Dispatchers.IO) {
+        runCatching {
+            okHttpClient.newCall(Request.Builder().url(url).head().build()).execute().use { response ->
+                response.header("Content-Length")?.toLongOrNull()
+            }
+        }.getOrNull()
+    }
+
     // Size estimate for a quality: measure one representative segment (HEAD,
     // falling back to a GET's headers) and scale its bitrate over the duration.
     suspend fun estimateDownloadSize(playlistUrl: String, rangeSeconds: Long?): Long? = withContext(Dispatchers.IO) {
         runCatching {
+            if (!playlistUrl.substringBefore('?').endsWith(".m3u8", ignoreCase = true)) {
+                // Progressive file (e.g. a prepared clip MP4): exact size via
+                // HEAD instead of segment sampling. Never GET it here — that
+                // would download the whole file just to measure it.
+                return@runCatching headContentLength(playlistUrl)
+            }
             val playlistText = playerRepository.loadTextFromUrl(
                 applicationContext.prefs().getString(AppConstants.NETWORK_LIBRARY, "OkHttp"),
                 playlistUrl
@@ -53,6 +86,19 @@ class DownloadViewModel @Inject constructor(
             val playlist = PlaylistUtils.parseMediaPlaylist(playlistText.byteInputStream())
             if (playlist.segments.isEmpty()) return@runCatching null
             val playlistDurationSeconds = playlist.segments.sumOf { it.duration.toDouble() }
+            if (playlistDurationSeconds <= 0.0) return@runCatching null
+
+            val totalRangeBytes = playlist.segments.sumOf { it.byteRangeLength ?: 0L }
+            if (totalRangeBytes > 0L) {
+                // Byte-range playlist: every segment is a slice of a shared
+                // container, so sampling one segment's full Content-Length
+                // would inflate the result ~60x. The range sizes ARE the total
+                // size of the asset; scale down proportionally when a sub-range
+                // (e.g. a 2-minute clip from a multi-hour VOD) is requested.
+                val seconds = rangeSeconds?.toDouble()?.coerceAtMost(playlistDurationSeconds) ?: playlistDurationSeconds
+                return@runCatching ((totalRangeBytes.toDouble() / playlistDurationSeconds) * seconds).toLong()
+            }
+
             val bitrate = bitrateCache.getOrPut(playlistUrl) {
                 val segment = playlist.segments[playlist.segments.size / 2]
                 val segmentUrl = if (segment.uri.startsWith("http")) {
@@ -68,7 +114,7 @@ class DownloadViewModel @Inject constructor(
                 } ?: return@runCatching null
                 (contentLength * 8 / segmentDurationSeconds).toLong()
             }
-            val seconds = rangeSeconds?.toDouble() ?: playlistDurationSeconds
+            val seconds = rangeSeconds?.toDouble()?.coerceAtMost(playlistDurationSeconds) ?: playlistDurationSeconds
             ((bitrate * seconds) / 8).toLong()
         }.getOrNull()
     }
@@ -172,20 +218,12 @@ class DownloadViewModel @Inject constructor(
 
     fun setClip(networkLibrary: String?, kickWebHeaders: Map<String, String>, clipId: String?, qualities: Map<String, Pair<String, String>>?, enableIntegrity: Boolean) {
         if (_qualities.value == null) {
-            // Clip downloads only support progressive MP4 URLs, so drop HLS variants.
-            val downloadable = qualities
-                ?.filterNot { it.value.second.substringBefore('?').endsWith(".m3u8", ignoreCase = true) }
-                ?.takeIf { it.isNotEmpty() }
-            if (!downloadable.isNullOrEmpty()) {
-                _qualities.value = downloadable
+            if (!qualities.isNullOrEmpty()) {
+                _qualities.value = qualities
             } else {
                 viewModelScope.launch {
                     try {
-                        val allUrls = playerRepository.loadClipUrls(networkLibrary, kickWebHeaders, clipId, enableIntegrity)
-                        val urls = allUrls
-                            ?.filterNot { it.value.substringBefore('?').endsWith(".m3u8", ignoreCase = true) }
-                            ?.takeIf { it.isNotEmpty() }
-                            ?: allUrls
+                        val urls = playerRepository.loadClipUrls(networkLibrary, kickWebHeaders, clipId, enableIntegrity)
                         val hideCodecs = urls?.all {
                             it.key.second?.substringBefore('.').let { codec ->
                                 codec == "avc1" || codec == "mp4a" || codec.isNullOrBlank()

@@ -26,4 +26,14 @@ class DiagnosticLoggerTest {
         assertTrue(DiagnosticLogger.shouldLogForMinimum("error", "warning"))
         assertTrue(DiagnosticLogger.shouldLogForMinimum("warning", "warning"))
     }
+
+    @Test
+    fun isNetworkExceptionIdentifiesNetworkThrowables() {
+        assertTrue(DiagnosticLogger.isNetworkException(java.net.UnknownHostException("images.kick.com")))
+        assertTrue(DiagnosticLogger.isNetworkException(java.net.SocketTimeoutException("timeout")))
+        assertTrue(DiagnosticLogger.isNetworkException(java.net.ConnectException("failed to connect")))
+        assertTrue(DiagnosticLogger.isNetworkException(RuntimeException("wrapper", java.net.UnknownHostException("nested"))))
+        assertFalse(DiagnosticLogger.isNetworkException(IllegalStateException("state error")))
+        assertFalse(DiagnosticLogger.isNetworkException(NullPointerException("null value")))
+    }
 }

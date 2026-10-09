@@ -219,10 +219,37 @@ object DiagnosticLogger {
             appendLine("thread=${Thread.currentThread().name}; foreground=$isAppInForeground; activity=${lastResumedActivity ?: "unknown"}")
             appendLine("memory=usedKb:${(runtime.totalMemory() - runtime.freeMemory()) / 1024L} maxKb:${runtime.maxMemory() / 1024L} nativeKb:$nativeHeapKb classMb:${memoryClass ?: "unknown"}")
             throwable?.let {
-                appendLine(stackTrace(it))
+                if (level == LEVEL_WARNING && isNetworkException(it)) {
+                    val causeMsg = it.cause?.let { cause ->
+                        " (cause: ${cause.javaClass.simpleName}: ${cause.message})"
+                    } ?: ""
+                    appendLine("cause=${it.javaClass.simpleName}: ${it.message ?: "network error"}$causeMsg")
+                } else {
+                    appendLine(stackTrace(it))
+                }
             }
             appendLine()
         }
+    }
+
+    internal fun isNetworkException(throwable: Throwable): Boolean {
+        var current: Throwable? = throwable
+        while (current != null) {
+            if (current is java.net.SocketException ||
+                current is java.net.SocketTimeoutException ||
+                current is java.net.UnknownHostException ||
+                current is java.net.ConnectException ||
+                current is java.net.NoRouteToHostException ||
+                current is java.net.PortUnreachableException ||
+                current is javax.net.ssl.SSLException ||
+                current is java.io.InterruptedIOException ||
+                current.javaClass.name.contains("HttpException")
+            ) {
+                return true
+            }
+            current = current.cause
+        }
+        return false
     }
 
     private fun stackTrace(throwable: Throwable): String {

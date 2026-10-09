@@ -2597,6 +2597,15 @@ class ChatFragment : BaseNetworkFragment(), MessageClickedDialog.OnButtonClickLi
                     }
                     viewLifecycleOwner.lifecycleScope.launch {
                         repeatOnLifecycle(Lifecycle.State.STARTED) {
+                            viewModel.kickViewerCount.collectLatest { count ->
+                                if (count != null) {
+                                    (parentFragment as? PlayerFragment)?.updateViewerCount(count)
+                                }
+                            }
+                        }
+                    }
+                    viewLifecycleOwner.lifecycleScope.launch {
+                        repeatOnLifecycle(Lifecycle.State.STARTED) {
                             viewModel.roomState.collectLatest { roomState ->
                                 if (roomState != null) {
                                     val roomStateSignature = buildRoomStateSignature(roomState)

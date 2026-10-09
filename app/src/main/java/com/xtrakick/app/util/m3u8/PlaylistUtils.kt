@@ -16,6 +16,7 @@ object PlaylistUtils {
     private val encryptionMethodPattern = Pattern.compile("METHOD=([A-Za-z0-9\\-]+)")
     private val segmentDurationPattern = Pattern.compile("#EXTINF:([\\d.]+)\\b")
     private val segmentTitlePattern = Pattern.compile("#EXTINF:[\\d.]+\\b,(.+)")
+    private val byteRangePattern = Pattern.compile("#EXT-X-BYTERANGE:(\\d+)(?:@(\\d+))?\\b")
 
     fun parseMediaPlaylist(input: InputStream): MediaPlaylist {
         var targetDuration = 10
@@ -25,6 +26,8 @@ object PlaylistUtils {
         var encrypted = false
         val segments = mutableListOf<Segment>()
         var segmentInfo: Pair<Float, String?>? = null
+        var pendingByteRange: Pair<Long, Long>? = null
+        var byteRangeCursor = 0L
         var end = false
         input.bufferedReader().forEachLine { line ->
             if (line.isNotBlank()) {
@@ -68,6 +71,18 @@ object PlaylistUtils {
                                 encrypted = true
                             }
                         }
+                        line.startsWith("#EXT-X-BYTERANGE:") -> {
+                            // Applies to the next segment URI. A missing @offset
+                            // continues where the previous range ended (0 for the first).
+                            val matcher = byteRangePattern.matcher(line)
+                            if (matcher.find()) {
+                                matcher.group(1)?.toLongOrNull()?.let { length ->
+                                    val offset = matcher.group(2)?.toLongOrNull() ?: byteRangeCursor
+                                    pendingByteRange = Pair(offset, length)
+                                    byteRangeCursor = offset + length
+                                }
+                            }
+                        }
                         line.startsWith("#EXTINF") -> {
                             val durationMatcher = segmentDurationPattern.matcher(line)
                             if (durationMatcher.find()) {
@@ -86,8 +101,9 @@ object PlaylistUtils {
                     }
                 } else {
                     segmentInfo?.let {
-                        segments.add(Segment(line, it.first, it.second, programDateTime))
+                        segments.add(Segment(line, it.first, it.second, programDateTime, pendingByteRange?.first, pendingByteRange?.second))
                         segmentInfo = null
+                        pendingByteRange = null
                     }
                 }
             }

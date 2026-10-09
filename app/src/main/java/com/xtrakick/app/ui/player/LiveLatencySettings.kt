@@ -185,9 +185,20 @@ object LiveLatencySettings {
         forwardBufferMs: Long,
         isInGracePeriod: Boolean,
         maxSpeedLimit: Float = 1.08f,
-        isCurrentlyCatchingUp: Boolean = false
+        isCurrentlyCatchingUp: Boolean = false,
+        minSpeedLimit: Float? = null
     ): Float? {
-        if (isInGracePeriod || forwardBufferMs < MIN_SAFE_FORWARD_BUFFER_MS) {
+        if (isInGracePeriod) {
+            return null
+        }
+        // Ahead of the edge: ease off to the configured floor so the live edge
+        // rebuilds. Defaults resolve to 1.00 (off) unless the user sets < 1.0.
+        minSpeedLimit?.takeIf { it < 1.0f }?.let { floor ->
+            if (latencyMs <= targetOffsetMs - CATCHUP_DRIFT_THRESHOLD_MS) {
+                return (floor.coerceIn(0.5f, 1.0f) * 100f).roundToInt() / 100f
+            }
+        }
+        if (forwardBufferMs < MIN_SAFE_FORWARD_BUFFER_MS) {
             return null
         }
         val targetMargin = targetOffsetMs + CATCHUP_TARGET_MARGIN_MS
@@ -215,7 +226,8 @@ object LiveLatencySettings {
         } else {
             MAX_IVS_CATCHUP_SPEED_DEFAULT
         }
-        return (configuredMax ?: MAX_IVS_CATCHUP_SPEED_DEFAULT).coerceIn(1.02f, ceiling)
+        val saneMax = configuredMax?.takeIf { !it.isNaN() }
+        return (saneMax ?: MAX_IVS_CATCHUP_SPEED_DEFAULT).coerceIn(1.02f, ceiling)
     }
 
     private fun migrateLegacyOverrides(prefs: SharedPreferences) {

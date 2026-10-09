@@ -869,11 +869,7 @@ class Media3Fragment : PlayerFragment() {
                 } else {
                     true
                 }
-                val targetOffset = if (catchupEnabled) {
-                    liveTargetOffsetMs ?: LiveLatencySettings.resolve(prefs).targetOffsetMs
-                } else {
-                    null
-                }
+                val targetOffset = liveTargetOffsetMs ?: LiveLatencySettings.resolve(prefs).targetOffsetMs
                 updateLatency(offset, targetOffset)
             }
             if (root.isVisible && !progressBar.isPressed && !isSkipPending()) {

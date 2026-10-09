@@ -39,6 +39,15 @@
         app:singleLineTitle="false" />
 
     <SwitchPreferenceCompat
+        android:defaultValue="false"
+        android:dependency="player_picture_in_picture"
+        android:key="pip_unmute_on_fullscreen"
+        android:summary="@string/pip_unmute_on_fullscreen_summary"
+        android:title="@string/pip_unmute_on_fullscreen"
+        app:iconSpaceReserved="false"
+        app:singleLineTitle="false" />
+
+    <SwitchPreferenceCompat
         android:defaultValue="true"
         android:key="player_background_audio"
         android:title="@string/use_background_audio"

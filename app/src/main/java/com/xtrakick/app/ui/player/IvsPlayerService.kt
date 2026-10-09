@@ -6,8 +6,10 @@ import android.app.NotificationManager
 import android.app.PendingIntent
 import android.app.KeyguardManager
 import android.app.Service
+import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.content.SharedPreferences
 import android.content.pm.ServiceInfo
 import android.graphics.Bitmap
@@ -332,6 +334,7 @@ class IvsPlayerService : Service() {
         watchOwner.setMetadata(channelId, livestreamId, channelLogin)
     }
     private var dynamicsProcessingAudioSessionId: Int? = null
+    private var becomingNoisyReceiver: BroadcastReceiver? = null
     private var audioManager: AudioManager? = null
     private var audioFocusRequest: AudioFocusRequest? = null
     private var idleStopRunnable: Runnable? = null
@@ -595,7 +598,7 @@ class IvsPlayerService : Service() {
                         // the same FIFO executor, so it swaps the warm source.
                         preloadStream(retryUrl)
                         applicationHandler?.postDelayed({
-                            if (currentUrl == retryUrl) {
+                            if (currentUrl == retryUrl && playbackRequested) {
                                 runPlayerOp("background-retry") {
                                     it.setLiveLowLatencyEnabled(true)
                                     it.setRebufferToLive(false)
@@ -720,6 +723,27 @@ class IvsPlayerService : Service() {
             )
         }
         applicationHandler = Handler(Looper.getMainLooper())
+        if (prefs().getBoolean(AppConstants.PLAYER_HANDLE_AUDIO_BECOMING_NOISY, true)) {
+            val receiver = object : BroadcastReceiver() {
+                override fun onReceive(context: Context?, intent: Intent?) {
+                    if (intent?.action == AudioManager.ACTION_AUDIO_BECOMING_NOISY && playbackRequested) {
+                        playerDebugLog("headset disconnected, pausing")
+                        pause(clearPlaybackRequest = true)
+                        updatePlaybackState()
+                        updateNotification()
+                    }
+                }
+            }
+            becomingNoisyReceiver = receiver
+            runCatching {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                    registerReceiver(receiver, IntentFilter(AudioManager.ACTION_AUDIO_BECOMING_NOISY), Context.RECEIVER_NOT_EXPORTED)
+                } else {
+                    @Suppress("UnspecifiedRegisterReceiverFlag")
+                    registerReceiver(receiver, IntentFilter(AudioManager.ACTION_AUDIO_BECOMING_NOISY))
+                }
+            }
+        }
         playerDebugLog("service created")
     }
 
@@ -1476,6 +1500,8 @@ class IvsPlayerService : Service() {
     }
 
     override fun onDestroy() {
+        becomingNoisyReceiver?.let { runCatching { unregisterReceiver(it) } }
+        becomingNoisyReceiver = null
         ioScope.cancel()
         watchOwner.release()
         clearActiveLiveChannel()
