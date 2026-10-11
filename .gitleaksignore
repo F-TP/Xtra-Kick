@@ -1,0 +1,3 @@
+# Gitleaks ignore file
+340f9ad9e06af0ee01bb35925bfec440da7c652d:app/src/test/java/com/xtrakick/app/util/AuthStateHelperTest.kt:generic-api-key:108
+340f9ad9e06af0ee01bb35925bfec440da7c652d:Xtra/app/src/test/java/com/xtrakick/app/util/AuthStateHelperTest.kt:generic-api-key:108
