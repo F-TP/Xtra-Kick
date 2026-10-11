@@ -1,12 +1,9 @@
 <androidx.preference.PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto">
 
-    <SwitchPreferenceCompat
-        android:defaultValue="true"
-        android:key="player_show_stream_notification_seekbar"
-        android:title="@string/player_show_stream_notification_seekbar"
-        app:iconSpaceReserved="false"
-        app:singleLineTitle="false" />
+    <PreferenceCategory
+        android:title="@string/live_latency"
+        app:iconSpaceReserved="false" />
 
     <ListPreference
         android:defaultValue="balanced"
@@ -23,9 +20,13 @@
         android:defaultValue="false"
         android:key="player_ivs_latency_catchup"
         android:title="@string/player_ivs_latency_catchup"
-        app:summary="@string/player_ivs_latency_catchup_summary"
         app:iconSpaceReserved="false"
-        app:singleLineTitle="false" />
+        app:singleLineTitle="false"
+        app:summary="@string/player_ivs_latency_catchup_summary" />
+
+    <PreferenceCategory
+        android:title="@string/buffer_cache_limits"
+        app:iconSpaceReserved="false" />
 
     <EditTextPreference
         android:defaultValue=""
@@ -66,6 +67,10 @@
         app:iconSpaceReserved="false"
         app:singleLineTitle="false"
         app:useSimpleSummaryProvider="true" />
+
+    <PreferenceCategory
+        android:title="@string/live_edge_sync"
+        app:iconSpaceReserved="false" />
 
     <EditTextPreference
         android:defaultValue=""

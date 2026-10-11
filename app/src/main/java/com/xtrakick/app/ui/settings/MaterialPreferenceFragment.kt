@@ -16,8 +16,14 @@ import androidx.preference.ListPreference
 import androidx.preference.MultiSelectListPreference
 import androidx.preference.Preference
 import androidx.preference.PreferenceFragmentCompat
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.updatePadding
+import androidx.recyclerview.widget.RecyclerView
+import com.xtrakick.app.R
 import com.xtrakick.app.util.AppConstants
 import com.xtrakick.app.util.prefs
+import com.google.android.material.appbar.AppBarLayout
 import com.google.android.material.color.MaterialColors
 
 abstract class MaterialPreferenceFragment : PreferenceFragmentCompat() {
@@ -82,6 +88,38 @@ abstract class MaterialPreferenceFragment : PreferenceFragmentCompat() {
                 }
             })
             start()
+        }
+    }
+
+    protected fun setupStandardListBehavior() {
+        view?.let { root ->
+            ViewCompat.setOnApplyWindowInsetsListener(root) { _, windowInsets ->
+                val insets = windowInsets.getInsets(WindowInsetsCompat.Type.systemBars())
+                listView.updatePadding(bottom = insets.bottom)
+                WindowInsetsCompat.CONSUMED
+            }
+        }
+        requireActivity().findViewById<AppBarLayout>(R.id.appBar)?.let { appBar ->
+            if (requireContext().prefs().getBoolean(AppConstants.UI_THEME_APPBAR_LIFT, true)) {
+                appBar.setLiftOnScrollTargetView(listView)
+                listView.addOnScrollListener(object : RecyclerView.OnScrollListener() {
+                    override fun onScrolled(recyclerView: RecyclerView, dx: Int, dy: Int) {
+                        appBar.isLifted = recyclerView.canScrollVertically(-1)
+                    }
+                })
+                listView.addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ ->
+                    appBar.isLifted = listView.canScrollVertically(-1)
+                }
+            } else {
+                appBar.setLiftable(false)
+                appBar.background = null
+            }
+        }
+        (requireActivity() as? SettingsActivity)?.let { activity ->
+            activity.searchItem?.also { key ->
+                activity.searchItem = null
+                scrollToPreference(key)
+            }
         }
     }
 

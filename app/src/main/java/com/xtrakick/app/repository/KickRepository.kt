@@ -66,6 +66,7 @@ import com.xtrakick.app.model.kick.KickMultiSearchResponse
 import com.xtrakick.app.model.kick.KickTypesenseQuery
 import com.xtrakick.app.model.kick.KickTypesenseResult
 import com.xtrakick.app.model.kick.auth.KickChatSendResponse
+import com.xtrakick.app.model.kick.auth.KickChatSendData
 import com.xtrakick.app.model.kick.auth.KickBackendRefreshRequest
 import com.xtrakick.app.model.ui.ChannelViewerList
 import com.xtrakick.app.model.ui.Clip
@@ -388,6 +389,19 @@ class KickRepository @Inject constructor(
     }
 
     private suspend fun resolveKickCurrentUser(accessToken: String): KickCurrentUser? {
+        if (AuthStateHelper.isKickGoogleSession(context)) {
+            val mobileUser = runCatching {
+                getKickMobileUser(accessToken)
+            }.getOrNull()
+            if (mobileUser != null) {
+                val userId = mobileUser.optString("id").takeIf { it.isNotBlank() && it != "null" }
+                val login = mobileUser.optString("username").takeIf { it.isNotBlank() && it != "null" } ?: userId
+                return KickCurrentUser(
+                    id = userId,
+                    login = login,
+                )
+            }
+        }
         val user = runCatching {
             kickOfficialApiClient.getUsers(accessToken).firstOrNull()
         }.getOrNull() ?: return null
@@ -451,10 +465,16 @@ class KickRepository @Inject constructor(
             if (tokenPrefs.getString(AppConstants.KICK_ACCESS_TOKEN, null) != observedToken) {
                 return@withLock KickApiHelper.getKickPublicApiHeaders(context)
             }
+            if (AuthStateHelper.isKickGoogleSession(context)) {
+                return@withLock headers
+            }
             val refreshToken = tokenPrefs.getString(AppConstants.KICK_REFRESH_TOKEN, null)?.takeIf { it.isNotBlank() }
             if (refreshToken.isNullOrBlank()) {
                 if (isKickAuthDebugEnabled()) {
                     DiagnosticLogger.w(tag, "Kick public API headers missing token and no refresh token available")
+                }
+                if (propagateFailure) {
+                    throw KickAuthRequestException.HttpFailure(401)
                 }
                 return headers
             }
@@ -1252,6 +1272,120 @@ class KickRepository @Inject constructor(
                 userId = targetUserId,
             )
         )
+    }
+
+    suspend fun deleteKickChatMessage(
+        chatroomId: String,
+        messageId: String,
+    ) = withContext(Dispatchers.IO) {
+        val cid = chatroomId.trim().takeIf { it.isNotBlank() }
+            ?: throw IllegalArgumentException("chatroomId is required")
+        val mid = messageId.trim().takeIf { it.isNotBlank() }
+            ?: throw IllegalArgumentException("messageId is required")
+        val url = "https://kick.com/api/v2/chatrooms/$cid/messages/$mid"
+        if (AuthStateHelper.isKickGoogleSession(context)) {
+            val mobileToken = context.tokenPrefs().getString(AppConstants.KICK_ACCESS_TOKEN, null)
+                ?.removePrefix("Bearer ")?.trim()?.takeIf { it.isNotBlank() }
+                ?: throw IOException("Kick login is required.")
+            val request = createKickMobileRequestBuilder(url, mobileToken)
+                .delete()
+                .build()
+            okHttpClient.newCall(request).execute().use { response ->
+                if (response.code == 401) throw KickAuthRequestException.HttpFailure(401)
+                if (!response.isSuccessful && response.code != 404) {
+                    throw IOException(parseKickMobileError(response.code, response.body.string()))
+                }
+            }
+        } else {
+            executeKickWebSessionRequest(url, method = "DELETE")
+        }
+    }
+
+    suspend fun banKickChannelUser(
+        channelSlug: String,
+        targetUsername: String,
+        permanent: Boolean = true,
+        durationSeconds: Int? = null,
+        reason: String? = null,
+    ) = withContext(Dispatchers.IO) {
+        val slug = channelSlug.trim().takeIf { it.isNotBlank() }
+            ?: throw IllegalArgumentException("channelSlug is required")
+        val username = targetUsername.trim().takeIf { it.isNotBlank() }
+            ?: throw IllegalArgumentException("targetUsername is required")
+        val payload = JSONObject().apply {
+            put("banned_username", username)
+            put("permanent", permanent)
+            if (!reason.isNullOrBlank()) {
+                put("reason", reason)
+            }
+            if (!permanent && durationSeconds != null && durationSeconds > 0) {
+                put("duration", durationSeconds)
+            }
+        }.toString()
+        val url = "https://kick.com/api/v2/channels/${urlEncode(slug)}/bans"
+        if (AuthStateHelper.isKickGoogleSession(context)) {
+            val mobileToken = context.tokenPrefs().getString(AppConstants.KICK_ACCESS_TOKEN, null)
+                ?.removePrefix("Bearer ")?.trim()?.takeIf { it.isNotBlank() }
+                ?: throw IOException("Kick login is required.")
+            val request = createKickMobileRequestBuilder(url, mobileToken)
+                .header("Content-Type", "application/json")
+                .post(payload.toRequestBody("application/json".toMediaTypeOrNull()))
+                .build()
+            okHttpClient.newCall(request).execute().use { response ->
+                if (response.code == 401) throw KickAuthRequestException.HttpFailure(401)
+                if (!response.isSuccessful) {
+                    throw IOException(parseKickMobileError(response.code, response.body.string()))
+                }
+            }
+        } else {
+            executeKickWebSessionRequest(url, body = payload, post = true)
+        }
+    }
+
+    suspend fun unbanKickChannelUser(
+        channelSlug: String,
+        targetUserIdOrUsername: String,
+    ) = withContext(Dispatchers.IO) {
+        val slug = channelSlug.trim().takeIf { it.isNotBlank() }
+            ?: throw IllegalArgumentException("channelSlug is required")
+        val target = targetUserIdOrUsername.trim().takeIf { it.isNotBlank() }
+            ?: throw IllegalArgumentException("target is required")
+        val url = "https://kick.com/api/v2/channels/${urlEncode(slug)}/bans/${urlEncode(target)}"
+        if (AuthStateHelper.isKickGoogleSession(context)) {
+            val mobileToken = context.tokenPrefs().getString(AppConstants.KICK_ACCESS_TOKEN, null)
+                ?.removePrefix("Bearer ")?.trim()?.takeIf { it.isNotBlank() }
+                ?: throw IOException("Kick login is required.")
+            val request = createKickMobileRequestBuilder(url, mobileToken)
+                .delete()
+                .build()
+            okHttpClient.newCall(request).execute().use { response ->
+                if (response.code == 401) throw KickAuthRequestException.HttpFailure(401)
+                if (!response.isSuccessful && response.code != 404) {
+                    throw IOException(parseKickMobileError(response.code, response.body.string()))
+                }
+            }
+        } else {
+            executeKickWebSessionRequest(url, method = "DELETE")
+        }
+    }
+
+    private fun createKickMobileRequestBuilder(url: String, mobileToken: String): Request.Builder {
+        val cleanToken = mobileToken.removePrefix("Bearer ").trim()
+        return Request.Builder()
+            .url(url)
+            .header("User-Agent", "KickMobile/40.31.0 (com.kick.mobile; platform: android; build:40310)")
+            .header("Accept", "application/json")
+            .header("Authorization", "Bearer $cleanToken")
+            .header("x-app-platform", "Android")
+            .header("x-app-version", "40.31.0")
+            .header("x-kick-app", "mobile")
+            .header("x-req-trace", "1e3c5f7a9b2d4c8f918a723eafbd10d2")
+    }
+
+    private fun parseKickMobileError(responseCode: Int, responseBody: String): String {
+        return runCatching {
+            JSONObject(responseBody).optString("message").takeIf { it.isNotBlank() }
+        }.getOrNull() ?: "HTTP $responseCode: $responseBody"
     }
 
     suspend fun getOfficialChannelRewards(networkLibrary: String?): List<KickOfficialReward> = withContext(Dispatchers.IO) {
@@ -3831,7 +3965,24 @@ class KickRepository @Inject constructor(
         return runCatching { URI(baseUrl).resolve(url).toString() }.getOrElse { url }
     }
 
-    suspend fun sendChatMessage(accessToken: String, broadcasterUserId: Long, content: String, replyToMessageId: String? = null): KickChatSendResponse = withContext(Dispatchers.IO) {
+    suspend fun sendChatMessage(
+        accessToken: String,
+        broadcasterUserId: Long,
+        content: String,
+        replyToMessageId: String? = null,
+        chatroomId: String? = null,
+    ): KickChatSendResponse = withContext(Dispatchers.IO) {
+        if (AuthStateHelper.isKickGoogleSession(context)) {
+            val resolvedChatroomId = chatroomId?.trim()?.takeIf { it.isNotBlank() }
+                ?: resolveDedicatedChatroomCandidates(broadcasterUserId.toString()).firstOrNull()
+                ?: broadcasterUserId.toString()
+            return@withContext sendKickMobileChatMessage(
+                bearerToken = accessToken,
+                chatroomId = resolvedChatroomId,
+                content = content,
+                replyToMessageId = replyToMessageId,
+            )
+        }
         val response = kickOfficialApiClient.postChatMessage(
             accessToken = accessToken,
             request = KickOfficialPostChatMessageRequest(
@@ -3846,6 +3997,51 @@ class KickRepository @Inject constructor(
             response is JsonObject && response["data"] != null -> json.decodeFromJsonElement(response)
             else -> KickChatSendResponse(
                 data = json.decodeFromJsonElement(response)
+            )
+        }
+    }
+
+    suspend fun sendKickMobileChatMessage(
+        bearerToken: String,
+        chatroomId: String,
+        content: String,
+        replyToMessageId: String? = null,
+    ): KickChatSendResponse = withContext(Dispatchers.IO) {
+        val payload = JSONObject().apply {
+            put("chatroomId", chatroomId.toLongOrNull() ?: chatroomId)
+            put("content", content.trim())
+            put("type", "message")
+            if (!replyToMessageId.isNullOrBlank()) {
+                put("metadata", JSONObject().apply {
+                    put("original_message", JSONObject().apply {
+                        put("id", replyToMessageId)
+                    })
+                })
+            }
+        }.toString()
+        val request = createKickMobileRequestBuilder("https://kick.com/api/v2/messages/send/$chatroomId", bearerToken)
+            .header("Content-Type", "application/json")
+            .post(payload.toRequestBody("application/json".toMediaTypeOrNull()))
+            .build()
+        okHttpClient.newCall(request).execute().use { response ->
+            val responseBody = response.body.string()
+            if (!response.isSuccessful) {
+                if (response.code == 401 || (response.code == 403 && responseBody.contains("not authenticated", ignoreCase = true))) {
+                    throw KickAuthRequestException.HttpFailure(401)
+                }
+                throw IOException(parseKickMobileError(response.code, responseBody))
+            }
+            val root = runCatching { JSONObject(responseBody) }.getOrNull()
+            val dataObj = root?.optJSONObject("data")
+            val messageId = dataObj?.optString("id")?.takeIf { it.isNotBlank() }
+                ?: dataObj?.optString("message_id")?.takeIf { it.isNotBlank() }
+            KickChatSendResponse(
+                data = KickChatSendData(
+                    isSent = true,
+                    messageId = messageId,
+                ),
+                status = root?.optString("status"),
+                message = root?.optString("message"),
             )
         }
     }

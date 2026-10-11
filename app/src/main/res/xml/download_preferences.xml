@@ -1,5 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
 <androidx.preference.PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto">
+
+    <PreferenceCategory
+        android:title="@string/download_settings"
+        app:iconSpaceReserved="false" />
 
     <SwitchPreferenceCompat
         android:defaultValue="true"
@@ -25,6 +30,27 @@
         app:min="1"
         app:showSeekBarValue="true"
         app:singleLineTitle="false" />
+
+    <PreferenceCategory
+        android:title="@string/storage_and_cleanup"
+        app:iconSpaceReserved="false" />
+
+    <Preference
+        android:key="action_import_app_downloads"
+        android:title="@string/import_app_downloads"
+        app:iconSpaceReserved="false"
+        app:singleLineTitle="false" />
+
+    <Preference
+        android:key="action_leftover_files"
+        android:title="@string/leftover_files"
+        android:summary="@string/leftover_files_scanning"
+        app:iconSpaceReserved="false"
+        app:singleLineTitle="false" />
+
+    <PreferenceCategory
+        android:title="@string/connection_timings"
+        app:iconSpaceReserved="false" />
 
     <EditTextPreference
         android:defaultValue="2"
@@ -61,18 +87,5 @@
         app:iconSpaceReserved="false"
         app:singleLineTitle="false"
         app:useSimpleSummaryProvider="true" />
-
-    <Preference
-        android:key="action_import_app_downloads"
-        android:title="@string/import_app_downloads"
-        app:iconSpaceReserved="false"
-        app:singleLineTitle="false" />
-
-    <Preference
-        android:key="action_leftover_files"
-        android:title="@string/leftover_files"
-        android:summary="@string/leftover_files_scanning"
-        app:iconSpaceReserved="false"
-        app:singleLineTitle="false" />
 
 </androidx.preference.PreferenceScreen>

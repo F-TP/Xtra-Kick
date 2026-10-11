@@ -1,76 +1,9 @@
 <androidx.preference.PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto">
 
-    <Preference
-        android:key="nav_muted_users"
-        android:title="@string/muted_users"
-        app:iconSpaceReserved="false"
-        app:singleLineTitle="false" />
-
-    <SwitchPreferenceCompat
-        android:defaultValue="false"
-        android:key="chat_boldnames"
-        android:title="@string/bold_usernames"
-        app:iconSpaceReserved="false"
-        app:singleLineTitle="false" />
-
-    <SwitchPreferenceCompat
-        android:defaultValue="true"
-        android:key="chat_randomcolor"
-        android:title="@string/randomcolor"
-        app:iconSpaceReserved="false"
-        app:singleLineTitle="false" />
-
-    <SwitchPreferenceCompat
-        android:defaultValue="true"
-        android:key="chat_theme_adapted_username_color"
-        android:title="@string/theme_adapted_username_color"
-        app:iconSpaceReserved="false"
-        app:singleLineTitle="false" />
-
-    <SwitchPreferenceCompat
-        android:defaultValue="false"
-        android:key="chat_timestamps"
-        android:title="@string/timestamps"
-        app:iconSpaceReserved="false"
-        app:singleLineTitle="false" />
-
-    <ListPreference
-        android:defaultValue="0"
-        android:entries="@array/timestampEntries"
-        android:entryValues="@array/timestampValues"
-        android:key="chat_timestamp_format"
-        android:summary="%s"
-        android:title="@string/timestamp_format"
-        app:iconSpaceReserved="false"
-        app:singleLineTitle="false" />
-
-    <ListPreference
-        android:defaultValue="0"
-        android:entries="@array/imageLibraryEntries"
-        android:entryValues="@array/imageLibraryValues"
-        android:key="chat_image_library"
-        android:summary="%s"
-        android:title="@string/image_library"
-        app:iconSpaceReserved="false"
-        app:singleLineTitle="false" />
-
-    <SwitchPreferenceCompat
-        android:defaultValue="true"
-        android:key="chat_use_webp"
-        android:title="@string/use_webp_images"
-        app:iconSpaceReserved="false"
-        app:singleLineTitle="false" />
-
-    <ListPreference
-        android:defaultValue="4"
-        android:entries="@array/imageQualityEntries"
-        android:entryValues="@array/imageQualityValues"
-        android:key="chat_image_quality"
-        android:summary="%s"
-        android:title="@string/image_quality"
-        app:iconSpaceReserved="false"
-        app:singleLineTitle="false" />
+    <PreferenceCategory
+        android:title="@string/text_and_sizing"
+        app:iconSpaceReserved="false" />
 
     <SeekBarPreference
         android:defaultValue="100"
@@ -117,68 +50,6 @@
         app:showSeekBarValue="true"
         app:singleLineTitle="false" />
 
-    <SeekBarPreference
-        android:defaultValue="600"
-        android:key="chat_limit"
-        android:max="1000"
-        android:title="@string/message_limit"
-        app:iconSpaceReserved="false"
-        app:min="1"
-        app:showSeekBarValue="true"
-        app:singleLineTitle="false" />
-
-    <SwitchPreferenceCompat
-        android:defaultValue="true"
-        android:key="chat_recent"
-        android:title="@string/recentMsg_enable"
-        app:iconSpaceReserved="false"
-        app:singleLineTitle="false" />
-
-    <SeekBarPreference
-        android:defaultValue="100"
-        android:key="chat_recent_limit"
-        android:max="800"
-        android:title="@string/recentMsg_limit"
-        app:iconSpaceReserved="false"
-        app:min="1"
-        app:showSeekBarValue="true"
-        app:singleLineTitle="false" />
-
-    <SwitchPreferenceCompat
-        android:defaultValue="false"
-        android:key="player_keep_chat_open"
-        android:title="@string/keep_chat_open"
-        app:iconSpaceReserved="false"
-        app:singleLineTitle="false" />
-
-    <SwitchPreferenceCompat
-        android:defaultValue="true"
-        android:key="chat_show_paints"
-        android:title="@string/show_name_paints"
-        app:iconSpaceReserved="false"
-        app:singleLineTitle="false" />
-
-    <SwitchPreferenceCompat
-        android:defaultValue="true"
-        android:key="chat_show_stv_badges"
-        android:title="@string/show_stv_badges"
-        app:iconSpaceReserved="false"
-        app:singleLineTitle="false" />
-
-    <SwitchPreferenceCompat
-        android:defaultValue="true"
-        android:key="chat_show_kick_badges"
-        android:title="@string/show_kick_badges"
-        app:iconSpaceReserved="false"
-        app:singleLineTitle="false" />
-
-    <SwitchPreferenceCompat
-        android:defaultValue="true"
-        android:key="chat_show_personal_emotes"
-        android:title="@string/show_stv_personal_emotes"
-        app:iconSpaceReserved="false"
-        app:singleLineTitle="false" />
-
     <SwitchPreferenceCompat
         android:defaultValue="true"
         android:key="chat_alternating_line_shadow"
@@ -198,12 +69,41 @@
         app:showSeekBarValue="true"
         app:singleLineTitle="false" />
 
+    <PreferenceCategory
+        android:title="@string/usernames_and_cosmetics"
+        app:iconSpaceReserved="false" />
+
     <SwitchPreferenceCompat
-        android:defaultValue="true"
-        android:key="chat_stv_live_updates"
-        android:title="@string/stv_live_updates"
+        android:defaultValue="false"
+        android:key="chat_boldnames"
+        android:title="@string/bold_usernames"
         app:iconSpaceReserved="false"
         app:singleLineTitle="false" />
+
+    <SwitchPreferenceCompat
+        android:defaultValue="true"
+        android:key="chat_theme_adapted_username_color"
+        android:title="@string/theme_adapted_username_color"
+        app:iconSpaceReserved="false"
+        app:singleLineTitle="false" />
+
+    <SwitchPreferenceCompat
+        android:defaultValue="true"
+        android:key="chat_randomcolor"
+        android:title="@string/randomcolor"
+        app:iconSpaceReserved="false"
+        app:singleLineTitle="false" />
+
+    <SwitchPreferenceCompat
+        android:defaultValue="true"
+        android:key="chat_show_paints"
+        android:title="@string/show_name_paints"
+        app:iconSpaceReserved="false"
+        app:singleLineTitle="false" />
+
+    <PreferenceCategory
+        android:title="@string/emotes_and_graphics"
+        app:iconSpaceReserved="false" />
 
     <SwitchPreferenceCompat
         android:defaultValue="true"
@@ -214,15 +114,77 @@
 
     <SwitchPreferenceCompat
         android:defaultValue="true"
-        android:key="chat_show_usernotice"
-        android:title="@string/show_usernotice"
+        android:dependency="chat_enable_stv"
+        android:key="chat_stv_live_updates"
+        android:title="@string/stv_live_updates"
         app:iconSpaceReserved="false"
         app:singleLineTitle="false" />
 
     <SwitchPreferenceCompat
-        android:defaultValue="false"
-        android:key="chat_disable_gift_train_banner"
-        android:title="@string/disable_gift_train_banner"
+        android:defaultValue="true"
+        android:dependency="chat_enable_stv"
+        android:key="chat_show_personal_emotes"
+        android:title="@string/show_stv_personal_emotes"
+        app:iconSpaceReserved="false"
+        app:singleLineTitle="false" />
+
+    <SwitchPreferenceCompat
+        android:defaultValue="true"
+        android:key="animatedGifEmotes"
+        android:title="@string/animated_emotes"
+        app:iconSpaceReserved="false"
+        app:singleLineTitle="false" />
+
+    <ListPreference
+        android:defaultValue="15"
+        android:dependency="animatedGifEmotes"
+        android:entries="@array/chatAnimatedEmoteFpsEntries"
+        android:entryValues="@array/chatAnimatedEmoteFpsValues"
+        android:key="chat_animated_emote_fps"
+        android:title="@string/animated_emote_frame_rate"
+        app:iconSpaceReserved="false"
+        app:singleLineTitle="false"
+        app:useSimpleSummaryProvider="true" />
+
+    <SwitchPreferenceCompat
+        android:defaultValue="true"
+        android:key="chat_zerowidth"
+        android:title="@string/overlay_emotes"
+        app:iconSpaceReserved="false"
+        app:singleLineTitle="false" />
+
+
+    <ListPreference
+        android:defaultValue="4"
+        android:entries="@array/imageQualityEntries"
+        android:entryValues="@array/imageQualityValues"
+        android:key="chat_image_quality"
+        android:summary="%s"
+        android:title="@string/image_quality"
+        app:iconSpaceReserved="false"
+        app:singleLineTitle="false" />
+
+    <PreferenceCategory
+        android:title="@string/moderation_and_badges"
+        app:iconSpaceReserved="false" />
+
+    <Preference
+        android:key="nav_muted_users"
+        android:title="@string/muted_users"
+        app:iconSpaceReserved="false"
+        app:singleLineTitle="false" />
+
+    <SwitchPreferenceCompat
+        android:defaultValue="true"
+        android:key="chat_show_kick_badges"
+        android:title="@string/show_kick_badges"
+        app:iconSpaceReserved="false"
+        app:singleLineTitle="false" />
+
+    <SwitchPreferenceCompat
+        android:defaultValue="true"
+        android:key="chat_show_stv_badges"
+        android:title="@string/show_stv_badges"
         app:iconSpaceReserved="false"
         app:singleLineTitle="false" />
 
@@ -252,26 +214,15 @@
 
     <SwitchPreferenceCompat
         android:defaultValue="true"
-        android:key="animatedGifEmotes"
-        android:title="@string/animated_emotes"
+        android:key="chat_show_usernotice"
+        android:title="@string/show_usernotice"
         app:iconSpaceReserved="false"
         app:singleLineTitle="false" />
 
-    <ListPreference
-        android:defaultValue="15"
-        android:dependency="animatedGifEmotes"
-        android:entries="@array/chatAnimatedEmoteFpsEntries"
-        android:entryValues="@array/chatAnimatedEmoteFpsValues"
-        android:key="chat_animated_emote_fps"
-        android:title="@string/animated_emote_frame_rate"
-        app:iconSpaceReserved="false"
-        app:singleLineTitle="false"
-        app:useSimpleSummaryProvider="true" />
-
     <SwitchPreferenceCompat
-        android:defaultValue="true"
-        android:key="chat_zerowidth"
-        android:title="@string/overlay_emotes"
+        android:defaultValue="false"
+        android:key="chat_disable_gift_train_banner"
+        android:title="@string/disable_gift_train_banner"
         app:iconSpaceReserved="false"
         app:singleLineTitle="false" />
 
@@ -282,10 +233,25 @@
         app:iconSpaceReserved="false"
         app:singleLineTitle="false" />
 
+    <PreferenceCategory
+        android:title="@string/sync_and_performance"
+        app:iconSpaceReserved="false" />
+
     <SwitchPreferenceCompat
         android:defaultValue="false"
-        android:key="chat_disable"
-        android:title="@string/disable_chat"
+        android:key="chat_timestamps"
+        android:title="@string/timestamps"
+        app:iconSpaceReserved="false"
+        app:singleLineTitle="false" />
+
+    <ListPreference
+        android:defaultValue="0"
+        android:dependency="chat_timestamps"
+        android:entries="@array/timestampEntries"
+        android:entryValues="@array/timestampValues"
+        android:key="chat_timestamp_format"
+        android:summary="%s"
+        android:title="@string/timestamp_format"
         app:iconSpaceReserved="false"
         app:singleLineTitle="false" />
 
@@ -301,10 +267,10 @@
 
     <SeekBarPreference
         android:defaultValue="5"
+        android:dependency="chat_delay_mode"
         android:key="chat_delay_custom_secs"
         android:max="120"
         android:title="@string/chat_delay_custom_secs"
-        app:dependency="chat_delay_mode"
         app:iconSpaceReserved="false"
         app:min="0"
         app:showSeekBarValue="true"
@@ -312,11 +278,73 @@
 
     <SwitchPreferenceCompat
         android:defaultValue="true"
+        android:dependency="chat_delay_mode"
         android:key="chat_show_delay_indicator"
         android:title="@string/chat_show_delay_indicator"
-        app:dependency="chat_delay_mode"
         app:iconSpaceReserved="false"
         app:singleLineTitle="false" />
 
+    <SeekBarPreference
+        android:defaultValue="600"
+        android:key="chat_limit"
+        android:max="1000"
+        android:title="@string/message_limit"
+        app:iconSpaceReserved="false"
+        app:min="1"
+        app:showSeekBarValue="true"
+        app:singleLineTitle="false" />
+
+    <SwitchPreferenceCompat
+        android:defaultValue="true"
+        android:key="chat_recent"
+        android:title="@string/recentMsg_enable"
+        app:iconSpaceReserved="false"
+        app:singleLineTitle="false" />
+
+    <SeekBarPreference
+        android:defaultValue="100"
+        android:dependency="chat_recent"
+        android:key="chat_recent_limit"
+        android:max="800"
+        android:title="@string/recentMsg_limit"
+        app:iconSpaceReserved="false"
+        app:min="1"
+        app:showSeekBarValue="true"
+        app:singleLineTitle="false" />
+
+    <SwitchPreferenceCompat
+        android:defaultValue="false"
+        android:key="player_keep_chat_open"
+        android:title="@string/keep_chat_open"
+        app:iconSpaceReserved="false"
+        app:singleLineTitle="false" />
+
+    <SwitchPreferenceCompat
+        android:defaultValue="false"
+        android:key="chat_disable"
+        android:title="@string/disable_chat"
+        app:iconSpaceReserved="false"
+        app:singleLineTitle="false" />
+
+    <PreferenceCategory
+        android:title="@string/advanced_image_rendering"
+        app:iconSpaceReserved="false" />
+
+    <ListPreference
+        android:defaultValue="0"
+        android:entries="@array/imageLibraryEntries"
+        android:entryValues="@array/imageLibraryValues"
+        android:key="chat_image_library"
+        android:summary="%s"
+        android:title="@string/image_library"
+        app:iconSpaceReserved="false"
+        app:singleLineTitle="false" />
+
+    <SwitchPreferenceCompat
+        android:defaultValue="true"
+        android:key="chat_use_webp"
+        android:title="@string/use_webp_images"
+        app:iconSpaceReserved="false"
+        app:singleLineTitle="false" />
 
 </androidx.preference.PreferenceScreen>

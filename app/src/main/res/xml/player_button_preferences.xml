@@ -1,75 +1,36 @@
 <androidx.preference.PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto">
 
-    <SwitchPreferenceCompat
-        android:defaultValue="true"
-        android:key="player_minimize"
-        android:title="@string/minimize"
-        android:icon="@drawable/baseline_expand_more_black_24"
-        app:singleLineTitle="false" />
-
-    <SwitchPreferenceCompat
-        android:defaultValue="false"
-        android:key="player_download"
-        android:title="@string/download"
-        android:icon="@drawable/ic_file_download_black_24dp"
-        app:singleLineTitle="false" />
+    <PreferenceCategory
+        android:title="@string/gestures_and_seeking"
+        app:iconSpaceReserved="false" />
 
     <SwitchPreferenceCompat
         android:defaultValue="true"
-        android:key="player_follow"
-        android:title="@string/follow"
-        android:icon="@drawable/baseline_favorite_border_black_24"
-        app:singleLineTitle="false" />
-
-    <SwitchPreferenceCompat
-        android:defaultValue="false"
-        android:key="player_sleep"
-        android:title="@string/sleep_timer"
-        android:icon="@drawable/baseline_alarm_black_24"
-        app:singleLineTitle="false" />
-
-    <SwitchPreferenceCompat
-        android:defaultValue="false"
-        android:key="sleep_timer_use_time_picker"
-        android:title="@string/sleep_timer_time_picker"
+        android:key="player_doubletap"
+        android:title="@string/player_doubletap"
         app:iconSpaceReserved="false"
         app:singleLineTitle="false" />
 
-    <SwitchPreferenceCompat
-        android:defaultValue="false"
-        android:key="sleep_timer_lock"
-        android:title="@string/sleep_timer_lock_screen"
+    <EditTextPreference
+        android:defaultValue="10"
+        android:dependency="player_doubletap"
+        android:inputType="number"
+        android:key="playerRewindV2"
+        android:summary="@string/seconds_full"
+        android:title="@string/rewind"
         app:iconSpaceReserved="false"
         app:singleLineTitle="false" />
 
-    <Preference
-        android:key="action_open_admin_settings"
-        android:title="@string/admin_settings"
+    <EditTextPreference
+        android:defaultValue="10"
+        android:dependency="player_doubletap"
+        android:inputType="number"
+        android:key="playerForwardV2"
+        android:summary="@string/seconds_full"
+        android:title="@string/forward"
         app:iconSpaceReserved="false"
         app:singleLineTitle="false" />
-
-    <SwitchPreferenceCompat
-        android:defaultValue="true"
-        android:key="player_aspect"
-        android:title="@string/aspect_ratio"
-        android:icon="@drawable/baseline_aspect_ratio_black_24"
-        app:singleLineTitle="false" />
-
-    <SwitchPreferenceCompat
-        android:defaultValue="true"
-        android:key="player_speedbutton"
-        android:title="@string/playback_speed"
-        android:icon="@drawable/exo_ic_speed"
-        app:singleLineTitle="false" />
-
-    <com.xtrakick.app.ui.settings.ValueEditTextPreference
-        android:defaultValue="0.25\n0.5\n0.75\n1.0\n1.25\n1.5\n1.75\n2.0\n3.0\n4.0\n8.0"
-        android:key="player_speed_list"
-        android:title="@string/playback_speeds"
-        app:iconSpaceReserved="false"
-        app:singleLineTitle="false"
-        app:widgetLayout="@layout/preference_value_widget" />
 
     <com.xtrakick.app.ui.settings.ValueListPreference
         android:defaultValue="2.0"
@@ -81,120 +42,161 @@
         app:singleLineTitle="false"
         app:widgetLayout="@layout/preference_value_widget" />
 
-    <SwitchPreferenceCompat
-        android:defaultValue="true"
-        android:key="player_settings"
-        android:title="@string/quality"
-        android:icon="@drawable/baseline_settings_black_24"
-        app:singleLineTitle="false" />
+    <com.xtrakick.app.ui.settings.ValueEditTextPreference
+        android:defaultValue="0.25\n0.5\n0.75\n1.0\n1.25\n1.5\n1.75\n2.0\n3.0\n4.0\n8.0"
+        android:key="player_speed_list"
+        android:title="@string/playback_speeds"
+        app:iconSpaceReserved="false"
+        app:singleLineTitle="false"
+        app:widgetLayout="@layout/preference_value_widget" />
 
     <SwitchPreferenceCompat
-        android:defaultValue="true"
-        android:key="player_menu"
-        android:title="@string/player_menu"
-        android:icon="@drawable/baseline_more_vert_black_24"
-        app:singleLineTitle="false" />
-
-    <Preference
-        android:key="nav_player_menu_settings"
-        android:title="@string/player_menu_settings"
+        android:defaultValue="false"
+        android:key="player_move_freely"
+        android:title="@string/move_player_freely"
         app:iconSpaceReserved="false"
         app:singleLineTitle="false" />
 
     <SwitchPreferenceCompat
-        android:defaultValue="true"
-        android:key="player_gamesbutton"
-        android:title="@string/chapters"
-        android:icon="@drawable/baseline_format_list_bulleted_black_24"
-        app:singleLineTitle="false" />
-
-    <SwitchPreferenceCompat
-        android:defaultValue="true"
-        android:key="player_restart"
-        android:title="@string/restart_player"
-        android:icon="@drawable/baseline_replay_black_24"
-        app:singleLineTitle="false" />
-
-    <SwitchPreferenceCompat
         android:defaultValue="false"
-        android:key="player_seeklive"
-        android:title="@string/seek_to_live"
-        android:icon="@drawable/exo_icon_fastforward"
+        android:key="player_rounded_corner_padding"
+        android:title="@string/avoid_rounded_corners"
+        app:iconSpaceReserved="false"
+        app:singleLineTitle="false" />
+
+    <PreferenceCategory
+        android:title="@string/on_screen_buttons"
+        app:iconSpaceReserved="false" />
+
+    <SwitchPreferenceCompat
+        android:defaultValue="true"
+        android:icon="@drawable/baseline_expand_more_black_24"
+        android:key="player_minimize"
+        android:title="@string/minimize"
         app:singleLineTitle="false" />
 
     <SwitchPreferenceCompat
         android:defaultValue="true"
-        android:key="player_volumebutton"
-        android:title="@string/volume"
-        android:icon="@drawable/baseline_volume_up_black_24"
-        app:singleLineTitle="false" />
-
-    <SwitchPreferenceCompat
-        android:defaultValue="true"
-        android:key="player_audio_compressor_button"
-        android:title="@string/audio_compressor"
-        android:icon="@drawable/baseline_audio_compressor_on_24dp"
-        app:singleLineTitle="false" />
-
-    <SwitchPreferenceCompat
-        android:defaultValue="false"
-        android:key="player_mode"
-        android:title="@string/audio_only"
-        android:icon="@drawable/baseline_audiotrack_black_24"
-        app:singleLineTitle="false" />
-
-    <SwitchPreferenceCompat
-        android:defaultValue="false"
-        android:key="player_subtitles"
-        android:title="@string/subtitles"
-        android:icon="@drawable/exo_ic_subtitle_off"
-        app:singleLineTitle="false" />
-
-    <SwitchPreferenceCompat
-        android:defaultValue="false"
-        android:key="player_chatbartoggle"
-        android:title="@string/chat_input_toggle"
-        android:icon="@drawable/baseline_keyboard_black_24"
-        app:singleLineTitle="false" />
-
-    <SwitchPreferenceCompat
-        android:defaultValue="true"
-        android:key="player_chattoggle"
-        android:title="@string/chat_toggle"
-        android:icon="@drawable/baseline_speaker_notes_black_24"
-        app:singleLineTitle="false" />
-
-    <SwitchPreferenceCompat
-        android:defaultValue="true"
+        android:icon="@drawable/baseline_fullscreen_black_24"
         android:key="player_fullscreen"
         android:title="@string/fullscreen"
-        android:icon="@drawable/baseline_fullscreen_black_24"
+        app:singleLineTitle="false" />
+
+    <SwitchPreferenceCompat
+        android:defaultValue="false"
+        android:key="player_pause"
+        android:title="@string/player_pause"
+        app:iconSpaceReserved="false"
+        app:singleLineTitle="false" />
+
+    <SwitchPreferenceCompat
+        android:defaultValue="false"
+        android:icon="@drawable/exo_icon_fastforward"
+        android:key="player_seeklive"
+        android:title="@string/seek_to_live"
         app:singleLineTitle="false" />
 
     <SwitchPreferenceCompat
         android:defaultValue="true"
-        android:key="player_doubletap"
-        android:title="@string/player_doubletap"
-        app:iconSpaceReserved="false"
+        android:icon="@drawable/exo_ic_speed"
+        android:key="player_speedbutton"
+        android:title="@string/playback_speed"
         app:singleLineTitle="false" />
 
-    <EditTextPreference
-        android:defaultValue="10"
-        android:key="playerRewindV2"
-        android:inputType="number"
-        android:summary="@string/seconds_full"
-        android:title="@string/rewind"
-        app:iconSpaceReserved="false"
+    <SwitchPreferenceCompat
+        android:defaultValue="true"
+        android:icon="@drawable/baseline_settings_black_24"
+        android:key="player_settings"
+        android:title="@string/quality"
         app:singleLineTitle="false" />
 
-    <EditTextPreference
-        android:defaultValue="10"
-        android:key="playerForwardV2"
-        android:inputType="number"
-        android:summary="@string/seconds_full"
-        android:title="@string/forward"
-        app:iconSpaceReserved="false"
+    <SwitchPreferenceCompat
+        android:defaultValue="true"
+        android:icon="@drawable/baseline_format_list_bulleted_black_24"
+        android:key="player_gamesbutton"
+        android:title="@string/chapters"
         app:singleLineTitle="false" />
+
+    <SwitchPreferenceCompat
+        android:defaultValue="true"
+        android:icon="@drawable/baseline_volume_up_black_24"
+        android:key="player_volumebutton"
+        android:title="@string/volume"
+        app:singleLineTitle="false" />
+
+    <SwitchPreferenceCompat
+        android:defaultValue="true"
+        android:icon="@drawable/baseline_audio_compressor_on_24dp"
+        android:key="player_audio_compressor_button"
+        android:title="@string/audio_compressor"
+        app:singleLineTitle="false" />
+
+    <SwitchPreferenceCompat
+        android:defaultValue="false"
+        android:icon="@drawable/baseline_audiotrack_black_24"
+        android:key="player_mode"
+        android:title="@string/audio_only"
+        app:singleLineTitle="false" />
+
+    <SwitchPreferenceCompat
+        android:defaultValue="false"
+        android:icon="@drawable/exo_ic_subtitle_off"
+        android:key="player_subtitles"
+        android:title="@string/subtitles"
+        app:singleLineTitle="false" />
+
+    <SwitchPreferenceCompat
+        android:defaultValue="true"
+        android:icon="@drawable/baseline_aspect_ratio_black_24"
+        android:key="player_aspect"
+        android:title="@string/aspect_ratio"
+        app:singleLineTitle="false" />
+
+    <SwitchPreferenceCompat
+        android:defaultValue="true"
+        android:icon="@drawable/baseline_replay_black_24"
+        android:key="player_restart"
+        android:title="@string/restart_player"
+        app:singleLineTitle="false" />
+
+    <SwitchPreferenceCompat
+        android:defaultValue="false"
+        android:icon="@drawable/ic_file_download_black_24dp"
+        android:key="player_download"
+        android:title="@string/download"
+        app:singleLineTitle="false" />
+
+    <SwitchPreferenceCompat
+        android:defaultValue="true"
+        android:icon="@drawable/baseline_favorite_border_black_24"
+        android:key="player_follow"
+        android:title="@string/follow"
+        app:singleLineTitle="false" />
+
+    <SwitchPreferenceCompat
+        android:defaultValue="true"
+        android:icon="@drawable/baseline_speaker_notes_black_24"
+        android:key="player_chattoggle"
+        android:title="@string/chat_toggle"
+        app:singleLineTitle="false" />
+
+    <SwitchPreferenceCompat
+        android:defaultValue="false"
+        android:icon="@drawable/baseline_keyboard_black_24"
+        android:key="player_chatbartoggle"
+        android:title="@string/chat_input_toggle"
+        app:singleLineTitle="false" />
+
+    <SwitchPreferenceCompat
+        android:defaultValue="true"
+        android:icon="@drawable/baseline_more_vert_black_24"
+        android:key="player_menu"
+        android:title="@string/player_menu"
+        app:singleLineTitle="false" />
+
+    <PreferenceCategory
+        android:title="@string/on_screen_info"
+        app:iconSpaceReserved="false" />
 
     <SwitchPreferenceCompat
         android:defaultValue="true"
@@ -232,13 +234,6 @@
         app:singleLineTitle="false" />
 
     <SwitchPreferenceCompat
-        android:defaultValue="false"
-        android:key="player_viewerlist"
-        android:title="@string/player_viewerlist"
-        app:iconSpaceReserved="false"
-        app:singleLineTitle="false" />
-
-    <SwitchPreferenceCompat
         android:defaultValue="true"
         android:key="player_viewericon"
         android:title="@string/show_view_count_icon"
@@ -247,8 +242,42 @@
 
     <SwitchPreferenceCompat
         android:defaultValue="false"
-        android:key="player_pause"
-        android:title="@string/player_pause"
+        android:key="player_viewerlist"
+        android:title="@string/player_viewerlist"
+        app:iconSpaceReserved="false"
+        app:singleLineTitle="false" />
+
+    <SwitchPreferenceCompat
+        android:defaultValue="true"
+        android:key="player_show_stream_notification_seekbar"
+        android:title="@string/player_show_stream_notification_seekbar"
+        app:iconSpaceReserved="false"
+        app:singleLineTitle="false" />
+
+    <PreferenceCategory
+        android:title="@string/sleep_timer"
+        app:iconSpaceReserved="false" />
+
+    <SwitchPreferenceCompat
+        android:defaultValue="false"
+        android:icon="@drawable/baseline_alarm_black_24"
+        android:key="player_sleep"
+        android:title="@string/sleep_timer"
+        app:singleLineTitle="false" />
+
+    <SwitchPreferenceCompat
+        android:defaultValue="false"
+        android:dependency="player_sleep"
+        android:key="sleep_timer_use_time_picker"
+        android:title="@string/sleep_timer_time_picker"
+        app:iconSpaceReserved="false"
+        app:singleLineTitle="false" />
+
+    <SwitchPreferenceCompat
+        android:defaultValue="false"
+        android:dependency="player_sleep"
+        android:key="sleep_timer_lock"
+        android:title="@string/sleep_timer_lock_screen"
         app:iconSpaceReserved="false"
         app:singleLineTitle="false" />
 

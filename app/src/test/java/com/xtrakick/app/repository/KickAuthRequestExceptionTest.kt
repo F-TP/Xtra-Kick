@@ -58,6 +58,17 @@ class KickAuthRequestExceptionTest {
     }
 
     @Test
+    fun classifyRecognizesHttp400AsUnauthorized() {
+        val error = KickAuthRequestException.classify(
+            KickAuthRequestException.HttpFailure(400),
+            isBackendRequest = true
+        )
+
+        assertTrue(error is KickAuthRequestException.HttpFailure)
+        assertTrue(KickAuthRequestException.isUnauthorized(error))
+    }
+
+    @Test
     fun classifyKeepsNonBackendIoErrorsGeneric() {
         val error = KickAuthRequestException.classify(
             IOException("network"),

@@ -1,0 +1,62 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.preference.PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto">
+
+    <PreferenceCategory
+        android:title="@string/session_and_security"
+        app:iconSpaceReserved="false" />
+
+    <SwitchPreferenceCompat
+        android:defaultValue="true"
+        android:key="validate_tokens"
+        android:title="@string/verify_session_startup"
+        android:summary="@string/verify_session_startup_summary"
+        app:iconSpaceReserved="false"
+        app:singleLineTitle="false" />
+
+    <PreferenceCategory
+        android:title="@string/kick_developer_tools"
+        app:iconSpaceReserved="false" />
+
+    <Preference
+        android:key="action_kick_manage_event_subscriptions"
+        android:summary="@string/kick_manage_event_subscriptions_summary"
+        android:title="@string/kick_manage_event_subscriptions"
+        app:iconSpaceReserved="false"
+        app:singleLineTitle="false" />
+
+    <EditTextPreference
+        android:defaultValue="user:read chat:write events:subscribe"
+        android:key="kick_scopes"
+        android:title="@string/api_kick_scopes"
+        app:useSimpleSummaryProvider="true"
+        app:iconSpaceReserved="false"
+        app:singleLineTitle="false" />
+
+    <EditTextPreference
+        android:key="kick_user_id"
+        android:title="@string/api_user_id"
+        app:useSimpleSummaryProvider="true"
+        app:iconSpaceReserved="false"
+        app:singleLineTitle="false" />
+
+    <EditTextPreference
+        android:key="kick_user_login"
+        android:title="@string/api_user_login"
+        app:useSimpleSummaryProvider="true"
+        app:iconSpaceReserved="false"
+        app:singleLineTitle="false" />
+
+    <EditTextPreference
+        android:key="kick_access_token"
+        android:title="@string/api_kick_access_token"
+        app:iconSpaceReserved="false"
+        app:singleLineTitle="false" />
+
+    <EditTextPreference
+        android:key="kick_refresh_token"
+        android:title="@string/api_kick_refresh_token"
+        app:iconSpaceReserved="false"
+        app:singleLineTitle="false" />
+
+</androidx.preference.PreferenceScreen>

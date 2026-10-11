@@ -12,13 +12,6 @@
         android:id="@+id/action_global_settingsFragment"
         app:destination="@id/settingsFragment" />
     <fragment
-        android:id="@+id/generalSettingsFragment"
-        android:name="com.xtrakick.app.ui.settings.SettingsActivity$GeneralSettingsFragment"
-        android:label="@string/general" />
-    <action
-        android:id="@+id/action_global_generalSettingsFragment"
-        app:destination="@id/generalSettingsFragment" />
-    <fragment
         android:id="@+id/appearanceSettingsFragment"
         android:name="com.xtrakick.app.ui.settings.SettingsActivity$AppearanceSettingsFragment"
         android:label="@string/appearance" />
@@ -47,12 +40,12 @@
         android:id="@+id/action_global_playerOverviewFragment"
         app:destination="@id/playerOverviewFragment" />
     <fragment
-        android:id="@+id/playerSettingsFragment"
-        android:name="com.xtrakick.app.ui.settings.SettingsActivity$PlayerSettingsFragment"
-        android:label="@string/player_behavior" />
+        android:id="@+id/playerBackgroundFragment"
+        android:name="com.xtrakick.app.ui.settings.SettingsActivity$PlayerBackgroundFragment"
+        android:label="@string/background_and_pip" />
     <action
-        android:id="@+id/action_global_playerSettingsFragment"
-        app:destination="@id/playerSettingsFragment" />
+        android:id="@+id/action_global_playerBackgroundSettingsFragment"
+        app:destination="@id/playerBackgroundFragment" />
     <fragment
         android:id="@+id/playerButtonSettingsFragment"
         android:name="com.xtrakick.app.ui.settings.SettingsActivity$PlayerButtonSettingsFragment"
@@ -91,10 +84,17 @@
     <fragment
         android:id="@+id/apiTokenSettingsFragment"
         android:name="com.xtrakick.app.ui.settings.SettingsActivity$ApiTokenSettingsFragment"
-        android:label="@string/api_token_settings" />
+        android:label="@string/account" />
     <action
         android:id="@+id/action_global_apiTokenSettingsFragment"
         app:destination="@id/apiTokenSettingsFragment" />
+    <fragment
+        android:id="@+id/developerSettingsFragment"
+        android:name="com.xtrakick.app.ui.settings.SettingsActivity$DeveloperSettingsFragment"
+        android:label="@string/developer_tokens" />
+    <action
+        android:id="@+id/action_global_developerSettingsFragment"
+        app:destination="@id/developerSettingsFragment" />
     <fragment
         android:id="@+id/downloadSettingsFragment"
         android:name="com.xtrakick.app.ui.settings.SettingsActivity$DownloadSettingsFragment"
@@ -144,4 +144,11 @@
     <action
         android:id="@+id/action_global_settingsSearchFragment"
         app:destination="@id/settingsSearchFragment" />
+    <fragment
+        android:id="@+id/notificationsSettingsFragment"
+        android:name="com.xtrakick.app.ui.settings.SettingsActivity$NotificationsSettingsFragment"
+        android:label="@string/notifications_and_rewards" />
+    <action
+        android:id="@+id/action_global_notificationsSettingsFragment"
+        app:destination="@id/notificationsSettingsFragment" />
 </navigation>

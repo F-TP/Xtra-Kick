@@ -384,8 +384,10 @@ object KickApiHelper {
             put("Origin", "https://kick.com")
             put("Referer", "https://kick.com/")
             put("x-kick-platform", "web")
-            AuthStateHelper.getKickBearerToken(context)?.let {
-                put(AppConstants.HEADER_TOKEN, it)
+            if (!AuthStateHelper.isKickGoogleSession(context)) {
+                AuthStateHelper.getKickBearerToken(context)?.let {
+                    put(AppConstants.HEADER_TOKEN, it)
+                }
             }
         }
     }

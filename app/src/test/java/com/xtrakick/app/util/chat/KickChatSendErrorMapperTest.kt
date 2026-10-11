@@ -57,6 +57,16 @@ class KickChatSendErrorMapperTest {
     }
 
     @Test
+    fun mapsUserNotAuthenticatedToTokenExpired() {
+        val reason = KickChatSendErrorMapper.classify(
+            "User is not authenticated.",
+            null
+        )
+
+        assertEquals(KickChatSendErrorMapper.Reason.TOKEN_EXPIRED, reason)
+    }
+
+    @Test
     fun mapsUnknownForbiddenToGenericKickRejection() {
         val reason = KickChatSendErrorMapper.classify(
             """Kick request failed (403): {"data":{},"message":"Forbidden"}""",

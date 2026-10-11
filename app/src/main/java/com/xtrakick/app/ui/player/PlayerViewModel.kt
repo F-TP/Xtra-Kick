@@ -508,7 +508,7 @@ class PlayerViewModel @Inject constructor(
                     }
                 }
                 val userTypes = channelId?.let {
-                    if (!kickPublicApiHeaders[AppConstants.HEADER_TOKEN].isNullOrBlank()) {
+                    if (kickPublicApiHeaders.isNotEmpty()) {
                         try {
                             kickPublicApiRepository.getUsers(
                                 networkLibrary = networkLibrary,

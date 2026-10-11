@@ -1,97 +1,130 @@
 <androidx.preference.PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto">
 
-    <SwitchPreferenceCompat
-        android:defaultValue="true"
-        android:key="player_picture_in_picture"
-        android:title="@string/picture_in_picture"
+    <PreferenceCategory
+        android:title="@string/video_quality"
+        app:iconSpaceReserved="false" />
+
+    <ListPreference
+        android:defaultValue="saved"
+        android:entries="@array/playerQualityEntries"
+        android:entryValues="@array/playerQualityValues"
+        android:key="player_defaultquality"
+        android:summary="%s"
+        android:title="@string/player_defaultquality"
         app:iconSpaceReserved="false"
         app:singleLineTitle="false" />
 
-    <SwitchPreferenceCompat
-        android:defaultValue="true"
-        android:dependency="player_picture_in_picture"
-        android:key="pip_show_audio_only"
-        android:summary="@string/pip_show_audio_only_summary"
-        android:title="@string/pip_show_audio_only"
+    <ListPreference
+        android:defaultValue="saved"
+        android:entries="@array/playerQualityEntries"
+        android:entryValues="@array/playerQualityValues"
+        android:key="player_default_cellular_quality"
+        android:summary="%s"
+        android:title="@string/default_cellular_quality"
         app:iconSpaceReserved="false"
-        app:singleLineTitle="false" />
-
-    <SwitchPreferenceCompat
-        android:defaultValue="true"
-        android:dependency="player_picture_in_picture"
-        android:key="pip_show_mute"
-        android:summary="@string/pip_show_mute_summary"
-        android:title="@string/pip_show_mute"
-        app:iconSpaceReserved="false"
-        app:singleLineTitle="false" />
-
-    <SeekBarPreference
-        android:defaultValue="0"
-        android:dependency="pip_show_mute"
-        android:key="pip_reduced_volume_level"
-        android:max="50"
-        android:summary="@string/pip_reduced_volume_level_summary"
-        android:title="@string/pip_reduced_volume_level"
-        app:iconSpaceReserved="false"
-        app:min="0"
-        app:showSeekBarValue="true"
         app:singleLineTitle="false" />
 
     <SwitchPreferenceCompat
         android:defaultValue="false"
-        android:dependency="player_picture_in_picture"
-        android:key="pip_unmute_on_fullscreen"
-        android:summary="@string/pip_unmute_on_fullscreen_summary"
-        android:title="@string/pip_unmute_on_fullscreen"
-        app:iconSpaceReserved="false"
-        app:singleLineTitle="false" />
-
-    <SwitchPreferenceCompat
-        android:defaultValue="true"
-        android:key="player_background_audio"
-        android:title="@string/use_background_audio"
-        app:iconSpaceReserved="false"
-        app:singleLineTitle="false" />
-
-    <SwitchPreferenceCompat
-        android:defaultValue="true"
-        android:key="player_background_audio_locked"
-        android:title="@string/use_background_audio_locked"
+        android:key="player_lock_quality"
+        android:summary="@string/player_lock_quality_summary"
+        android:title="@string/player_lock_quality"
         app:iconSpaceReserved="false"
         app:singleLineTitle="false" />
 
     <PreferenceCategory
-        android:title="@string/player"
+        android:title="@string/playback_engine"
+        app:iconSpaceReserved="false" />
+
+    <ListPreference
+        android:defaultValue="ivs_kick_live"
+        android:entries="@array/kickLivePlayerEngineEntries"
+        android:entryValues="@array/kickLivePlayerEngineValues"
+        android:key="player_kick_live_engine"
+        android:summary="%s"
+        android:title="@string/kick_live_player_engine"
+        app:iconSpaceReserved="false"
+        app:singleLineTitle="false" />
+
+    <SwitchPreferenceCompat
+        android:defaultValue="true"
+        android:key="player_audio_focus"
+        android:title="@string/use_audio_focus"
+        app:iconSpaceReserved="false"
+        app:singleLineTitle="false" />
+
+    <SwitchPreferenceCompat
+        android:defaultValue="true"
+        android:key="player_handle_audio_becoming_noisy"
+        android:title="@string/handle_audio_becoming_noisy"
+        app:iconSpaceReserved="false"
+        app:singleLineTitle="false" />
+
+    <SwitchPreferenceCompat
+        android:defaultValue="false"
+        android:key="player_keep_screen_on_when_paused"
+        android:title="@string/keep_screen_on_when_paused"
+        app:iconSpaceReserved="false"
+        app:singleLineTitle="false" />
+
+    <PreferenceCategory
+        android:title="@string/background_and_pip"
         app:iconSpaceReserved="false" />
 
     <Preference
-        android:key="nav_player_behavior"
-        android:title="@string/player_behavior"
+        android:key="nav_player_background_settings"
+        android:summary="@string/background_pip_summary"
+        android:title="@string/background_and_pip"
         app:iconSpaceReserved="false"
         app:singleLineTitle="false" />
 
-    <Preference
-        android:key="nav_multipov_settings"
-        android:title="@string/multipov_settings"
-        app:iconSpaceReserved="false"
-        app:singleLineTitle="false" />
+    <PreferenceCategory
+        android:title="@string/player_customization_submenus"
+        app:iconSpaceReserved="false" />
 
     <Preference
         android:key="nav_player_button_settings"
+        android:summary="@string/player_controls_buttons_summary"
         android:title="@string/player_buttons"
         app:iconSpaceReserved="false"
         app:singleLineTitle="false" />
 
     <Preference
         android:key="nav_player_menu_settings_root"
+        android:summary="@string/player_menu_settings_summary"
         android:title="@string/player_menu_settings"
         app:iconSpaceReserved="false"
         app:singleLineTitle="false" />
 
     <Preference
+        android:key="nav_multipov_settings"
+        android:summary="@string/multipov_settings_summary"
+        android:title="@string/multipov_settings"
+        app:iconSpaceReserved="false"
+        app:singleLineTitle="false" />
+
+    <Preference
         android:key="nav_buffer_settings"
+        android:summary="@string/buffer_settings_summary"
         android:title="@string/buffer_settings"
+        app:iconSpaceReserved="false"
+        app:singleLineTitle="false" />
+
+    <PreferenceCategory
+        android:title="@string/watch_history_and_resume"
+        app:iconSpaceReserved="false" />
+
+    <SwitchPreferenceCompat
+        android:defaultValue="true"
+        android:key="player_use_videopositions"
+        android:title="@string/save_video_positions"
+        app:iconSpaceReserved="false"
+        app:singleLineTitle="false" />
+
+    <Preference
+        android:key="action_delete_video_positions"
+        android:title="@string/delete_video_positions"
         app:iconSpaceReserved="false"
         app:singleLineTitle="false" />
 

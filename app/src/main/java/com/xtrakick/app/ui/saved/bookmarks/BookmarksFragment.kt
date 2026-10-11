@@ -272,7 +272,7 @@ class BookmarksFragment : BaseNetworkFragment(), Scrollable, Sortable, Bookmarks
             )
         }
         val kickPublicApiHeaders = KickApiHelper.getKickPublicApiHeaders(requireContext())
-        if (!kickPublicApiHeaders[AppConstants.HEADER_TOKEN].isNullOrBlank()) {
+        if (kickPublicApiHeaders.isNotEmpty()) {
             viewModel.updateVideos(requireContext().filesDir.path, requireContext().prefs().getString(AppConstants.NETWORK_LIBRARY, "OkHttp"), kickPublicApiHeaders)
         }
     }

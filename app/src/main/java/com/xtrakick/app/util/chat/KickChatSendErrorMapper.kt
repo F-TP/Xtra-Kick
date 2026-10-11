@@ -20,6 +20,7 @@ object KickChatSendErrorMapper {
         return when {
             normalized.contains("(401)") ||
                 normalized.contains("unauthorized") ||
+                normalized.contains("not authenticated") ||
                 normalized.contains("invalid token") ||
                 normalized.contains("token") && normalized.contains("expired") -> Reason.TOKEN_EXPIRED
             normalized.contains("(429)") ||

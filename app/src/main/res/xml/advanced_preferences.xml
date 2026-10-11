@@ -1,6 +1,54 @@
 <androidx.preference.PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto">
 
+    <PreferenceCategory
+        android:title="@string/navigation"
+        app:iconSpaceReserved="false" />
+
+    <Preference
+        android:key="nav_navigation_settings"
+        android:summary="@string/nav_navigation_settings_summary"
+        android:title="@string/navigation"
+        app:iconSpaceReserved="false"
+        app:singleLineTitle="false" />
+
+    <PreferenceCategory
+        android:title="@string/updates"
+        app:iconSpaceReserved="false" />
+
+    <Preference
+        android:key="action_check_updates"
+        android:title="@string/check_updates"
+        app:iconSpaceReserved="false"
+        app:singleLineTitle="false" />
+
+    <Preference
+        android:key="nav_update_settings"
+        android:summary="@string/nav_update_settings_summary"
+        android:title="@string/update_settings"
+        app:iconSpaceReserved="false"
+        app:singleLineTitle="false" />
+
+    <PreferenceCategory
+        android:title="@string/backup_and_restore"
+        app:iconSpaceReserved="false" />
+
+    <Preference
+        android:key="action_backup_settings"
+        android:title="@string/backup_settings"
+        app:iconSpaceReserved="false"
+        app:singleLineTitle="false" />
+
+    <Preference
+        android:key="action_restore_settings"
+        android:title="@string/restore_settings"
+        app:iconSpaceReserved="false"
+        app:singleLineTitle="false" />
+
+    <PreferenceCategory
+        android:title="@string/network"
+        app:iconSpaceReserved="false" />
+
     <SwitchPreferenceCompat
         android:defaultValue="false"
         android:key="player_stream_proxy"
@@ -11,68 +59,24 @@
 
     <EditTextPreference
         android:defaultValue=""
+        android:dependency="player_stream_proxy"
         android:key="player_proxy_url"
         android:summary="@string/stream_proxy_url_desc"
         android:title="@string/stream_proxy_url"
         app:iconSpaceReserved="false"
         app:singleLineTitle="false" />
 
-    <PreferenceCategory
-        android:title="@string/following_label"
-        app:iconSpaceReserved="false" />
-
-    <ListPreference
-        android:defaultValue="60"
-        android:entries="@array/followedLiveAutoRefreshEntries"
-        android:entryValues="@array/followedLiveAutoRefreshValues"
-        android:key="followed_live_auto_refresh_interval"
-        android:summary="%s"
-        android:title="@string/followed_live_auto_refresh"
-        app:iconSpaceReserved="false"
-        app:singleLineTitle="false" />
-
-    <SwitchPreferenceCompat
-        android:defaultValue="true"
-        android:key="followed_live_refresh_on_return"
-        android:summary="@string/followed_live_refresh_on_return_summary"
-        android:title="@string/followed_live_refresh_on_return"
-        app:iconSpaceReserved="false"
-        app:singleLineTitle="false" />
-
-    <PreferenceCategory
-        android:title="@string/network"
-        app:iconSpaceReserved="false" />
-
     <Preference
         android:key="nav_proxy_settings"
+        android:summary="@string/proxy_settings_summary"
         android:title="@string/proxy_settings"
         app:iconSpaceReserved="false"
         app:singleLineTitle="false" />
 
     <Preference
         android:key="nav_playback_settings"
-        android:title="@string/playback_settings"
-        app:iconSpaceReserved="false"
-        app:singleLineTitle="false" />
-
-    <PreferenceCategory
-        android:title="@string/account"
-        app:iconSpaceReserved="false" />
-
-    <Preference
-        android:key="nav_api_token_settings"
-        android:title="@string/api_token_settings"
-        app:iconSpaceReserved="false"
-        app:singleLineTitle="false" />
-
-    <PreferenceCategory
-        android:key="advanced_category"
-        android:title="@string/advanced"
-        app:iconSpaceReserved="false" />
-
-    <Preference
-        android:key="nav_debug_settings"
-        android:title="@string/debug_settings"
+        android:summary="@string/stream_parameters_summary"
+        android:title="@string/stream_parameters"
         app:iconSpaceReserved="false"
         app:singleLineTitle="false" />
 
@@ -85,6 +89,24 @@
         android:key="usage_stats_enabled"
         android:summary="@string/usage_stats_summary"
         android:title="@string/usage_stats_title"
+        app:iconSpaceReserved="false"
+        app:singleLineTitle="false" />
+
+    <PreferenceCategory
+        android:key="advanced_category"
+        android:title="@string/advanced"
+        app:iconSpaceReserved="false" />
+
+    <Preference
+        android:key="nav_developer_settings"
+        android:summary="@string/developer_tokens_summary"
+        android:title="@string/developer_tokens"
+        app:iconSpaceReserved="false"
+        app:singleLineTitle="false" />
+
+    <Preference
+        android:key="nav_debug_settings"
+        android:title="@string/debug_settings"
         app:iconSpaceReserved="false"
         app:singleLineTitle="false" />
 

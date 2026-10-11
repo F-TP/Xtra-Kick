@@ -1,67 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
 <androidx.preference.PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto">
 
-    <ListPreference
-        android:defaultValue="3"
-        android:entries="@array/loginApiEntries"
-        android:entryValues="@array/loginApiValues"
-        android:key="api_login"
-        android:summary="%s"
-        android:title="@string/api_login"
-        app:iconSpaceReserved="false"
-        app:singleLineTitle="false" />
-
-    <EditTextPreference
-        android:defaultValue="user:read chat:write events:subscribe"
-        android:key="kick_scopes"
-        android:title="@string/api_kick_scopes"
-        app:useSimpleSummaryProvider="true"
-        app:iconSpaceReserved="false"
-        app:singleLineTitle="false" />
-
     <PreferenceCategory
-        android:title="@string/kick_developer_tools"
+        android:title="@string/kick_account"
         app:iconSpaceReserved="false" />
 
     <Preference
-        android:key="action_kick_manage_event_subscriptions"
-        android:summary="@string/kick_manage_event_subscriptions_summary"
-        android:title="@string/kick_manage_event_subscriptions"
+        android:key="action_kick_auth_toggle"
+        android:title="@string/kick_account"
+        android:summary="@string/log_in_to_kick_summary"
         app:iconSpaceReserved="false"
         app:singleLineTitle="false" />
 
     <PreferenceCategory
-        android:title="@string/api_current_login"
+        android:title="@string/account_sync"
         app:iconSpaceReserved="false" />
 
-    <EditTextPreference
-        android:key="kick_user_id"
-        android:title="@string/api_user_id"
-        app:iconSpaceReserved="false"
-        app:singleLineTitle="false" />
-
-    <EditTextPreference
-        android:key="kick_user_login"
-        android:title="@string/api_user_login"
-        app:iconSpaceReserved="false"
-        app:singleLineTitle="false" />
-
-    <EditTextPreference
-        android:key="kick_access_token"
-        android:title="@string/api_kick_access_token"
-        app:iconSpaceReserved="false"
-        app:singleLineTitle="false" />
-
-    <EditTextPreference
-        android:key="kick_refresh_token"
-        android:title="@string/api_kick_refresh_token"
-        app:iconSpaceReserved="false"
-        app:singleLineTitle="false" />
-
-    <SwitchPreferenceCompat
-        android:defaultValue="true"
-        android:key="validate_tokens"
-        android:title="@string/api_validate_tokens"
+    <Preference
+        android:key="action_kick_import_follows"
+        android:title="@string/import_kick_followed"
+        android:summary="@string/import_kick_follows_summary"
         app:iconSpaceReserved="false"
         app:singleLineTitle="false" />
 

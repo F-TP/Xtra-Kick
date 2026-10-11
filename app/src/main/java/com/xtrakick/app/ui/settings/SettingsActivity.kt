@@ -2,12 +2,14 @@ package com.xtrakick.app.ui.settings
 
 import android.Manifest
 import android.annotation.SuppressLint
+import android.app.Activity
 import android.app.admin.DeviceAdminReceiver
 import android.app.admin.DevicePolicyManager
 import android.content.ActivityNotFoundException
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
+import com.xtrakick.app.ui.login.LoginActivity
 import android.content.pm.PackageManager
 import android.graphics.Typeface
 import android.net.Uri
@@ -86,6 +88,7 @@ import com.xtrakick.app.repository.NotificationUsersRepository
 import com.xtrakick.app.repository.ShownNotificationsRepository
 import com.xtrakick.app.ui.main.RewardClaimScheduler
 import com.xtrakick.app.ui.common.CompactDialogs.constrainSheets
+import com.xtrakick.app.ui.following.KickFollowImportDialog
 import com.xtrakick.app.ui.player.IvsPlayerService
 import com.xtrakick.app.ui.player.LiveLatencySettings
 import com.xtrakick.app.ui.player.PlaybackService
@@ -257,12 +260,6 @@ class SettingsActivity : AppCompatActivity() {
         }
     }
 
-    private fun getSelectedSearchItem(): String? {
-        return searchItem?.also {
-            searchItem = null
-        }
-    }
-
     private fun setResult() {
         if (!changed) {
             changed = true
@@ -283,9 +280,10 @@ class SettingsActivity : AppCompatActivity() {
 
         override fun onCreatePreferences(savedInstanceState: Bundle?, rootKey: String?) {
             setPreferencesFromResource(R.xml.root_preferences, rootKey)
-            findPreference<Preference>("nav_general_settings")?.setOnPreferenceClickListener {
+            updateAccountSummary()
+            findPreference<Preference>("nav_api_token_settings")?.setOnPreferenceClickListener {
                 requireActivity().findViewById<AppBarLayout>(R.id.appBar)?.setExpanded(true)
-                findNavController().navigate(SettingsNavGraphDirections.actionGlobalGeneralSettingsFragment())
+                findNavController().navigate(SettingsNavGraphDirections.actionGlobalApiTokenSettingsFragment())
                 true
             }
             findPreference<Preference>("nav_appearance_settings")?.setOnPreferenceClickListener {
@@ -293,9 +291,9 @@ class SettingsActivity : AppCompatActivity() {
                 findNavController().navigate(SettingsNavGraphDirections.actionGlobalAppearanceSettingsFragment())
                 true
             }
-            findPreference<Preference>("nav_navigation_settings")?.setOnPreferenceClickListener {
+            findPreference<Preference>("nav_player_overview")?.setOnPreferenceClickListener {
                 requireActivity().findViewById<AppBarLayout>(R.id.appBar)?.setExpanded(true)
-                findNavController().navigate(SettingsNavGraphDirections.actionGlobalNavigationSettingsFragment())
+                findNavController().navigate(SettingsNavGraphDirections.actionGlobalPlayerOverviewFragment())
                 true
             }
             findPreference<Preference>("nav_chat_settings")?.setOnPreferenceClickListener {
@@ -303,9 +301,9 @@ class SettingsActivity : AppCompatActivity() {
                 findNavController().navigate(SettingsNavGraphDirections.actionGlobalChatSettingsFragment())
                 true
             }
-            findPreference<Preference>("nav_player_overview")?.setOnPreferenceClickListener {
+            findPreference<Preference>("nav_notifications_settings")?.setOnPreferenceClickListener {
                 requireActivity().findViewById<AppBarLayout>(R.id.appBar)?.setExpanded(true)
-                findNavController().navigate(SettingsNavGraphDirections.actionGlobalPlayerOverviewFragment())
+                findNavController().navigate(SettingsNavGraphDirections.actionGlobalNotificationsSettingsFragment())
                 true
             }
             findPreference<Preference>("nav_download_settings")?.setOnPreferenceClickListener {
@@ -320,85 +318,33 @@ class SettingsActivity : AppCompatActivity() {
             }
         }
 
-        override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
-            super.onViewCreated(view, savedInstanceState)
-            ViewCompat.setOnApplyWindowInsetsListener(view) { _, windowInsets ->
-                val insets = windowInsets.getInsets(WindowInsetsCompat.Type.systemBars())
-                listView.updatePadding(bottom = insets.bottom)
-                WindowInsetsCompat.CONSUMED
-            }
-            requireActivity().findViewById<AppBarLayout>(R.id.appBar)?.let { appBar ->
-                if (requireContext().prefs().getBoolean(AppConstants.UI_THEME_APPBAR_LIFT, true)) {
-                    listView.let {
-                        appBar.setLiftOnScrollTargetView(it)
-                        it.addOnScrollListener(object : RecyclerView.OnScrollListener() {
-                            override fun onScrolled(recyclerView: RecyclerView, dx: Int, dy: Int) {
-                                super.onScrolled(recyclerView, dx, dy)
-                                appBar.isLifted = recyclerView.canScrollVertically(-1)
-                            }
-                        })
-                        it.addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ ->
-                            appBar.isLifted = it.canScrollVertically(-1)
-                        }
-                    }
+        override fun onResume() {
+            super.onResume()
+            updateAccountSummary()
+        }
+
+        private fun updateAccountSummary() {
+            findPreference<Preference>("nav_api_token_settings")?.apply {
+                val username = requireContext().tokenPrefs().getString(AppConstants.KICK_USER_LOGIN, null)?.takeIf { it.isNotBlank() }
+                summary = if (username != null) {
+                    getString(R.string.logged_in_as_summary, username)
                 } else {
-                    appBar.setLiftable(false)
-                    appBar.background = null
+                    getString(R.string.log_in_to_kick_summary)
                 }
             }
-            (requireActivity() as? SettingsActivity)?.getSelectedSearchItem()?.let { scrollToPreference(it) }
+        }
+
+        override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
+            super.onViewCreated(view, savedInstanceState)
+            setupStandardListBehavior()
         }
     }
 
-    class GeneralSettingsFragment : MaterialPreferenceFragment() {
-
+    class NotificationsSettingsFragment : MaterialPreferenceFragment() {
         private val viewModel: SettingsViewModel by activityViewModels()
-        private var backupResultLauncher: ActivityResultLauncher<Intent>? = null
-        private var restoreResultLauncher: ActivityResultLauncher<Intent>? = null
-
-        override fun onCreate(savedInstanceState: Bundle?) {
-            super.onCreate(savedInstanceState)
-            backupResultLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
-                if (result.resultCode == RESULT_OK) {
-                    result.data?.data?.let {
-                        viewModel.backupSettings(it.toString())
-                    }
-                }
-            }
-            restoreResultLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
-                if (result.resultCode == RESULT_OK) {
-                    val list = mutableListOf<String>()
-                    result.data?.clipData?.let { clipData ->
-                        for (i in 0 until clipData.itemCount) {
-                            clipData.getItemAt(i).uri?.let { uri ->
-                                runCatching {
-                                    requireContext().contentResolver.takePersistableUriPermission(
-                                        uri, Intent.FLAG_GRANT_READ_URI_PERMISSION
-                                    )
-                                }
-                                list.add(uri.toString())
-                            }
-                        }
-                    } ?: result.data?.data?.let { uri ->
-                        runCatching {
-                            requireContext().contentResolver.takePersistableUriPermission(
-                                uri, Intent.FLAG_GRANT_READ_URI_PERMISSION
-                            )
-                        }
-                        list.add(uri.toString())
-                    }
-                    viewModel.restoreSettings(
-                        list = list,
-                        networkLibrary = requireContext().prefs().getString(AppConstants.NETWORK_LIBRARY, "OkHttp"),
-                        kickWebHeaders = KickApiHelper.getKickWebHeaders(requireContext(), true),
-                        kickPublicApiHeaders = KickApiHelper.getKickPublicApiHeaders(requireContext())
-                    )
-                }
-            }
-        }
 
         override fun onCreatePreferences(savedInstanceState: Bundle?, rootKey: String?) {
-            setPreferencesFromResource(R.xml.general_preferences, rootKey)
+            setPreferencesFromResource(R.xml.notifications_preferences, rootKey)
             findPreference<SwitchPreferenceCompat>(AppConstants.LIVE_NOTIFICATIONS_ENABLED)?.setOnPreferenceChangeListener { _, newValue ->
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
                     ActivityCompat.checkSelfPermission(requireActivity(), Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
@@ -450,6 +396,420 @@ class SettingsActivity : AppCompatActivity() {
                 (requireActivity() as? SettingsActivity)?.setResult()
                 true
             }
+        }
+
+        override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
+            super.onViewCreated(view, savedInstanceState)
+            setupStandardListBehavior()
+        }
+    }
+
+    /**
+     * res/xml/multipov_preferences.xml was authored but never registered in
+     * settings_nav_graph.xml, so its eight preferences — all of which ARE read at runtime by
+     * MultiPovFragment — were stranded at their code defaults with
+     * no way for the user to reach them.
+     */
+    class MultiPovSettingsFragment : MaterialPreferenceFragment() {
+        override fun onCreatePreferences(savedInstanceState: Bundle?, rootKey: String?) {
+            setPreferencesFromResource(R.xml.multipov_preferences, rootKey)
+        }
+
+        override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
+            super.onViewCreated(view, savedInstanceState)
+            setupStandardListBehavior()
+        }
+    }
+
+    class AppearanceSettingsFragment : MaterialPreferenceFragment() {
+        override fun onCreatePreferences(savedInstanceState: Bundle?, rootKey: String?) {
+            setPreferencesFromResource(R.xml.appearance_preferences, rootKey)
+            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) {
+                findPreference<ListPreference>(AppConstants.THEME)?.apply {
+                    setEntries(R.array.themeNoDynamicEntries)
+                    setEntryValues(R.array.themeNoDynamicValues)
+                }
+                findPreference<ListPreference>(AppConstants.UI_THEME_DARK_ON)?.apply {
+                    setEntries(R.array.themeNoDynamicEntries)
+                    setEntryValues(R.array.themeNoDynamicValues)
+                }
+                findPreference<ListPreference>(AppConstants.UI_THEME_DARK_OFF)?.apply {
+                    setEntries(R.array.themeNoDynamicEntries)
+                    setEntryValues(R.array.themeNoDynamicValues)
+                }
+            }
+            val recreateListener = Preference.OnPreferenceChangeListener { _, _ ->
+                (requireActivity() as? SettingsActivity)?.changed = true
+                requireActivity().recreate()
+                true
+            }
+            val resultListener = Preference.OnPreferenceChangeListener { _, _ ->
+                (requireActivity() as? SettingsActivity)?.setResult()
+                true
+            }
+            findPreference<ListPreference>(AppConstants.THEME)?.onPreferenceChangeListener = recreateListener
+            findPreference<SwitchPreferenceCompat>(AppConstants.UI_THEME_FOLLOW_SYSTEM)?.onPreferenceChangeListener = recreateListener
+            findPreference<ListPreference>(AppConstants.UI_THEME_DARK_ON)?.onPreferenceChangeListener = recreateListener
+            findPreference<ListPreference>(AppConstants.UI_THEME_DARK_OFF)?.onPreferenceChangeListener = recreateListener
+            findPreference<ListPreference>(AppConstants.UI_THEME_ROUNDED_CORNERS)?.onPreferenceChangeListener = recreateListener
+            findPreference<SwitchPreferenceCompat>(AppConstants.UI_THEME_REDUCED_PADDING)?.onPreferenceChangeListener = recreateListener
+            findPreference<SwitchPreferenceCompat>(AppConstants.UI_THEME_COMPACT_TEXT)?.onPreferenceChangeListener = recreateListener
+            findPreference<SwitchPreferenceCompat>(AppConstants.UI_THEME_APPBAR_LIFT)?.onPreferenceChangeListener = recreateListener
+            findPreference<SwitchPreferenceCompat>(AppConstants.UI_THEME_BOTTOM_NAV_COLOR)?.onPreferenceChangeListener = recreateListener
+            findPreference<SwitchPreferenceCompat>(AppConstants.UI_THEME_MATERIAL3)?.onPreferenceChangeListener = recreateListener
+            findPreference<SwitchPreferenceCompat>(AppConstants.UI_DRAW_BEHIND_CUTOUTS)?.apply {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                    onPreferenceChangeListener = recreateListener
+                } else {
+                    isVisible = false
+                }
+            }
+            findPreference<ListPreference>(AppConstants.PORTRAIT_COLUMN_COUNT)?.onPreferenceChangeListener = resultListener
+            findPreference<ListPreference>(AppConstants.LANDSCAPE_COLUMN_COUNT)?.onPreferenceChangeListener = resultListener
+            findPreference<ListPreference>(AppConstants.COMPACT_STREAMS)?.onPreferenceChangeListener = resultListener
+            findPreference<ListPreference>(AppConstants.UI_NAME_DISPLAY)?.onPreferenceChangeListener = resultListener
+            findPreference<ListPreference>(AppConstants.UI_FOLLOW_BUTTON)?.onPreferenceChangeListener = resultListener
+            findPreference<SwitchPreferenceCompat>(AppConstants.FOLLOW_MODE_REMEMBERED)?.onPreferenceChangeListener = resultListener
+            findPreference<SwitchPreferenceCompat>(AppConstants.UI_ROUNDUSERIMAGE)?.onPreferenceChangeListener = resultListener
+            findPreference<SwitchPreferenceCompat>(AppConstants.UI_TRUNCATEVIEWCOUNT)?.onPreferenceChangeListener = resultListener
+            findPreference<SwitchPreferenceCompat>(AppConstants.UI_UPTIME)?.onPreferenceChangeListener = resultListener
+            findPreference<SwitchPreferenceCompat>(AppConstants.UI_TAGS)?.onPreferenceChangeListener = resultListener
+            findPreference<SwitchPreferenceCompat>(AppConstants.UI_BROADCASTERSCOUNT)?.onPreferenceChangeListener = resultListener
+            findPreference<SwitchPreferenceCompat>(AppConstants.UI_BOOKMARK_TIME_LEFT)?.onPreferenceChangeListener = resultListener
+        }
+
+        override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
+            super.onViewCreated(view, savedInstanceState)
+            setupStandardListBehavior()
+        }
+    }
+
+    class NavigationSettingsFragment : MaterialPreferenceFragment() {
+        private val viewModel: SettingsViewModel by activityViewModels()
+
+        override fun onCreatePreferences(savedInstanceState: Bundle?, rootKey: String?) {
+            setPreferencesFromResource(R.xml.navigation_preferences, rootKey)
+            val changeListener = Preference.OnPreferenceChangeListener { _, _ ->
+                (requireActivity() as? SettingsActivity)?.setResult()
+                true
+            }
+            findPreference<ListPreference>(AppConstants.UI_STARTONFOLLOWED)?.onPreferenceChangeListener = changeListener
+            findPreference<SwitchPreferenceCompat>(AppConstants.UI_FOLLOWPAGER)?.onPreferenceChangeListener = changeListener
+            findPreference<SwitchPreferenceCompat>(AppConstants.UI_SAVEDPAGER)?.onPreferenceChangeListener = changeListener
+            findPreference<SwitchPreferenceCompat>(AppConstants.UI_GAMEPAGER)?.onPreferenceChangeListener = changeListener
+            findPreference<SwitchPreferenceCompat>(AppConstants.UI_SCROLLTOP)?.onPreferenceChangeListener = changeListener
+            findPreference<SwitchPreferenceCompat>(AppConstants.UI_STORE_RECENT_SEARCHES)?.onPreferenceChangeListener = changeListener
+            findPreference<ListPreference>(AppConstants.FOLLOWED_LIVE_AUTO_REFRESH_INTERVAL)?.onPreferenceChangeListener = changeListener
+            findPreference<SwitchPreferenceCompat>(AppConstants.FOLLOWED_LIVE_REFRESH_ON_RETURN)?.onPreferenceChangeListener = changeListener
+            findPreference<Preference>("action_navigation_tab_list")?.setOnPreferenceClickListener { preference ->
+                val tabList = resolveTabList(AppConstants.UI_NAVIGATION_TAB_LIST, AppConstants.DEFAULT_NAVIGATION_TAB_LIST)
+                val tabs = tabList.map {
+                    val split = it.split(':')
+                    SettingsDragListItem(
+                        key = split[0],
+                        text = when (split[0]) {
+                            "0" -> getString(R.string.games)
+                            "1" -> getString(R.string.popular)
+                            "2" -> getString(R.string.following)
+                            "3" -> getString(R.string.saved)
+                            else -> getString(R.string.popular)
+                        },
+                        default = split[1] != "0",
+                        enabled = split[2] != "0",
+                    )
+                }
+                (requireActivity() as? SettingsActivity)?.showDragListDialog(tabs, AppConstants.UI_NAVIGATION_TAB_LIST, preference.title)
+                true
+            }
+            findPreference<Preference>("action_following_tabs")?.setOnPreferenceClickListener { preference ->
+                val tabList = resolveTabList(AppConstants.UI_FOLLOWING_TABS, AppConstants.DEFAULT_FOLLOWING_TABS)
+                val tabs = tabList.map {
+                    val split = it.split(':')
+                    SettingsDragListItem(
+                        key = split[0],
+                        text = when (split[0]) {
+                            "0" -> getString(R.string.games)
+                            "1" -> getString(R.string.live)
+                            "2" -> getString(R.string.channels)
+                            else -> getString(R.string.live)
+                        },
+                        default = split[1] != "0",
+                        enabled = split[2] != "0",
+                    )
+                }
+                (requireActivity() as? SettingsActivity)?.showDragListDialog(tabs, AppConstants.UI_FOLLOWING_TABS, preference.title)
+                true
+            }
+            findPreference<Preference>("action_saved_tabs")?.setOnPreferenceClickListener { preference ->
+                val tabList = resolveTabList(AppConstants.UI_SAVED_TABS, AppConstants.DEFAULT_SAVED_TABS)
+                val tabs = tabList.map {
+                    val split = it.split(':')
+                    SettingsDragListItem(
+                        key = split[0],
+                        text = when (split[0]) {
+                            "0" -> getString(R.string.bookmarks)
+                            "1" -> getString(R.string.downloads)
+                            "2" -> getString(R.string.filters)
+                            else -> getString(R.string.downloads)
+                        },
+                        default = split[1] != "0",
+                        enabled = split[2] != "0",
+                    )
+                }
+                (requireActivity() as? SettingsActivity)?.showDragListDialog(tabs, AppConstants.UI_SAVED_TABS, preference.title)
+                true
+            }
+            findPreference<Preference>("action_channel_tabs")?.setOnPreferenceClickListener { preference ->
+                val tabList = resolveTabList(AppConstants.UI_CHANNEL_TABS, AppConstants.DEFAULT_CHANNEL_TABS)
+                val tabs = tabList.map {
+                    val split = it.split(':')
+                    SettingsDragListItem(
+                        key = split[0],
+                        text = when (split[0]) {
+                            "0" -> getString(R.string.suggested)
+                            "1" -> getString(R.string.videos)
+                            "2" -> getString(R.string.clips)
+                            "3" -> getString(R.string.chat)
+                            "4" -> getString(R.string.about)
+                            else -> getString(R.string.videos)
+                        },
+                        default = split[1] != "0",
+                        enabled = split[2] != "0",
+                    )
+                }
+                (requireActivity() as? SettingsActivity)?.showDragListDialog(tabs, AppConstants.UI_CHANNEL_TABS, preference.title)
+                true
+            }
+            findPreference<Preference>("action_game_tabs")?.setOnPreferenceClickListener { preference ->
+                val tabList = resolveTabList(AppConstants.UI_GAME_TABS, AppConstants.DEFAULT_GAME_TABS)
+                val tabs = tabList.map {
+                    val split = it.split(':')
+                    SettingsDragListItem(
+                        key = split[0],
+                        text = when (split[0]) {
+                            "1" -> getString(R.string.live)
+                            "2" -> getString(R.string.clips)
+                            else -> getString(R.string.live)
+                        },
+                        default = split[1] != "0",
+                        enabled = split[2] != "0",
+                    )
+                }
+                (requireActivity() as? SettingsActivity)?.showDragListDialog(tabs, AppConstants.UI_GAME_TABS, preference.title)
+                true
+            }
+            findPreference<Preference>("action_search_tabs")?.setOnPreferenceClickListener { preference ->
+                val tabList = resolveTabList(AppConstants.UI_SEARCH_TABS, AppConstants.DEFAULT_SEARCH_TABS)
+                val tabs = tabList.map {
+                    val split = it.split(':')
+                    SettingsDragListItem(
+                        key = split[0],
+                        text = when (split[0]) {
+                            "0" -> getString(R.string.videos)
+                            "1" -> getString(R.string.streams)
+                            "2" -> getString(R.string.channels)
+                            "3" -> getString(R.string.games)
+                            else -> getString(R.string.channels)
+                        },
+                        default = split[1] != "0",
+                        enabled = split[2] != "0",
+                    )
+                }
+                (requireActivity() as? SettingsActivity)?.showDragListDialog(tabs, AppConstants.UI_SEARCH_TABS, preference.title)
+                true
+            }
+            findPreference<Preference>("action_delete_recent_searches")?.setOnPreferenceClickListener {
+                requireActivity().getAlertDialogBuilder()
+                    .setMessage(getString(R.string.delete_recent_searches_message))
+                    .setPositiveButton(getString(R.string.yes)) { _, _ ->
+                        viewModel.deleteRecentSearches()
+                    }
+                    .setNegativeButton(getString(R.string.no), null)
+                    .show()
+                true
+            }
+        }
+
+        private fun resolveTabList(prefKey: String, defaultValue: String): List<String> {
+            val defaultTabs = defaultValue.split(',')
+            val tabPref = requireContext().prefs().getString(prefKey, null)
+            if (tabPref == null) return defaultTabs
+            val validKeys = defaultTabs.map { it.first() }.toSet()
+            val list = tabPref.split(',').filter { it.firstOrNull() in validKeys }.toMutableList()
+            defaultTabs.forEachIndexed { index, item ->
+                if (list.none { it.firstOrNull() == item.first() }) {
+                    list.add(index.coerceAtMost(list.size), item)
+                }
+            }
+            return list
+        }
+
+        override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
+            super.onViewCreated(view, savedInstanceState)
+            setupStandardListBehavior()
+        }
+    }
+
+    class PlayerOverviewFragment : MaterialPreferenceFragment() {
+        private val viewModel: SettingsViewModel by activityViewModels()
+
+        override fun onCreatePreferences(savedInstanceState: Bundle?, rootKey: String?) {
+            setPreferencesFromResource(R.xml.player_overview_preferences, rootKey)
+            val changeListener = Preference.OnPreferenceChangeListener { _, _ ->
+                (requireActivity() as? SettingsActivity)?.setResult()
+                true
+            }
+            listOf(
+                AppConstants.PLAYER_DEFAULTQUALITY,
+                AppConstants.PLAYER_DEFAULT_CELLULAR_QUALITY,
+                AppConstants.PLAYER_LOCK_QUALITY,
+                AppConstants.PLAYER_KICK_LIVE_ENGINE,
+                AppConstants.PLAYER_AUDIO_FOCUS,
+                AppConstants.PLAYER_HANDLE_AUDIO_BECOMING_NOISY,
+                AppConstants.PLAYER_KEEP_SCREEN_ON_WHEN_PAUSED,
+                AppConstants.PLAYER_USE_VIDEOPOSITIONS
+            ).forEach { key ->
+                findPreference<Preference>(key)?.onPreferenceChangeListener = changeListener
+            }
+            findPreference<Preference>("action_delete_video_positions")?.setOnPreferenceClickListener {
+                requireActivity().getAlertDialogBuilder()
+                    .setMessage(getString(R.string.delete_video_positions_message))
+                    .setPositiveButton(getString(R.string.yes)) { _, _ ->
+                        viewModel.deletePositions()
+                    }
+                    .setNegativeButton(getString(R.string.no), null)
+                    .show()
+                true
+            }
+            findPreference<Preference>("nav_player_background_settings")?.setOnPreferenceClickListener {
+                requireActivity().findViewById<AppBarLayout>(R.id.appBar)?.setExpanded(true)
+                findNavController().navigate(SettingsNavGraphDirections.actionGlobalPlayerBackgroundSettingsFragment())
+                true
+            }
+            findPreference<Preference>("nav_player_button_settings")?.setOnPreferenceClickListener {
+                requireActivity().findViewById<AppBarLayout>(R.id.appBar)?.setExpanded(true)
+                findNavController().navigate(SettingsNavGraphDirections.actionGlobalPlayerButtonSettingsFragment())
+                true
+            }
+            findPreference<Preference>("nav_multipov_settings")?.setOnPreferenceClickListener {
+                requireActivity().findViewById<AppBarLayout>(R.id.appBar)?.setExpanded(true)
+                findNavController().navigate(SettingsNavGraphDirections.actionGlobalMultiPovSettingsFragment())
+                true
+            }
+            findPreference<Preference>("nav_player_menu_settings_root")?.setOnPreferenceClickListener {
+                requireActivity().findViewById<AppBarLayout>(R.id.appBar)?.setExpanded(true)
+                findNavController().navigate(SettingsNavGraphDirections.actionGlobalPlayerMenuSettingsFragment())
+                true
+            }
+            findPreference<Preference>("nav_buffer_settings")?.setOnPreferenceClickListener {
+                requireActivity().findViewById<AppBarLayout>(R.id.appBar)?.setExpanded(true)
+                findNavController().navigate(SettingsNavGraphDirections.actionGlobalBufferSettingsFragment())
+                true
+            }
+        }
+
+        override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
+            super.onViewCreated(view, savedInstanceState)
+            setupStandardListBehavior()
+        }
+    }
+
+    class PlayerBackgroundFragment : MaterialPreferenceFragment() {
+        override fun onCreatePreferences(savedInstanceState: Bundle?, rootKey: String?) {
+            setPreferencesFromResource(R.xml.player_background_preferences, rootKey)
+            val changeListener = Preference.OnPreferenceChangeListener { _, _ ->
+                (requireActivity() as? SettingsActivity)?.setResult()
+                true
+            }
+            val isPipSupported = Build.VERSION.SDK_INT >= Build.VERSION_CODES.O &&
+                requireActivity().packageManager.hasSystemFeature(PackageManager.FEATURE_PICTURE_IN_PICTURE)
+            listOf(
+                AppConstants.PLAYER_PICTURE_IN_PICTURE,
+                AppConstants.PIP_SHOW_AUDIO_ONLY,
+                AppConstants.PIP_SHOW_MUTE,
+                AppConstants.PIP_REDUCED_VOLUME_LEVEL,
+                AppConstants.PIP_UNMUTE_ON_FULLSCREEN,
+                AppConstants.PLAYER_BACKGROUND_AUDIO_PIP_CLOSED,
+                AppConstants.PLAYER_BACKGROUND_AUDIO_PIP_LOCKED
+            ).forEach { key ->
+                findPreference<Preference>(key)?.apply {
+                    isVisible = isPipSupported
+                    if (isPipSupported) onPreferenceChangeListener = changeListener
+                }
+            }
+            listOf(
+                AppConstants.PLAYER_BACKGROUND_AUDIO,
+                AppConstants.PLAYER_BACKGROUND_AUDIO_LOCKED,
+                AppConstants.PLAYER_DISABLE_BACKGROUND_VIDEO,
+                AppConstants.PLAYER_USE_BACKGROUND_AUDIO_TRACK
+            ).forEach { key ->
+                findPreference<Preference>(key)?.onPreferenceChangeListener = changeListener
+            }
+        }
+
+        override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
+            super.onViewCreated(view, savedInstanceState)
+            setupStandardListBehavior()
+        }
+    }
+
+    class AdvancedSettingsFragment : MaterialPreferenceFragment() {
+        private val viewModel: SettingsViewModel by activityViewModels()
+        private var backupResultLauncher: ActivityResultLauncher<Intent>? = null
+        private var restoreResultLauncher: ActivityResultLauncher<Intent>? = null
+
+        override fun onCreate(savedInstanceState: Bundle?) {
+            super.onCreate(savedInstanceState)
+            backupResultLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+                if (result.resultCode == Activity.RESULT_OK) {
+                    result.data?.data?.let {
+                        viewModel.backupSettings(it.toString())
+                    }
+                }
+            }
+            restoreResultLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+                if (result.resultCode == Activity.RESULT_OK) {
+                    val list = mutableListOf<String>()
+                    result.data?.clipData?.let { clipData ->
+                        for (i in 0 until clipData.itemCount) {
+                            clipData.getItemAt(i).uri?.let { uri ->
+                                runCatching {
+                                    requireContext().contentResolver.takePersistableUriPermission(
+                                        uri, Intent.FLAG_GRANT_READ_URI_PERMISSION
+                                    )
+                                }
+                                list.add(uri.toString())
+                            }
+                        }
+                    } ?: result.data?.data?.let { uri ->
+                        runCatching {
+                            requireContext().contentResolver.takePersistableUriPermission(
+                                uri, Intent.FLAG_GRANT_READ_URI_PERMISSION
+                            )
+                        }
+                        list.add(uri.toString())
+                    }
+                    viewModel.restoreSettings(
+                        list = list,
+                        networkLibrary = requireContext().prefs().getString(AppConstants.NETWORK_LIBRARY, "OkHttp"),
+                        kickWebHeaders = KickApiHelper.getKickWebHeaders(requireContext(), true),
+                        kickPublicApiHeaders = KickApiHelper.getKickPublicApiHeaders(requireContext())
+                    )
+                }
+            }
+        }
+
+        override fun onCreatePreferences(savedInstanceState: Bundle?, rootKey: String?) {
+            setPreferencesFromResource(R.xml.advanced_preferences, rootKey)
+            val changeListener = Preference.OnPreferenceChangeListener { _, _ ->
+                (requireActivity() as? SettingsActivity)?.setResult()
+                true
+            }
+            findPreference<Preference>("nav_navigation_settings")?.setOnPreferenceClickListener {
+                requireActivity().findViewById<AppBarLayout>(R.id.appBar)?.setExpanded(true)
+                findNavController().navigate(SettingsNavGraphDirections.actionGlobalNavigationSettingsFragment())
+                true
+            }
             findPreference<Preference>("action_check_updates")?.setOnPreferenceClickListener {
                 val lastInstallTime = requireContext().tokenPrefs().getLong(AppConstants.UPDATE_LAST_INSTALL_TIME, 0L)
                 viewModel.checkUpdates(
@@ -479,35 +839,51 @@ class SettingsActivity : AppCompatActivity() {
                 })
                 true
             }
+            findPreference<SwitchPreferenceCompat>(AppConstants.PLAYER_STREAM_PROXY)?.onPreferenceChangeListener = changeListener
+            findPreference<EditTextPreference>(AppConstants.PLAYER_PROXY_URL)?.onPreferenceChangeListener = changeListener
+            findPreference<Preference>("nav_proxy_settings")?.setOnPreferenceClickListener {
+                requireActivity().findViewById<AppBarLayout>(R.id.appBar)?.setExpanded(true)
+                findNavController().navigate(SettingsNavGraphDirections.actionGlobalProxySettingsFragment())
+                true
+            }
+            findPreference<Preference>("nav_playback_settings")?.setOnPreferenceClickListener {
+                requireActivity().findViewById<AppBarLayout>(R.id.appBar)?.setExpanded(true)
+                findNavController().navigate(SettingsNavGraphDirections.actionGlobalPlaybackSettingsFragment())
+                true
+            }
+            findPreference<Preference>("nav_developer_settings")?.setOnPreferenceClickListener {
+                requireActivity().findViewById<AppBarLayout>(R.id.appBar)?.setExpanded(true)
+                findNavController().navigate(SettingsNavGraphDirections.actionGlobalDeveloperSettingsFragment())
+                true
+            }
+            findPreference<Preference>("nav_debug_settings")?.let { debugPreference ->
+                // Debug Settings can swap the entire playback stack and the search
+                // implementation. It must not be reachable in a shipped build.
+                if (BuildConfig.DEBUG) {
+                    debugPreference.setOnPreferenceClickListener {
+                        requireActivity().findViewById<AppBarLayout>(R.id.appBar)?.setExpanded(true)
+                        findNavController().navigate(SettingsNavGraphDirections.actionGlobalDebugSettingsFragment())
+                        true
+                    }
+                } else {
+                    // Release keeps the full debug stack (playback/search swaps)
+                    // hidden, but crash + diagnostic log export stays reachable
+                    // with verbose toggles defaulting to off.
+                    debugPreference.title = getString(R.string.customize_debug_logs)
+                    debugPreference.summary = getString(R.string.customize_debug_logs_summary)
+                    debugPreference.isVisible = true
+                    debugPreference.setOnPreferenceClickListener {
+                        requireActivity().findViewById<AppBarLayout>(R.id.appBar)?.setExpanded(true)
+                        findNavController().navigate(SettingsNavGraphDirections.actionGlobalDebugLogSettingsFragment())
+                        true
+                    }
+                }
+            }
         }
 
         override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
             super.onViewCreated(view, savedInstanceState)
-            ViewCompat.setOnApplyWindowInsetsListener(view) { _, windowInsets ->
-                val insets = windowInsets.getInsets(WindowInsetsCompat.Type.systemBars())
-                listView.updatePadding(bottom = insets.bottom)
-                WindowInsetsCompat.CONSUMED
-            }
-            requireActivity().findViewById<AppBarLayout>(R.id.appBar)?.let { appBar ->
-                if (requireContext().prefs().getBoolean(AppConstants.UI_THEME_APPBAR_LIFT, true)) {
-                    listView.let {
-                        appBar.setLiftOnScrollTargetView(it)
-                        it.addOnScrollListener(object : RecyclerView.OnScrollListener() {
-                            override fun onScrolled(recyclerView: RecyclerView, dx: Int, dy: Int) {
-                                super.onScrolled(recyclerView, dx, dy)
-                                appBar.isLifted = recyclerView.canScrollVertically(-1)
-                            }
-                        })
-                        it.addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ ->
-                            appBar.isLifted = it.canScrollVertically(-1)
-                        }
-                    }
-                } else {
-                    appBar.setLiftable(false)
-                    appBar.background = null
-                }
-            }
-            (requireActivity() as? SettingsActivity)?.getSelectedSearchItem()?.let { scrollToPreference(it) }
+            setupStandardListBehavior()
             viewLifecycleOwner.lifecycleScope.launch {
                 repeatOnLifecycle(Lifecycle.State.STARTED) {
                     viewModel.backupStatus.collectLatest { message ->
@@ -575,530 +951,6 @@ class SettingsActivity : AppCompatActivity() {
         }
     }
 
-    /**
-     * res/xml/multipov_preferences.xml was authored but never registered in
-     * settings_nav_graph.xml, so its eight preferences — all of which ARE read at runtime by
-     * MultiPovFragment — were stranded at their code defaults with
-     * no way for the user to reach them.
-     */
-    class MultiPovSettingsFragment : MaterialPreferenceFragment() {
-        override fun onCreatePreferences(savedInstanceState: Bundle?, rootKey: String?) {
-            setPreferencesFromResource(R.xml.multipov_preferences, rootKey)
-        }
-
-        override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
-            super.onViewCreated(view, savedInstanceState)
-            ViewCompat.setOnApplyWindowInsetsListener(view) { _, windowInsets ->
-                val insets = windowInsets.getInsets(WindowInsetsCompat.Type.systemBars())
-                listView.updatePadding(bottom = insets.bottom)
-                WindowInsetsCompat.CONSUMED
-            }
-            (requireActivity() as? SettingsActivity)?.getSelectedSearchItem()?.let { scrollToPreference(it) }
-        }
-    }
-
-    class AppearanceSettingsFragment : MaterialPreferenceFragment() {
-        override fun onCreatePreferences(savedInstanceState: Bundle?, rootKey: String?) {
-            setPreferencesFromResource(R.xml.appearance_preferences, rootKey)
-            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) {
-                findPreference<ListPreference>(AppConstants.THEME)?.apply {
-                    setEntries(R.array.themeNoDynamicEntries)
-                    setEntryValues(R.array.themeNoDynamicValues)
-                }
-                findPreference<ListPreference>(AppConstants.UI_THEME_DARK_ON)?.apply {
-                    setEntries(R.array.themeNoDynamicEntries)
-                    setEntryValues(R.array.themeNoDynamicValues)
-                }
-                findPreference<ListPreference>(AppConstants.UI_THEME_DARK_OFF)?.apply {
-                    setEntries(R.array.themeNoDynamicEntries)
-                    setEntryValues(R.array.themeNoDynamicValues)
-                }
-            }
-            val recreateListener = Preference.OnPreferenceChangeListener { _, _ ->
-                (requireActivity() as? SettingsActivity)?.changed = true
-                requireActivity().recreate()
-                true
-            }
-            val resultListener = Preference.OnPreferenceChangeListener { _, _ ->
-                (requireActivity() as? SettingsActivity)?.setResult()
-                true
-            }
-            findPreference<ListPreference>(AppConstants.THEME)?.onPreferenceChangeListener = recreateListener
-            findPreference<SwitchPreferenceCompat>(AppConstants.UI_THEME_FOLLOW_SYSTEM)?.onPreferenceChangeListener = recreateListener
-            findPreference<ListPreference>(AppConstants.UI_THEME_DARK_ON)?.onPreferenceChangeListener = recreateListener
-            findPreference<ListPreference>(AppConstants.UI_THEME_DARK_OFF)?.onPreferenceChangeListener = recreateListener
-            findPreference<ListPreference>(AppConstants.UI_THEME_ROUNDED_CORNERS)?.onPreferenceChangeListener = recreateListener
-            findPreference<SwitchPreferenceCompat>(AppConstants.UI_THEME_REDUCED_PADDING)?.onPreferenceChangeListener = recreateListener
-            findPreference<SwitchPreferenceCompat>(AppConstants.UI_THEME_COMPACT_TEXT)?.onPreferenceChangeListener = recreateListener
-            findPreference<SwitchPreferenceCompat>(AppConstants.UI_THEME_APPBAR_LIFT)?.onPreferenceChangeListener = recreateListener
-            findPreference<SwitchPreferenceCompat>(AppConstants.UI_THEME_BOTTOM_NAV_COLOR)?.onPreferenceChangeListener = recreateListener
-            findPreference<SwitchPreferenceCompat>(AppConstants.UI_THEME_MATERIAL3)?.onPreferenceChangeListener = recreateListener
-            findPreference<SwitchPreferenceCompat>(AppConstants.UI_DRAW_BEHIND_CUTOUTS)?.apply {
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-                    onPreferenceChangeListener = recreateListener
-                } else {
-                    isVisible = false
-                }
-            }
-            findPreference<ListPreference>(AppConstants.PORTRAIT_COLUMN_COUNT)?.onPreferenceChangeListener = resultListener
-            findPreference<ListPreference>(AppConstants.LANDSCAPE_COLUMN_COUNT)?.onPreferenceChangeListener = resultListener
-            findPreference<ListPreference>(AppConstants.COMPACT_STREAMS)?.onPreferenceChangeListener = resultListener
-            findPreference<ListPreference>(AppConstants.UI_NAME_DISPLAY)?.onPreferenceChangeListener = resultListener
-            findPreference<ListPreference>(AppConstants.UI_FOLLOW_BUTTON)?.onPreferenceChangeListener = resultListener
-            findPreference<SwitchPreferenceCompat>(AppConstants.FOLLOW_MODE_REMEMBERED)?.onPreferenceChangeListener = resultListener
-            findPreference<SwitchPreferenceCompat>(AppConstants.UI_ROUNDUSERIMAGE)?.onPreferenceChangeListener = resultListener
-            findPreference<SwitchPreferenceCompat>(AppConstants.UI_TRUNCATEVIEWCOUNT)?.onPreferenceChangeListener = resultListener
-            findPreference<SwitchPreferenceCompat>(AppConstants.UI_UPTIME)?.onPreferenceChangeListener = resultListener
-            findPreference<SwitchPreferenceCompat>(AppConstants.UI_TAGS)?.onPreferenceChangeListener = resultListener
-            findPreference<SwitchPreferenceCompat>(AppConstants.UI_BROADCASTERSCOUNT)?.onPreferenceChangeListener = resultListener
-            findPreference<SwitchPreferenceCompat>(AppConstants.UI_BOOKMARK_TIME_LEFT)?.onPreferenceChangeListener = resultListener
-        }
-
-        override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
-            super.onViewCreated(view, savedInstanceState)
-            ViewCompat.setOnApplyWindowInsetsListener(view) { _, windowInsets ->
-                val insets = windowInsets.getInsets(WindowInsetsCompat.Type.systemBars())
-                listView.updatePadding(bottom = insets.bottom)
-                WindowInsetsCompat.CONSUMED
-            }
-            requireActivity().findViewById<AppBarLayout>(R.id.appBar)?.let { appBar ->
-                if (requireContext().prefs().getBoolean(AppConstants.UI_THEME_APPBAR_LIFT, true)) {
-                    listView.let {
-                        appBar.setLiftOnScrollTargetView(it)
-                        it.addOnScrollListener(object : RecyclerView.OnScrollListener() {
-                            override fun onScrolled(recyclerView: RecyclerView, dx: Int, dy: Int) {
-                                super.onScrolled(recyclerView, dx, dy)
-                                appBar.isLifted = recyclerView.canScrollVertically(-1)
-                            }
-                        })
-                        it.addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ ->
-                            appBar.isLifted = it.canScrollVertically(-1)
-                        }
-                    }
-                } else {
-                    appBar.setLiftable(false)
-                    appBar.background = null
-                }
-            }
-            (requireActivity() as? SettingsActivity)?.getSelectedSearchItem()?.let { scrollToPreference(it) }
-        }
-    }
-
-    class NavigationSettingsFragment : MaterialPreferenceFragment() {
-        private val viewModel: SettingsViewModel by activityViewModels()
-
-        override fun onCreatePreferences(savedInstanceState: Bundle?, rootKey: String?) {
-            setPreferencesFromResource(R.xml.navigation_preferences, rootKey)
-            val changeListener = Preference.OnPreferenceChangeListener { _, _ ->
-                (requireActivity() as? SettingsActivity)?.setResult()
-                true
-            }
-            findPreference<ListPreference>(AppConstants.UI_STARTONFOLLOWED)?.onPreferenceChangeListener = changeListener
-            findPreference<SwitchPreferenceCompat>(AppConstants.UI_FOLLOWPAGER)?.onPreferenceChangeListener = changeListener
-            findPreference<SwitchPreferenceCompat>(AppConstants.UI_SAVEDPAGER)?.onPreferenceChangeListener = changeListener
-            findPreference<SwitchPreferenceCompat>(AppConstants.UI_GAMEPAGER)?.onPreferenceChangeListener = changeListener
-            findPreference<SwitchPreferenceCompat>(AppConstants.UI_SCROLLTOP)?.onPreferenceChangeListener = changeListener
-            findPreference<SwitchPreferenceCompat>(AppConstants.UI_STORE_RECENT_SEARCHES)?.onPreferenceChangeListener = changeListener
-            findPreference<Preference>("action_navigation_tab_list")?.setOnPreferenceClickListener { preference ->
-                val tabList = requireContext().prefs().getString(AppConstants.UI_NAVIGATION_TAB_LIST, null).let { tabPref ->
-                    val defaultTabs = AppConstants.DEFAULT_NAVIGATION_TAB_LIST.split(',')
-                    if (tabPref != null) {
-                        val list = tabPref.split(',').filter { item ->
-                            defaultTabs.find { it.first() == item.first() } != null
-                        }.toMutableList()
-                        defaultTabs.forEachIndexed { index, item ->
-                            if (list.find { it.first() == item.first() } == null) {
-                                list.add(index, item)
-                            }
-                        }
-                        list
-                    } else defaultTabs
-                }
-                val tabs = tabList.map {
-                    val split = it.split(':')
-                    SettingsDragListItem(
-                        key = split[0],
-                        text = when (split[0]) {
-                            "0" -> getString(R.string.games)
-                            "1" -> getString(R.string.popular)
-                            "2" -> getString(R.string.following)
-                            "3" -> getString(R.string.saved)
-                            else -> getString(R.string.popular)
-                        },
-                        default = split[1] != "0",
-                        enabled = split[2] != "0",
-                    )
-                }
-                (requireActivity() as? SettingsActivity)?.showDragListDialog(tabs, AppConstants.UI_NAVIGATION_TAB_LIST, preference.title)
-                true
-            }
-            findPreference<Preference>("action_following_tabs")?.setOnPreferenceClickListener { preference ->
-                val tabList = requireContext().prefs().getString(AppConstants.UI_FOLLOWING_TABS, null).let { tabPref ->
-                    val defaultTabs = AppConstants.DEFAULT_FOLLOWING_TABS.split(',')
-                    if (tabPref != null) {
-                        val list = tabPref.split(',').filter { item ->
-                            defaultTabs.find { it.first() == item.first() } != null
-                        }.toMutableList()
-                        defaultTabs.forEachIndexed { index, item ->
-                            if (list.find { it.first() == item.first() } == null) {
-                                list.add(index, item)
-                            }
-                        }
-                        list
-                    } else defaultTabs
-                }
-                val tabs = tabList.map {
-                    val split = it.split(':')
-                    SettingsDragListItem(
-                        key = split[0],
-                        text = when (split[0]) {
-                            "0" -> getString(R.string.games)
-                            "1" -> getString(R.string.live)
-                            "2" -> getString(R.string.channels)
-                            else -> getString(R.string.live)
-                        },
-                        default = split[1] != "0",
-                        enabled = split[2] != "0",
-                    )
-                }
-                (requireActivity() as? SettingsActivity)?.showDragListDialog(tabs, AppConstants.UI_FOLLOWING_TABS, preference.title)
-                true
-            }
-            findPreference<Preference>("action_saved_tabs")?.setOnPreferenceClickListener { preference ->
-                val tabList = requireContext().prefs().getString(AppConstants.UI_SAVED_TABS, null).let { tabPref ->
-                    val defaultTabs = AppConstants.DEFAULT_SAVED_TABS.split(',')
-                    if (tabPref != null) {
-                        val list = tabPref.split(',').filter { item ->
-                            defaultTabs.find { it.first() == item.first() } != null
-                        }.toMutableList()
-                        defaultTabs.forEachIndexed { index, item ->
-                            if (list.find { it.first() == item.first() } == null) {
-                                list.add(index, item)
-                            }
-                        }
-                        list
-                    } else defaultTabs
-                }
-                val tabs = tabList.map {
-                    val split = it.split(':')
-                    SettingsDragListItem(
-                        key = split[0],
-                        text = when (split[0]) {
-                            "0" -> getString(R.string.bookmarks)
-                            "1" -> getString(R.string.downloads)
-                            "2" -> getString(R.string.filters)
-                            else -> getString(R.string.downloads)
-                        },
-                        default = split[1] != "0",
-                        enabled = split[2] != "0",
-                    )
-                }
-                (requireActivity() as? SettingsActivity)?.showDragListDialog(tabs, AppConstants.UI_SAVED_TABS, preference.title)
-                true
-            }
-            findPreference<Preference>("action_channel_tabs")?.setOnPreferenceClickListener { preference ->
-                val tabList = requireContext().prefs().getString(AppConstants.UI_CHANNEL_TABS, null).let { tabPref ->
-                    val defaultTabs = AppConstants.DEFAULT_CHANNEL_TABS.split(',')
-                    if (tabPref != null) {
-                        val list = tabPref.split(',').filter { item ->
-                            defaultTabs.find { it.first() == item.first() } != null
-                        }.toMutableList()
-                        defaultTabs.forEachIndexed { index, item ->
-                            if (list.find { it.first() == item.first() } == null) {
-                                list.add(index, item)
-                            }
-                        }
-                        list
-                    } else defaultTabs
-                }
-                val tabs = tabList.map {
-                    val split = it.split(':')
-                    SettingsDragListItem(
-                        key = split[0],
-                        text = when (split[0]) {
-                            "0" -> getString(R.string.suggested)
-                            "1" -> getString(R.string.videos)
-                            "2" -> getString(R.string.clips)
-                            "3" -> getString(R.string.chat)
-                            "4" -> getString(R.string.about)
-                            else -> getString(R.string.videos)
-                        },
-                        default = split[1] != "0",
-                        enabled = split[2] != "0",
-                    )
-                }
-                (requireActivity() as? SettingsActivity)?.showDragListDialog(tabs, AppConstants.UI_CHANNEL_TABS, preference.title)
-                true
-            }
-            findPreference<Preference>("action_game_tabs")?.setOnPreferenceClickListener { preference ->
-                val tabList = requireContext().prefs().getString(AppConstants.UI_GAME_TABS, null).let { tabPref ->
-                    val defaultTabs = AppConstants.DEFAULT_GAME_TABS.split(',')
-                    if (tabPref != null) {
-                        val list = tabPref.split(',').filter { item ->
-                            defaultTabs.find { it.first() == item.first() } != null
-                        }.toMutableList()
-                        defaultTabs.forEachIndexed { index, item ->
-                            if (list.find { it.first() == item.first() } == null) {
-                                list.add(index, item)
-                            }
-                        }
-                        list
-                    } else defaultTabs
-                }
-                val tabs = tabList.map {
-                    val split = it.split(':')
-                    SettingsDragListItem(
-                        key = split[0],
-                        text = when (split[0]) {
-                            "1" -> getString(R.string.live)
-                            "2" -> getString(R.string.clips)
-                            else -> getString(R.string.live)
-                        },
-                        default = split[1] != "0",
-                        enabled = split[2] != "0",
-                    )
-                }
-                (requireActivity() as? SettingsActivity)?.showDragListDialog(tabs, AppConstants.UI_GAME_TABS, preference.title)
-                true
-            }
-            findPreference<Preference>("action_search_tabs")?.setOnPreferenceClickListener { preference ->
-                val tabList = requireContext().prefs().getString(AppConstants.UI_SEARCH_TABS, null).let { tabPref ->
-                    val defaultTabs = AppConstants.DEFAULT_SEARCH_TABS.split(',')
-                    if (tabPref != null) {
-                        val list = tabPref.split(',').filter { item ->
-                            defaultTabs.find { it.first() == item.first() } != null
-                        }.toMutableList()
-                        defaultTabs.forEachIndexed { index, item ->
-                            if (list.find { it.first() == item.first() } == null) {
-                                list.add(index, item)
-                            }
-                        }
-                        list
-                    } else defaultTabs
-                }
-                val tabs = tabList.map {
-                    val split = it.split(':')
-                    SettingsDragListItem(
-                        key = split[0],
-                        text = when (split[0]) {
-                            "0" -> getString(R.string.videos)
-                            "1" -> getString(R.string.streams)
-                            "2" -> getString(R.string.channels)
-                            "3" -> getString(R.string.games)
-                            else -> getString(R.string.channels)
-                        },
-                        default = split[1] != "0",
-                        enabled = split[2] != "0",
-                    )
-                }
-                (requireActivity() as? SettingsActivity)?.showDragListDialog(tabs, AppConstants.UI_SEARCH_TABS, preference.title)
-                true
-            }
-            findPreference<Preference>("action_delete_recent_searches")?.setOnPreferenceClickListener {
-                requireActivity().getAlertDialogBuilder()
-                    .setMessage(getString(R.string.delete_recent_searches_message))
-                    .setPositiveButton(getString(R.string.yes)) { _, _ ->
-                        viewModel.deleteRecentSearches()
-                    }
-                    .setNegativeButton(getString(R.string.no), null)
-                    .show()
-                true
-            }
-        }
-
-        override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
-            super.onViewCreated(view, savedInstanceState)
-            ViewCompat.setOnApplyWindowInsetsListener(view) { _, windowInsets ->
-                val insets = windowInsets.getInsets(WindowInsetsCompat.Type.systemBars())
-                listView.updatePadding(bottom = insets.bottom)
-                WindowInsetsCompat.CONSUMED
-            }
-            requireActivity().findViewById<AppBarLayout>(R.id.appBar)?.let { appBar ->
-                if (requireContext().prefs().getBoolean(AppConstants.UI_THEME_APPBAR_LIFT, true)) {
-                    listView.let {
-                        appBar.setLiftOnScrollTargetView(it)
-                        it.addOnScrollListener(object : RecyclerView.OnScrollListener() {
-                            override fun onScrolled(recyclerView: RecyclerView, dx: Int, dy: Int) {
-                                super.onScrolled(recyclerView, dx, dy)
-                                appBar.isLifted = recyclerView.canScrollVertically(-1)
-                            }
-                        })
-                        it.addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ ->
-                            appBar.isLifted = it.canScrollVertically(-1)
-                        }
-                    }
-                } else {
-                    appBar.setLiftable(false)
-                    appBar.background = null
-                }
-            }
-            (requireActivity() as? SettingsActivity)?.getSelectedSearchItem()?.let { scrollToPreference(it) }
-        }
-    }
-
-    class PlayerOverviewFragment : MaterialPreferenceFragment() {
-        override fun onCreatePreferences(savedInstanceState: Bundle?, rootKey: String?) {
-            setPreferencesFromResource(R.xml.player_overview_preferences, rootKey)
-            val changeListener = Preference.OnPreferenceChangeListener { _, _ ->
-                (requireActivity() as? SettingsActivity)?.setResult()
-                true
-            }
-            val isPipSupported = Build.VERSION.SDK_INT >= Build.VERSION_CODES.O &&
-                requireActivity().packageManager.hasSystemFeature(PackageManager.FEATURE_PICTURE_IN_PICTURE)
-            listOf(
-                AppConstants.PLAYER_PICTURE_IN_PICTURE,
-                AppConstants.PIP_SHOW_AUDIO_ONLY,
-                AppConstants.PIP_SHOW_MUTE,
-                AppConstants.PIP_REDUCED_VOLUME_LEVEL,
-                AppConstants.PIP_UNMUTE_ON_FULLSCREEN
-            ).forEach { key ->
-                findPreference<Preference>(key)?.apply {
-                    isVisible = isPipSupported
-                    if (isPipSupported) onPreferenceChangeListener = changeListener
-                }
-            }
-            findPreference<SwitchPreferenceCompat>(AppConstants.PLAYER_BACKGROUND_AUDIO)?.onPreferenceChangeListener = changeListener
-            findPreference<SwitchPreferenceCompat>(AppConstants.PLAYER_BACKGROUND_AUDIO_LOCKED)?.onPreferenceChangeListener = changeListener
-            findPreference<Preference>("nav_player_behavior")?.setOnPreferenceClickListener {
-                requireActivity().findViewById<AppBarLayout>(R.id.appBar)?.setExpanded(true)
-                findNavController().navigate(SettingsNavGraphDirections.actionGlobalPlayerSettingsFragment())
-                true
-            }
-            findPreference<Preference>("nav_player_button_settings")?.setOnPreferenceClickListener {
-                requireActivity().findViewById<AppBarLayout>(R.id.appBar)?.setExpanded(true)
-                findNavController().navigate(SettingsNavGraphDirections.actionGlobalPlayerButtonSettingsFragment())
-                true
-            }
-            findPreference<Preference>("nav_multipov_settings")?.setOnPreferenceClickListener {
-                requireActivity().findViewById<AppBarLayout>(R.id.appBar)?.setExpanded(true)
-                findNavController().navigate(SettingsNavGraphDirections.actionGlobalMultiPovSettingsFragment())
-                true
-            }
-            findPreference<Preference>("nav_player_menu_settings_root")?.setOnPreferenceClickListener {
-                requireActivity().findViewById<AppBarLayout>(R.id.appBar)?.setExpanded(true)
-                findNavController().navigate(SettingsNavGraphDirections.actionGlobalPlayerMenuSettingsFragment())
-                true
-            }
-            findPreference<Preference>("nav_buffer_settings")?.setOnPreferenceClickListener {
-                requireActivity().findViewById<AppBarLayout>(R.id.appBar)?.setExpanded(true)
-                findNavController().navigate(SettingsNavGraphDirections.actionGlobalBufferSettingsFragment())
-                true
-            }
-        }
-
-        override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
-            super.onViewCreated(view, savedInstanceState)
-            ViewCompat.setOnApplyWindowInsetsListener(view) { _, windowInsets ->
-                val insets = windowInsets.getInsets(WindowInsetsCompat.Type.systemBars())
-                listView.updatePadding(bottom = insets.bottom)
-                WindowInsetsCompat.CONSUMED
-            }
-            requireActivity().findViewById<AppBarLayout>(R.id.appBar)?.let { appBar ->
-                if (requireContext().prefs().getBoolean(AppConstants.UI_THEME_APPBAR_LIFT, true)) {
-                    listView.let {
-                        appBar.setLiftOnScrollTargetView(it)
-                        it.addOnScrollListener(object : RecyclerView.OnScrollListener() {
-                            override fun onScrolled(recyclerView: RecyclerView, dx: Int, dy: Int) {
-                                super.onScrolled(recyclerView, dx, dy)
-                                appBar.isLifted = recyclerView.canScrollVertically(-1)
-                            }
-                        })
-                        it.addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ ->
-                            appBar.isLifted = it.canScrollVertically(-1)
-                        }
-                    }
-                } else {
-                    appBar.setLiftable(false)
-                    appBar.background = null
-                }
-            }
-            (requireActivity() as? SettingsActivity)?.getSelectedSearchItem()?.let { scrollToPreference(it) }
-        }
-    }
-
-    class AdvancedSettingsFragment : MaterialPreferenceFragment() {
-        override fun onCreatePreferences(savedInstanceState: Bundle?, rootKey: String?) {
-            setPreferencesFromResource(R.xml.advanced_preferences, rootKey)
-            val changeListener = Preference.OnPreferenceChangeListener { _, _ ->
-                (requireActivity() as? SettingsActivity)?.setResult()
-                true
-            }
-            findPreference<SwitchPreferenceCompat>(AppConstants.PLAYER_STREAM_PROXY)?.onPreferenceChangeListener = changeListener
-            findPreference<EditTextPreference>(AppConstants.PLAYER_PROXY_URL)?.onPreferenceChangeListener = changeListener
-            findPreference<Preference>("nav_proxy_settings")?.setOnPreferenceClickListener {
-                requireActivity().findViewById<AppBarLayout>(R.id.appBar)?.setExpanded(true)
-                findNavController().navigate(SettingsNavGraphDirections.actionGlobalProxySettingsFragment())
-                true
-            }
-            findPreference<Preference>("nav_playback_settings")?.setOnPreferenceClickListener {
-                requireActivity().findViewById<AppBarLayout>(R.id.appBar)?.setExpanded(true)
-                findNavController().navigate(SettingsNavGraphDirections.actionGlobalPlaybackSettingsFragment())
-                true
-            }
-            findPreference<Preference>("nav_api_token_settings")?.apply {
-                val username = requireContext().tokenPrefs().getString(AppConstants.KICK_USER_LOGIN, null)?.takeIf { it.isNotBlank() }
-                summary = if (username != null) getString(R.string.logout_msg, username) else getString(R.string.not_logged_in)
-                setOnPreferenceClickListener {
-                    requireActivity().findViewById<AppBarLayout>(R.id.appBar)?.setExpanded(true)
-                    findNavController().navigate(SettingsNavGraphDirections.actionGlobalApiTokenSettingsFragment())
-                    true
-                }
-            }
-            findPreference<Preference>("nav_debug_settings")?.let { debugPreference ->
-                // Debug Settings can swap the entire playback stack and the search
-                // implementation. It must not be reachable in a shipped build.
-                if (BuildConfig.DEBUG) {
-                    debugPreference.setOnPreferenceClickListener {
-                        requireActivity().findViewById<AppBarLayout>(R.id.appBar)?.setExpanded(true)
-                        findNavController().navigate(SettingsNavGraphDirections.actionGlobalDebugSettingsFragment())
-                        true
-                    }
-                } else {
-                    // Release keeps the full debug stack (playback/search swaps)
-                    // hidden, but crash + diagnostic log export stays reachable
-                    // with verbose toggles defaulting to off.
-                    debugPreference.title = getString(R.string.customize_debug_logs)
-                    debugPreference.summary = getString(R.string.customize_debug_logs_summary)
-                    debugPreference.isVisible = true
-                    debugPreference.setOnPreferenceClickListener {
-                        requireActivity().findViewById<AppBarLayout>(R.id.appBar)?.setExpanded(true)
-                        findNavController().navigate(SettingsNavGraphDirections.actionGlobalDebugLogSettingsFragment())
-                        true
-                    }
-                }
-            }
-        }
-
-        override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
-            super.onViewCreated(view, savedInstanceState)
-            ViewCompat.setOnApplyWindowInsetsListener(view) { _, windowInsets ->
-                val insets = windowInsets.getInsets(WindowInsetsCompat.Type.systemBars())
-                listView.updatePadding(bottom = insets.bottom)
-                WindowInsetsCompat.CONSUMED
-            }
-            requireActivity().findViewById<AppBarLayout>(R.id.appBar)?.let { appBar ->
-                if (requireContext().prefs().getBoolean(AppConstants.UI_THEME_APPBAR_LIFT, true)) {
-                    listView.let {
-                        appBar.setLiftOnScrollTargetView(it)
-                        it.addOnScrollListener(object : RecyclerView.OnScrollListener() {
-                            override fun onScrolled(recyclerView: RecyclerView, dx: Int, dy: Int) {
-                                super.onScrolled(recyclerView, dx, dy)
-                                appBar.isLifted = recyclerView.canScrollVertically(-1)
-                            }
-                        })
-                        it.addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ ->
-                            appBar.isLifted = it.canScrollVertically(-1)
-                        }
-                    }
-                } else {
-                    appBar.setLiftable(false)
-                    appBar.background = null
-                }
-            }
-            (requireActivity() as? SettingsActivity)?.getSelectedSearchItem()?.let { scrollToPreference(it) }
-        }
-    }
-
     class ChatSettingsFragment : MaterialPreferenceFragment() {
         override fun onCreatePreferences(savedInstanceState: Bundle?, rootKey: String?) {
             setPreferencesFromResource(R.xml.chat_preferences, rootKey)
@@ -1143,91 +995,16 @@ class SettingsActivity : AppCompatActivity() {
 
         override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
             super.onViewCreated(view, savedInstanceState)
-            ViewCompat.setOnApplyWindowInsetsListener(view) { _, windowInsets ->
-                val insets = windowInsets.getInsets(WindowInsetsCompat.Type.systemBars())
-                listView.updatePadding(bottom = insets.bottom)
-                WindowInsetsCompat.CONSUMED
-            }
-            requireActivity().findViewById<AppBarLayout>(R.id.appBar)?.let { appBar ->
-                if (requireContext().prefs().getBoolean(AppConstants.UI_THEME_APPBAR_LIFT, true)) {
-                    listView.let {
-                        appBar.setLiftOnScrollTargetView(it)
-                        it.addOnScrollListener(object : RecyclerView.OnScrollListener() {
-                            override fun onScrolled(recyclerView: RecyclerView, dx: Int, dy: Int) {
-                                super.onScrolled(recyclerView, dx, dy)
-                                appBar.isLifted = recyclerView.canScrollVertically(-1)
-                            }
-                        })
-                        it.addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ ->
-                            appBar.isLifted = it.canScrollVertically(-1)
-                        }
-                    }
-                } else {
-                    appBar.setLiftable(false)
-                    appBar.background = null
-                }
-            }
-            (requireActivity() as? SettingsActivity)?.getSelectedSearchItem()?.let { scrollToPreference(it) }
-        }
-    }
-
-    class PlayerSettingsFragment : MaterialPreferenceFragment() {
-        private val viewModel: SettingsViewModel by activityViewModels()
-
-        override fun onCreatePreferences(savedInstanceState: Bundle?, rootKey: String?) {
-            setPreferencesFromResource(R.xml.player_preferences, rootKey)
-            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O || !requireActivity().packageManager.hasSystemFeature(PackageManager.FEATURE_PICTURE_IN_PICTURE)) {
-                findPreference<SwitchPreferenceCompat>(AppConstants.PLAYER_BACKGROUND_AUDIO_PIP_CLOSED)?.isVisible = false
-                findPreference<SwitchPreferenceCompat>(AppConstants.PLAYER_BACKGROUND_AUDIO_PIP_LOCKED)?.isVisible = false
-            }
-            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) {
-                findPreference<SwitchPreferenceCompat>(AppConstants.PLAYER_ROUNDED_CORNER_PADDING)?.isVisible = false
-            }
-            findPreference<Preference>("action_delete_video_positions")?.setOnPreferenceClickListener {
-                requireActivity().getAlertDialogBuilder()
-                    .setMessage(getString(R.string.delete_video_positions_message))
-                    .setPositiveButton(getString(R.string.yes)) { _, _ ->
-                        viewModel.deletePositions()
-                    }
-                    .setNegativeButton(getString(R.string.no), null)
-                    .show()
-                true
-            }
-        }
-
-        override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
-            super.onViewCreated(view, savedInstanceState)
-            ViewCompat.setOnApplyWindowInsetsListener(view) { _, windowInsets ->
-                val insets = windowInsets.getInsets(WindowInsetsCompat.Type.systemBars())
-                listView.updatePadding(bottom = insets.bottom)
-                WindowInsetsCompat.CONSUMED
-            }
-            requireActivity().findViewById<AppBarLayout>(R.id.appBar)?.let { appBar ->
-                if (requireContext().prefs().getBoolean(AppConstants.UI_THEME_APPBAR_LIFT, true)) {
-                    listView.let {
-                        appBar.setLiftOnScrollTargetView(it)
-                        it.addOnScrollListener(object : RecyclerView.OnScrollListener() {
-                            override fun onScrolled(recyclerView: RecyclerView, dx: Int, dy: Int) {
-                                super.onScrolled(recyclerView, dx, dy)
-                                appBar.isLifted = recyclerView.canScrollVertically(-1)
-                            }
-                        })
-                        it.addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ ->
-                            appBar.isLifted = it.canScrollVertically(-1)
-                        }
-                    }
-                } else {
-                    appBar.setLiftable(false)
-                    appBar.background = null
-                }
-            }
-            (requireActivity() as? SettingsActivity)?.getSelectedSearchItem()?.let { scrollToPreference(it) }
+            setupStandardListBehavior()
         }
     }
 
     class PlayerButtonSettingsFragment : MaterialPreferenceFragment() {
         override fun onCreatePreferences(savedInstanceState: Bundle?, rootKey: String?) {
             setPreferencesFromResource(R.xml.player_button_preferences, rootKey)
+            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) {
+                findPreference<SwitchPreferenceCompat>(AppConstants.PLAYER_ROUNDED_CORNER_PADDING)?.isVisible = false
+            }
             listOf(AppConstants.PLAYER_REWIND, AppConstants.PLAYER_FORWARD).forEach { key ->
                 findPreference<EditTextPreference>(key)?.apply {
                     summary = getString(R.string.seconds_full, requireContext().prefs().getString(key, "10"))
@@ -1255,47 +1032,14 @@ class SettingsActivity : AppCompatActivity() {
                 }
                 true
             }
-            findPreference<Preference>("action_open_admin_settings")?.setOnPreferenceClickListener {
-                startActivity(Intent().setComponent(ComponentName("com.android.settings", "com.android.settings.DeviceAdminSettings")))
-                true
-            }
             if (Build.VERSION.SDK_INT < Build.VERSION_CODES.P) {
                 findPreference<SwitchPreferenceCompat>(AppConstants.PLAYER_AUDIO_COMPRESSOR_BUTTON)?.isVisible = false
-            }
-            findPreference<Preference>("nav_player_menu_settings")?.setOnPreferenceClickListener {
-                requireActivity().findViewById<AppBarLayout>(R.id.appBar)?.setExpanded(true)
-                findNavController().navigate(SettingsNavGraphDirections.actionGlobalPlayerMenuSettingsFragment())
-                true
             }
         }
 
         override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
             super.onViewCreated(view, savedInstanceState)
-            ViewCompat.setOnApplyWindowInsetsListener(view) { _, windowInsets ->
-                val insets = windowInsets.getInsets(WindowInsetsCompat.Type.systemBars())
-                listView.updatePadding(bottom = insets.bottom)
-                WindowInsetsCompat.CONSUMED
-            }
-            requireActivity().findViewById<AppBarLayout>(R.id.appBar)?.let { appBar ->
-                if (requireContext().prefs().getBoolean(AppConstants.UI_THEME_APPBAR_LIFT, true)) {
-                    listView.let {
-                        appBar.setLiftOnScrollTargetView(it)
-                        it.addOnScrollListener(object : RecyclerView.OnScrollListener() {
-                            override fun onScrolled(recyclerView: RecyclerView, dx: Int, dy: Int) {
-                                super.onScrolled(recyclerView, dx, dy)
-                                appBar.isLifted = recyclerView.canScrollVertically(-1)
-                            }
-                        })
-                        it.addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ ->
-                            appBar.isLifted = it.canScrollVertically(-1)
-                        }
-                    }
-                } else {
-                    appBar.setLiftable(false)
-                    appBar.background = null
-                }
-            }
-            (requireActivity() as? SettingsActivity)?.getSelectedSearchItem()?.let { scrollToPreference(it) }
+            setupStandardListBehavior()
         }
     }
 
@@ -1306,31 +1050,7 @@ class SettingsActivity : AppCompatActivity() {
 
         override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
             super.onViewCreated(view, savedInstanceState)
-            ViewCompat.setOnApplyWindowInsetsListener(view) { _, windowInsets ->
-                val insets = windowInsets.getInsets(WindowInsetsCompat.Type.systemBars())
-                listView.updatePadding(bottom = insets.bottom)
-                WindowInsetsCompat.CONSUMED
-            }
-            requireActivity().findViewById<AppBarLayout>(R.id.appBar)?.let { appBar ->
-                if (requireContext().prefs().getBoolean(AppConstants.UI_THEME_APPBAR_LIFT, true)) {
-                    listView.let {
-                        appBar.setLiftOnScrollTargetView(it)
-                        it.addOnScrollListener(object : RecyclerView.OnScrollListener() {
-                            override fun onScrolled(recyclerView: RecyclerView, dx: Int, dy: Int) {
-                                super.onScrolled(recyclerView, dx, dy)
-                                appBar.isLifted = recyclerView.canScrollVertically(-1)
-                            }
-                        })
-                        it.addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ ->
-                            appBar.isLifted = it.canScrollVertically(-1)
-                        }
-                    }
-                } else {
-                    appBar.setLiftable(false)
-                    appBar.background = null
-                }
-            }
-            (requireActivity() as? SettingsActivity)?.getSelectedSearchItem()?.let { scrollToPreference(it) }
+            setupStandardListBehavior()
         }
     }
 
@@ -1344,31 +1064,7 @@ class SettingsActivity : AppCompatActivity() {
 
         override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
             super.onViewCreated(view, savedInstanceState)
-            ViewCompat.setOnApplyWindowInsetsListener(view) { _, windowInsets ->
-                val insets = windowInsets.getInsets(WindowInsetsCompat.Type.systemBars())
-                listView.updatePadding(bottom = insets.bottom)
-                WindowInsetsCompat.CONSUMED
-            }
-            requireActivity().findViewById<AppBarLayout>(R.id.appBar)?.let { appBar ->
-                if (requireContext().prefs().getBoolean(AppConstants.UI_THEME_APPBAR_LIFT, true)) {
-                    listView.let {
-                        appBar.setLiftOnScrollTargetView(it)
-                        it.addOnScrollListener(object : RecyclerView.OnScrollListener() {
-                            override fun onScrolled(recyclerView: RecyclerView, dx: Int, dy: Int) {
-                                super.onScrolled(recyclerView, dx, dy)
-                                appBar.isLifted = recyclerView.canScrollVertically(-1)
-                            }
-                        })
-                        it.addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ ->
-                            appBar.isLifted = it.canScrollVertically(-1)
-                        }
-                    }
-                } else {
-                    appBar.setLiftable(false)
-                    appBar.background = null
-                }
-            }
-            (requireActivity() as? SettingsActivity)?.getSelectedSearchItem()?.let { scrollToPreference(it) }
+            setupStandardListBehavior()
         }
 
         private fun bindLatencyPreferences() {
@@ -1417,31 +1113,7 @@ class SettingsActivity : AppCompatActivity() {
 
         override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
             super.onViewCreated(view, savedInstanceState)
-            ViewCompat.setOnApplyWindowInsetsListener(view) { _, windowInsets ->
-                val insets = windowInsets.getInsets(WindowInsetsCompat.Type.systemBars())
-                listView.updatePadding(bottom = insets.bottom)
-                WindowInsetsCompat.CONSUMED
-            }
-            requireActivity().findViewById<AppBarLayout>(R.id.appBar)?.let { appBar ->
-                if (requireContext().prefs().getBoolean(AppConstants.UI_THEME_APPBAR_LIFT, true)) {
-                    listView.let {
-                        appBar.setLiftOnScrollTargetView(it)
-                        it.addOnScrollListener(object : RecyclerView.OnScrollListener() {
-                            override fun onScrolled(recyclerView: RecyclerView, dx: Int, dy: Int) {
-                                super.onScrolled(recyclerView, dx, dy)
-                                appBar.isLifted = recyclerView.canScrollVertically(-1)
-                            }
-                        })
-                        it.addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ ->
-                            appBar.isLifted = it.canScrollVertically(-1)
-                        }
-                    }
-                } else {
-                    appBar.setLiftable(false)
-                    appBar.background = null
-                }
-            }
-            (requireActivity() as? SettingsActivity)?.getSelectedSearchItem()?.let { scrollToPreference(it) }
+            setupStandardListBehavior()
         }
     }
 
@@ -1452,43 +1124,108 @@ class SettingsActivity : AppCompatActivity() {
 
         override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
             super.onViewCreated(view, savedInstanceState)
-            ViewCompat.setOnApplyWindowInsetsListener(view) { _, windowInsets ->
-                val insets = windowInsets.getInsets(WindowInsetsCompat.Type.systemBars())
-                listView.updatePadding(bottom = insets.bottom)
-                WindowInsetsCompat.CONSUMED
-            }
-            requireActivity().findViewById<AppBarLayout>(R.id.appBar)?.let { appBar ->
-                if (requireContext().prefs().getBoolean(AppConstants.UI_THEME_APPBAR_LIFT, true)) {
-                    listView.let {
-                        appBar.setLiftOnScrollTargetView(it)
-                        it.addOnScrollListener(object : RecyclerView.OnScrollListener() {
-                            override fun onScrolled(recyclerView: RecyclerView, dx: Int, dy: Int) {
-                                super.onScrolled(recyclerView, dx, dy)
-                                appBar.isLifted = recyclerView.canScrollVertically(-1)
-                            }
-                        })
-                        it.addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ ->
-                            appBar.isLifted = it.canScrollVertically(-1)
-                        }
-                    }
-                } else {
-                    appBar.setLiftable(false)
-                    appBar.background = null
-                }
-            }
-            (requireActivity() as? SettingsActivity)?.getSelectedSearchItem()?.let { scrollToPreference(it) }
+            setupStandardListBehavior()
         }
     }
 
     @AndroidEntryPoint
     class ApiTokenSettingsFragment : MaterialPreferenceFragment() {
+        private var authResultLauncher: ActivityResultLauncher<Intent>? = null
+
+        override fun onCreate(savedInstanceState: Bundle?) {
+            super.onCreate(savedInstanceState)
+            authResultLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+                if (result.resultCode == Activity.RESULT_OK) {
+                    updateAuthHeader()
+                    (requireActivity() as? SettingsActivity)?.setResult()
+                }
+            }
+        }
+
+        private fun updateAuthHeader() {
+            val context = requireContext()
+            val username = context.tokenPrefs().getString(AppConstants.KICK_USER_LOGIN, null)?.takeIf { it.isNotBlank() }
+            val isLoggedIn = AuthStateHelper.isKickLoggedIn(context)
+            findPreference<Preference>("action_kick_auth_toggle")?.apply {
+                if (username != null && isLoggedIn) {
+                    title = username
+                    summary = getString(R.string.tap_to_log_out)
+                } else if (username != null) {
+                    title = username
+                    summary = getString(R.string.token_expired)
+                } else {
+                    title = getString(R.string.log_in)
+                    summary = getString(R.string.log_in_to_kick_summary)
+                }
+            }
+            findPreference<Preference>("action_kick_import_follows")?.apply {
+                isEnabled = isLoggedIn
+                summary = if (isLoggedIn) {
+                    getString(R.string.import_kick_follows_summary)
+                } else {
+                    getString(R.string.login_to_import_follows)
+                }
+            }
+        }
+
+        override fun onResume() {
+            super.onResume()
+            updateAuthHeader()
+        }
+
+        override fun onCreatePreferences(savedInstanceState: Bundle?, rootKey: String?) {
+            setPreferencesFromResource(R.xml.api_token_preferences, rootKey)
+            updateAuthHeader()
+            findPreference<Preference>("action_kick_auth_toggle")?.setOnPreferenceClickListener {
+                val context = requireContext()
+                val username = context.tokenPrefs().getString(AppConstants.KICK_USER_LOGIN, null)?.takeIf { it.isNotBlank() }
+                val isLoggedIn = AuthStateHelper.isKickLoggedIn(context)
+                if (username != null && isLoggedIn) {
+                    context.getAlertDialogBuilder().apply {
+                        setTitle(getString(R.string.logout_title))
+                        setMessage(getString(R.string.logout_msg, username))
+                        setNegativeButton(getString(R.string.no), null)
+                        setPositiveButton(getString(R.string.yes)) { _, _ ->
+                            authResultLauncher?.launch(
+                                Intent(context, LoginActivity::class.java).putExtra(AppConstants.LOGIN_LOGOUT_ONLY, true)
+                            )
+                        }
+                    }.show()
+                } else {
+                    authResultLauncher?.launch(Intent(context, LoginActivity::class.java))
+                }
+                true
+            }
+            findPreference<Preference>("action_kick_import_follows")?.setOnPreferenceClickListener {
+                if (AuthStateHelper.isKickLoggedIn(requireContext())) {
+                    KickFollowImportDialog().show(childFragmentManager, "kick_follow_import")
+                } else {
+                    Toast.makeText(requireContext(), R.string.log_in, Toast.LENGTH_SHORT).show()
+                }
+                true
+            }
+        }
+
+        override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
+            super.onViewCreated(view, savedInstanceState)
+            setupStandardListBehavior()
+        }
+    }
+
+    @AndroidEntryPoint
+    class DeveloperSettingsFragment : MaterialPreferenceFragment() {
         @Inject
         lateinit var kickRepository: KickRepository
 
         private val eventScopes = setOf("events:subscribe")
 
         override fun onCreatePreferences(savedInstanceState: Bundle?, rootKey: String?) {
-            setPreferencesFromResource(R.xml.api_token_preferences, rootKey)
+            setPreferencesFromResource(R.xml.developer_preferences, rootKey)
+            findPreference<SwitchPreferenceCompat>(AppConstants.VALIDATE_TOKENS)?.onPreferenceChangeListener =
+                Preference.OnPreferenceChangeListener { _, _ ->
+                    (requireActivity() as? SettingsActivity)?.setResult()
+                    true
+                }
             findPreference<EditTextPreference>(AppConstants.KICK_USER_ID)?.apply {
                 isPersistent = false
                 text = requireContext().tokenPrefs().getString(AppConstants.KICK_USER_ID, null)
@@ -1709,31 +1446,7 @@ class SettingsActivity : AppCompatActivity() {
 
         override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
             super.onViewCreated(view, savedInstanceState)
-            ViewCompat.setOnApplyWindowInsetsListener(view) { _, windowInsets ->
-                val insets = windowInsets.getInsets(WindowInsetsCompat.Type.systemBars())
-                listView.updatePadding(bottom = insets.bottom)
-                WindowInsetsCompat.CONSUMED
-            }
-            requireActivity().findViewById<AppBarLayout>(R.id.appBar)?.let { appBar ->
-                if (requireContext().prefs().getBoolean(AppConstants.UI_THEME_APPBAR_LIFT, true)) {
-                    listView.let {
-                        appBar.setLiftOnScrollTargetView(it)
-                        it.addOnScrollListener(object : RecyclerView.OnScrollListener() {
-                            override fun onScrolled(recyclerView: RecyclerView, dx: Int, dy: Int) {
-                                super.onScrolled(recyclerView, dx, dy)
-                                appBar.isLifted = recyclerView.canScrollVertically(-1)
-                            }
-                        })
-                        it.addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ ->
-                            appBar.isLifted = it.canScrollVertically(-1)
-                        }
-                    }
-                } else {
-                    appBar.setLiftable(false)
-                    appBar.background = null
-                }
-            }
-            (requireActivity() as? SettingsActivity)?.getSelectedSearchItem()?.let { scrollToPreference(it) }
+            setupStandardListBehavior()
         }
     }
 
@@ -1820,31 +1533,7 @@ class SettingsActivity : AppCompatActivity() {
                 }
             }
             viewModel.scanLeftoverFiles()
-            ViewCompat.setOnApplyWindowInsetsListener(view) { _, windowInsets ->
-                val insets = windowInsets.getInsets(WindowInsetsCompat.Type.systemBars())
-                listView.updatePadding(bottom = insets.bottom)
-                WindowInsetsCompat.CONSUMED
-            }
-            requireActivity().findViewById<AppBarLayout>(R.id.appBar)?.let { appBar ->
-                if (requireContext().prefs().getBoolean(AppConstants.UI_THEME_APPBAR_LIFT, true)) {
-                    listView.let {
-                        appBar.setLiftOnScrollTargetView(it)
-                        it.addOnScrollListener(object : RecyclerView.OnScrollListener() {
-                            override fun onScrolled(recyclerView: RecyclerView, dx: Int, dy: Int) {
-                                super.onScrolled(recyclerView, dx, dy)
-                                appBar.isLifted = recyclerView.canScrollVertically(-1)
-                            }
-                        })
-                        it.addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ ->
-                            appBar.isLifted = it.canScrollVertically(-1)
-                        }
-                    }
-                } else {
-                    appBar.setLiftable(false)
-                    appBar.background = null
-                }
-            }
-            (requireActivity() as? SettingsActivity)?.getSelectedSearchItem()?.let { scrollToPreference(it) }
+            setupStandardListBehavior()
         }
     }
 
@@ -1896,31 +1585,7 @@ class SettingsActivity : AppCompatActivity() {
 
         override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
             super.onViewCreated(view, savedInstanceState)
-            ViewCompat.setOnApplyWindowInsetsListener(view) { _, windowInsets ->
-                val insets = windowInsets.getInsets(WindowInsetsCompat.Type.systemBars())
-                listView.updatePadding(bottom = insets.bottom)
-                WindowInsetsCompat.CONSUMED
-            }
-            requireActivity().findViewById<AppBarLayout>(R.id.appBar)?.let { appBar ->
-                if (requireContext().prefs().getBoolean(AppConstants.UI_THEME_APPBAR_LIFT, true)) {
-                    listView.let {
-                        appBar.setLiftOnScrollTargetView(it)
-                        it.addOnScrollListener(object : RecyclerView.OnScrollListener() {
-                            override fun onScrolled(recyclerView: RecyclerView, dx: Int, dy: Int) {
-                                super.onScrolled(recyclerView, dx, dy)
-                                appBar.isLifted = recyclerView.canScrollVertically(-1)
-                            }
-                        })
-                        it.addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ ->
-                            appBar.isLifted = it.canScrollVertically(-1)
-                        }
-                    }
-                } else {
-                    appBar.setLiftable(false)
-                    appBar.background = null
-                }
-            }
-            (requireActivity() as? SettingsActivity)?.getSelectedSearchItem()?.let { scrollToPreference(it) }
+            setupStandardListBehavior()
         }
     }
 
@@ -2104,31 +1769,7 @@ class SettingsActivity : AppCompatActivity() {
 
         override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
             super.onViewCreated(view, savedInstanceState)
-            ViewCompat.setOnApplyWindowInsetsListener(view) { _, windowInsets ->
-                val insets = windowInsets.getInsets(WindowInsetsCompat.Type.systemBars())
-                listView.updatePadding(bottom = insets.bottom)
-                WindowInsetsCompat.CONSUMED
-            }
-            requireActivity().findViewById<AppBarLayout>(R.id.appBar)?.let { appBar ->
-                if (requireContext().prefs().getBoolean(AppConstants.UI_THEME_APPBAR_LIFT, true)) {
-                    listView.let {
-                        appBar.setLiftOnScrollTargetView(it)
-                        it.addOnScrollListener(object : RecyclerView.OnScrollListener() {
-                            override fun onScrolled(recyclerView: RecyclerView, dx: Int, dy: Int) {
-                                super.onScrolled(recyclerView, dx, dy)
-                                appBar.isLifted = recyclerView.canScrollVertically(-1)
-                            }
-                        })
-                        it.addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ ->
-                            appBar.isLifted = it.canScrollVertically(-1)
-                        }
-                    }
-                } else {
-                    appBar.setLiftable(false)
-                    appBar.background = null
-                }
-            }
-            (requireActivity() as? SettingsActivity)?.getSelectedSearchItem()?.let { scrollToPreference(it) }
+            setupStandardListBehavior()
         }
     }
 
@@ -2276,31 +1917,7 @@ class SettingsActivity : AppCompatActivity() {
 
         override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
             super.onViewCreated(view, savedInstanceState)
-            ViewCompat.setOnApplyWindowInsetsListener(view) { _, windowInsets ->
-                val insets = windowInsets.getInsets(WindowInsetsCompat.Type.systemBars())
-                listView.updatePadding(bottom = insets.bottom)
-                WindowInsetsCompat.CONSUMED
-            }
-            requireActivity().findViewById<AppBarLayout>(R.id.appBar)?.let { appBar ->
-                if (requireContext().prefs().getBoolean(AppConstants.UI_THEME_APPBAR_LIFT, true)) {
-                    listView.let {
-                        appBar.setLiftOnScrollTargetView(it)
-                        it.addOnScrollListener(object : RecyclerView.OnScrollListener() {
-                            override fun onScrolled(recyclerView: RecyclerView, dx: Int, dy: Int) {
-                                super.onScrolled(recyclerView, dx, dy)
-                                appBar.isLifted = recyclerView.canScrollVertically(-1)
-                            }
-                        })
-                        it.addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ ->
-                            appBar.isLifted = it.canScrollVertically(-1)
-                        }
-                    }
-                } else {
-                    appBar.setLiftable(false)
-                    appBar.background = null
-                }
-            }
-            (requireActivity() as? SettingsActivity)?.getSelectedSearchItem()?.let { scrollToPreference(it) }
+            setupStandardListBehavior()
         }
     }
 
@@ -2367,29 +1984,33 @@ class SettingsActivity : AppCompatActivity() {
             if (preferences == null) {
                 val list = mutableListOf<SettingsSearchItem>()
                 val preferenceManager = PreferenceManager(requireContext())
+                fun searchSource(xmlRes: Int, nav: androidx.navigation.NavDirections, titleRes: Int) =
+                    Triple(xmlRes, nav, getString(titleRes))
                 val searchSources = mutableListOf(
-                    Triple(R.xml.general_preferences, SettingsNavGraphDirections.actionGlobalGeneralSettingsFragment(), getString(R.string.general)),
-                    Triple(R.xml.appearance_preferences, SettingsNavGraphDirections.actionGlobalAppearanceSettingsFragment(), getString(R.string.appearance)),
-                    Triple(R.xml.navigation_preferences, SettingsNavGraphDirections.actionGlobalNavigationSettingsFragment(), getString(R.string.navigation)),
-                    Triple(R.xml.chat_preferences, SettingsNavGraphDirections.actionGlobalChatSettingsFragment(), getString(R.string.chat_settings)),
-                    Triple(R.xml.player_overview_preferences, SettingsNavGraphDirections.actionGlobalPlayerOverviewFragment(), getString(R.string.player_settings)),
-                    Triple(R.xml.player_preferences, SettingsNavGraphDirections.actionGlobalPlayerSettingsFragment(), getString(R.string.player_behavior)),
-                    Triple(R.xml.player_button_preferences, SettingsNavGraphDirections.actionGlobalPlayerButtonSettingsFragment(), getString(R.string.player_buttons)),
-                    Triple(R.xml.player_menu_preferences, SettingsNavGraphDirections.actionGlobalPlayerMenuSettingsFragment(), getString(R.string.player_menu_settings)),
-                    Triple(R.xml.buffer_preferences, SettingsNavGraphDirections.actionGlobalBufferSettingsFragment(), getString(R.string.buffer_settings)),
-                    Triple(R.xml.download_preferences, SettingsNavGraphDirections.actionGlobalDownloadSettingsFragment(), getString(R.string.download_settings)),
-                    Triple(R.xml.advanced_preferences, SettingsNavGraphDirections.actionGlobalAdvancedSettingsFragment(), getString(R.string.advanced)),
-                    Triple(R.xml.proxy_preferences, SettingsNavGraphDirections.actionGlobalProxySettingsFragment(), getString(R.string.proxy_settings)),
-                    Triple(R.xml.playback_preferences, SettingsNavGraphDirections.actionGlobalPlaybackSettingsFragment(), getString(R.string.playback_settings)),
-                    Triple(R.xml.api_token_preferences, SettingsNavGraphDirections.actionGlobalApiTokenSettingsFragment(), getString(R.string.api_token_settings)),
-                    Triple(R.xml.update_preferences, SettingsNavGraphDirections.actionGlobalUpdateSettingsFragment(), getString(R.string.update_settings)),
+                    searchSource(R.xml.notifications_preferences, SettingsNavGraphDirections.actionGlobalNotificationsSettingsFragment(), R.string.notifications_and_rewards),
+                    searchSource(R.xml.appearance_preferences, SettingsNavGraphDirections.actionGlobalAppearanceSettingsFragment(), R.string.appearance),
+                    searchSource(R.xml.navigation_preferences, SettingsNavGraphDirections.actionGlobalNavigationSettingsFragment(), R.string.navigation),
+                    searchSource(R.xml.chat_preferences, SettingsNavGraphDirections.actionGlobalChatSettingsFragment(), R.string.chat_settings),
+                    searchSource(R.xml.player_overview_preferences, SettingsNavGraphDirections.actionGlobalPlayerOverviewFragment(), R.string.video_and_audio),
+                    searchSource(R.xml.player_background_preferences, SettingsNavGraphDirections.actionGlobalPlayerBackgroundSettingsFragment(), R.string.background_and_pip),
+                    searchSource(R.xml.player_button_preferences, SettingsNavGraphDirections.actionGlobalPlayerButtonSettingsFragment(), R.string.player_buttons),
+                    searchSource(R.xml.player_menu_preferences, SettingsNavGraphDirections.actionGlobalPlayerMenuSettingsFragment(), R.string.player_menu_settings),
+                    searchSource(R.xml.multipov_preferences, SettingsNavGraphDirections.actionGlobalMultiPovSettingsFragment(), R.string.multipov_settings),
+                    searchSource(R.xml.buffer_preferences, SettingsNavGraphDirections.actionGlobalBufferSettingsFragment(), R.string.buffer_settings),
+                    searchSource(R.xml.download_preferences, SettingsNavGraphDirections.actionGlobalDownloadSettingsFragment(), R.string.download_settings),
+                    searchSource(R.xml.advanced_preferences, SettingsNavGraphDirections.actionGlobalAdvancedSettingsFragment(), R.string.system_and_advanced),
+                    searchSource(R.xml.proxy_preferences, SettingsNavGraphDirections.actionGlobalProxySettingsFragment(), R.string.proxy_settings),
+                    searchSource(R.xml.playback_preferences, SettingsNavGraphDirections.actionGlobalPlaybackSettingsFragment(), R.string.stream_parameters),
+                    searchSource(R.xml.api_token_preferences, SettingsNavGraphDirections.actionGlobalApiTokenSettingsFragment(), R.string.account),
+                    searchSource(R.xml.developer_preferences, SettingsNavGraphDirections.actionGlobalDeveloperSettingsFragment(), R.string.developer_tokens),
+                    searchSource(R.xml.update_preferences, SettingsNavGraphDirections.actionGlobalUpdateSettingsFragment(), R.string.update_settings),
                 )
                 // Debug Settings can swap the entire playback stack and the search
                 // implementation. It must not be reachable in a shipped build.
                 // The log-only screen is safe and always searchable.
-                searchSources.add(Triple(R.xml.debug_log_preferences, SettingsNavGraphDirections.actionGlobalDebugLogSettingsFragment(), getString(R.string.customize_debug_logs)))
+                searchSources.add(searchSource(R.xml.debug_log_preferences, SettingsNavGraphDirections.actionGlobalDebugLogSettingsFragment(), R.string.customize_debug_logs))
                 if (BuildConfig.DEBUG) {
-                    searchSources.add(Triple(R.xml.debug_preferences, SettingsNavGraphDirections.actionGlobalDebugSettingsFragment(), getString(R.string.debug_settings)))
+                    searchSources.add(searchSource(R.xml.debug_preferences, SettingsNavGraphDirections.actionGlobalDebugSettingsFragment(), R.string.debug_settings))
                 }
                 fun collectPreferences(pref: Preference, navDirections: androidx.navigation.NavDirections, location: String) {
                     if (pref is PreferenceGroup) {

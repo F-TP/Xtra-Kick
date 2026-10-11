@@ -133,6 +133,7 @@ object AuthStateHelper {
     }
 
     fun markUnexpectedLogout(context: Context) {
+        com.xtrakick.app.KickApp.showUnexpectedLogoutNoticeThisProcess = true
         context.tokenPrefs().edit {
             putBoolean(AppConstants.KICK_UNEXPECTED_LOGOUT_PENDING, true)
         }

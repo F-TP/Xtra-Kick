@@ -47,7 +47,9 @@ sealed class KickAuthRequestException(message: String, cause: Throwable? = null)
         }
 
         fun isUnauthorized(throwable: Throwable): Boolean {
-            return throwable is HttpFailure && throwable.statusCode == 401
+            val failure = (throwable as? HttpFailure)
+                ?: (throwable.cause as? HttpFailure)
+            return failure != null && (failure.statusCode == 401 || failure.statusCode == 400)
         }
 
         private fun isBackendUnavailableCause(throwable: Throwable): Boolean {

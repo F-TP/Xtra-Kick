@@ -1,6 +1,10 @@
 <androidx.preference.PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto">
 
+    <PreferenceCategory
+        android:title="@string/feed_refresh_and_startup"
+        app:iconSpaceReserved="false" />
+
     <ListPreference
         android:defaultValue="1"
         android:entries="@array/followedEntries"
@@ -11,24 +15,21 @@
         app:iconSpaceReserved="false"
         app:singleLineTitle="false" />
 
-    <SwitchPreferenceCompat
-        android:defaultValue="true"
-        android:key="ui_followpager"
-        android:title="@string/use_followpager"
+    <ListPreference
+        android:defaultValue="60"
+        android:entries="@array/followedLiveAutoRefreshEntries"
+        android:entryValues="@array/followedLiveAutoRefreshValues"
+        android:key="followed_live_auto_refresh_interval"
+        android:summary="%s"
+        android:title="@string/followed_live_auto_refresh"
         app:iconSpaceReserved="false"
         app:singleLineTitle="false" />
 
     <SwitchPreferenceCompat
         android:defaultValue="true"
-        android:key="ui_savedpager"
-        android:title="@string/use_savedpager"
-        app:iconSpaceReserved="false"
-        app:singleLineTitle="false" />
-
-    <SwitchPreferenceCompat
-        android:defaultValue="true"
-        android:key="ui_gamepager"
-        android:title="@string/use_gamepager"
+        android:key="followed_live_refresh_on_return"
+        android:summary="@string/followed_live_refresh_on_return_summary"
+        android:title="@string/followed_live_refresh_on_return"
         app:iconSpaceReserved="false"
         app:singleLineTitle="false" />
 
@@ -49,27 +50,51 @@
         app:iconSpaceReserved="false"
         app:singleLineTitle="false" />
 
+    <SwitchPreferenceCompat
+        android:defaultValue="true"
+        android:key="ui_followpager"
+        android:title="@string/use_followpager"
+        app:iconSpaceReserved="false"
+        app:singleLineTitle="false" />
+
     <Preference
+        android:dependency="ui_followpager"
         android:key="action_following_tabs"
         android:title="@string/following_tabs"
         app:iconSpaceReserved="false"
         app:singleLineTitle="false" />
 
+    <SwitchPreferenceCompat
+        android:defaultValue="true"
+        android:key="ui_savedpager"
+        android:title="@string/use_savedpager"
+        app:iconSpaceReserved="false"
+        app:singleLineTitle="false" />
+
     <Preference
+        android:dependency="ui_savedpager"
         android:key="action_saved_tabs"
         android:title="@string/saved_tabs"
+        app:iconSpaceReserved="false"
+        app:singleLineTitle="false" />
+
+    <SwitchPreferenceCompat
+        android:defaultValue="true"
+        android:key="ui_gamepager"
+        android:title="@string/use_gamepager"
+        app:iconSpaceReserved="false"
+        app:singleLineTitle="false" />
+
+    <Preference
+        android:dependency="ui_gamepager"
+        android:key="action_game_tabs"
+        android:title="@string/game_tabs"
         app:iconSpaceReserved="false"
         app:singleLineTitle="false" />
 
     <Preference
         android:key="action_channel_tabs"
         android:title="@string/channel_tabs"
-        app:iconSpaceReserved="false"
-        app:singleLineTitle="false" />
-
-    <Preference
-        android:key="action_game_tabs"
-        android:title="@string/game_tabs"
         app:iconSpaceReserved="false"
         app:singleLineTitle="false" />
 

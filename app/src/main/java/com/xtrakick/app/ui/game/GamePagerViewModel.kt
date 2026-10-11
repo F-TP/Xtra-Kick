@@ -101,7 +101,7 @@ class GamePagerViewModel @Inject constructor(
                     File(filesDir, "box_art").mkdir()
                     val path = filesDir + File.separator + "box_art" + File.separator + gameId
                     val remoteBoxArt = gameBoxArt?.takeIf { it.isNotBlank() } ?: try {
-                        if (!kickPublicApiHeaders[AppConstants.HEADER_TOKEN].isNullOrBlank()) {
+                        if (kickPublicApiHeaders.isNotEmpty()) {
                             kickPublicApiRepository.getGames(
                                 networkLibrary = networkLibrary,
                                 headers = kickPublicApiHeaders,
@@ -206,7 +206,7 @@ class GamePagerViewModel @Inject constructor(
                     File(filesDir, "box_art").mkdir()
                     val path = filesDir + File.separator + "box_art" + File.separator + gameId
                     val remoteBoxArt = try {
-                        if (!kickPublicApiHeaders[AppConstants.HEADER_TOKEN].isNullOrBlank()) {
+                        if (kickPublicApiHeaders.isNotEmpty()) {
                             kickPublicApiRepository.getGames(
                                 networkLibrary = networkLibrary,
                                 headers = kickPublicApiHeaders,

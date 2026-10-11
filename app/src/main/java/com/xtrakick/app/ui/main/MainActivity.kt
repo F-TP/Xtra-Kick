@@ -606,7 +606,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun maybeShowUnexpectedLogoutNotice() {
-        if (!KickApp.showUnexpectedLogoutNoticeThisProcess) {
+        if (!KickApp.showUnexpectedLogoutNoticeThisProcess && !AuthStateHelper.hasPendingUnexpectedLogoutNotice(this)) {
             return
         }
         KickApp.showUnexpectedLogoutNoticeThisProcess = false

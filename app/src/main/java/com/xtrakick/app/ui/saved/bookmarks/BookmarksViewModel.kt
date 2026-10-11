@@ -95,7 +95,7 @@ class BookmarksViewModel @Inject internal constructor(
                 bookmarks.mapNotNull { bookmark ->
                     bookmark.userId?.takeUnless(ignoredUserIds::contains)
                 }.chunked(100).forEach { ids ->
-                    if (!kickPublicApiHeaders[AppConstants.HEADER_TOKEN].isNullOrBlank()) {
+                    if (kickPublicApiHeaders.isNotEmpty()) {
                         try {
                             val users = kickPublicApiRepository.getUsers(
                                 networkLibrary = networkLibrary,
@@ -126,7 +126,7 @@ class BookmarksViewModel @Inject internal constructor(
     fun updateVideo(filesDir: String, videoId: String?, networkLibrary: String?, kickWebHeaders: Map<String, String>, kickPublicApiHeaders: Map<String, String>, enableIntegrity: Boolean) {
         viewModelScope.launch {
             if (!videoId.isNullOrBlank()) {
-                val video = if (!kickPublicApiHeaders[AppConstants.HEADER_TOKEN].isNullOrBlank()) {
+                val video = if (kickPublicApiHeaders.isNotEmpty()) {
                     try {
                         kickPublicApiRepository.getVideos(
                             networkLibrary = networkLibrary,

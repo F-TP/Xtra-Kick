@@ -611,7 +611,7 @@ class PlayerRepository @Inject constructor(
 
     suspend fun loadGlobalBadges(networkLibrary: String?, kickPublicApiHeaders: Map<String, String>, kickWebHeaders: Map<String, String>, emoteQuality: String, enableIntegrity: Boolean): List<ChatBadge> = withContext(Dispatchers.IO) {
         // The Twitch GQL badge queries this used to try first can never succeed against Kick.
-        if (kickPublicApiHeaders[AppConstants.HEADER_TOKEN].isNullOrBlank()) return@withContext emptyList()
+        if (kickPublicApiHeaders.isEmpty()) return@withContext emptyList()
         kickPublicApiRepository.getGlobalBadges(networkLibrary, kickPublicApiHeaders).data.mapNotNull { set ->
             set.setId?.let { setId ->
                 set.versions?.mapNotNull {
@@ -632,7 +632,7 @@ class PlayerRepository @Inject constructor(
 
 
     suspend fun loadChannelBadges(networkLibrary: String?, kickPublicApiHeaders: Map<String, String>, kickWebHeaders: Map<String, String>, channelId: String?, channelLogin: String?, emoteQuality: String, enableIntegrity: Boolean): List<ChatBadge> = withContext(Dispatchers.IO) {
-        if (kickPublicApiHeaders[AppConstants.HEADER_TOKEN].isNullOrBlank()) return@withContext emptyList()
+        if (kickPublicApiHeaders.isEmpty()) return@withContext emptyList()
         kickPublicApiRepository.getChannelBadges(networkLibrary, kickPublicApiHeaders, channelId).data.mapNotNull { set ->
             set.setId?.let { setId ->
                 set.versions?.mapNotNull {
@@ -653,7 +653,7 @@ class PlayerRepository @Inject constructor(
 
 
     suspend fun loadCheerEmotes(networkLibrary: String?, kickPublicApiHeaders: Map<String, String>, kickWebHeaders: Map<String, String>, channelId: String?, channelLogin: String?, animateGifs: Boolean, enableIntegrity: Boolean): List<CheerEmote> = withContext(Dispatchers.IO) {
-        if (kickPublicApiHeaders[AppConstants.HEADER_TOKEN].isNullOrBlank()) return@withContext emptyList()
+        if (kickPublicApiHeaders.isEmpty()) return@withContext emptyList()
         kickPublicApiRepository.getCheerEmotes(networkLibrary, kickPublicApiHeaders, channelId).data.map { set ->
             set.tiers.mapNotNull { tier ->
                 tier.images.let { it.dark ?: it.light }?.let { formats ->
@@ -681,7 +681,7 @@ class PlayerRepository @Inject constructor(
 
 
     suspend fun loadUserEmotes(networkLibrary: String?, kickPublicApiHeaders: Map<String, String>, kickWebHeaders: Map<String, String>, channelId: String?, userId: String?, animateGifs: Boolean, enableIntegrity: Boolean): List<ChatEmote> = withContext(Dispatchers.IO) {
-        if (kickPublicApiHeaders[AppConstants.HEADER_TOKEN].isNullOrBlank()) return@withContext emptyList()
+        if (kickPublicApiHeaders.isEmpty()) return@withContext emptyList()
         val emotes = mutableListOf<ChatEmote>()
         var offset: String? = null
         do {

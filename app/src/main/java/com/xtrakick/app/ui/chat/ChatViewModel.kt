@@ -166,6 +166,8 @@ class ChatViewModel @Inject constructor(
 
     private var kickPusherChatWebSocket: KickPusherChatWebSocket? = null
     private var kickCentrifugoChatWebSocket: KickCentrifugoChatWebSocket? = null
+    @Volatile
+    private var currentKickChatroomId: String? = null
     private var chatReadJob: Job? = null
     @Volatile
     private var chatSessionGeneration = 0L
@@ -1452,11 +1454,27 @@ class ChatViewModel @Inject constructor(
         return null
     }
 
-    private suspend fun getKickAccessTokenForChatSend(forceRefresh: Boolean = false): String? {
+    private suspend fun getKickAccessTokenForChatSend(
+        forceRefresh: Boolean = false,
+        propagateFailure: Boolean = false,
+    ): String? {
+        if (AuthStateHelper.isKickGoogleSession(applicationContext)) {
+            if (forceRefresh) {
+                return null
+            }
+            val token = applicationContext.tokenPrefs().getString(AppConstants.KICK_ACCESS_TOKEN, null)
+                ?.trim()
+                ?.takeIf { it.isNotBlank() }
+            if (token.isNullOrBlank() && propagateFailure) {
+                throw KickAuthRequestException.HttpFailure(401)
+            }
+            return token
+        }
         val networkLibrary = applicationContext.prefs().getString(AppConstants.NETWORK_LIBRARY, "OkHttp")
         val headers = kickRepository.getKickPublicApiHeadersWithRefresh(
             networkLibrary = networkLibrary,
             forceRefresh = forceRefresh,
+            propagateFailure = propagateFailure,
         )
         return headers[AppConstants.HEADER_TOKEN]
             ?.removePrefix("Bearer ")
@@ -2861,6 +2879,7 @@ class ChatViewModel @Inject constructor(
             } else {
                 fallbackId
             }
+            currentKickChatroomId = kickChatroomId
             if (debugKickRealtimeChat) {
                 Log.d("KickRealtimeChat", "resolved chatroomId=$kickChatroomId channelId=$effectiveChannelId channelLogin=$channelLogin")
             }
@@ -3098,6 +3117,7 @@ class ChatViewModel @Inject constructor(
             }
         }
         kickCentrifugoChatWebSocket = null
+        currentKickChatroomId = null
         val eventSocket = stvEventApi
         stvEventApi = null
         if (eventSocket != null) {
@@ -3888,8 +3908,11 @@ class ChatViewModel @Inject constructor(
                 // fetch returns an empty default on any network failure, which previously
                 // false-blocked legitimate sends (e.g. long-time followers). The server
                 // is authoritative and its errors are mapped via formatKickChatSendError.
+                val chatroomId = currentKickChatroomId
+                    ?: channelId?.let { getCachedKickRealtimeChatroomId(it, channelLogin) }
+                    ?: resolveKickRealtimeChatroomId(channelId.orEmpty(), channelLogin.orEmpty())
                 val accessToken = try {
-                    getKickAccessTokenForChatSend()
+                    getKickAccessTokenForChatSend(propagateFailure = true)
                 } catch (e: Exception) {
                     if (KickAuthRequestException.isBackendUnavailable(e)) {
                         onMessage(ChatMessage(systemMsg = applicationContext.getString(R.string.chat_send_msg_error, applicationContext.getString(R.string.kick_oauth_backend_unreachable))))
@@ -3904,11 +3927,13 @@ class ChatViewModel @Inject constructor(
                 val broadcasterId = resolveKickBroadcasterUserId(channelId, channelLogin)
                 if (!accessToken.isNullOrBlank() && broadcasterId != null) {
                     runCatching {
-                        kickRepository.sendChatMessage(accessToken, broadcasterId, message.toString(), replyId)
+                        kickRepository.sendChatMessage(accessToken, broadcasterId, message.toString(), replyId, chatroomId)
                     }.onFailure { initialError ->
-                        if (initialError.message?.contains("(401)", ignoreCase = true) == true) {
+                        if (initialError.message?.contains("(401)", ignoreCase = true) == true ||
+                            (initialError is KickAuthRequestException.HttpFailure && initialError.statusCode == 401)
+                        ) {
                             val retryToken = try {
-                                getKickAccessTokenForChatSend(forceRefresh = true)
+                                getKickAccessTokenForChatSend(forceRefresh = true, propagateFailure = true)
                             } catch (refreshError: Exception) {
                                 if (!KickAuthRequestException.isBackendUnavailable(refreshError)) {
                                     AuthStateHelper.markUnexpectedLogout(applicationContext)
@@ -3919,11 +3944,21 @@ class ChatViewModel @Inject constructor(
                             }
                             if (!retryToken.isNullOrBlank()) {
                                 runCatching {
-                                    kickRepository.sendChatMessage(retryToken, broadcasterId, message.toString(), replyId)
+                                    kickRepository.sendChatMessage(retryToken, broadcasterId, message.toString(), replyId, chatroomId)
                                 }.onFailure { retryError ->
+                                    if (retryError.message?.contains("(401)", ignoreCase = true) == true ||
+                                        (retryError is KickAuthRequestException.HttpFailure && retryError.statusCode == 401)
+                                    ) {
+                                        AuthStateHelper.markUnexpectedLogout(applicationContext)
+                                        AuthStateHelper.clearKickAuth(applicationContext)
+                                        AuthStateHelper.clearLegacyWebAuth(applicationContext)
+                                    }
                                     onMessage(ChatMessage(systemMsg = applicationContext.getString(R.string.chat_send_msg_error, formatKickChatSendError(retryError))))
                                 }
                             } else {
+                                AuthStateHelper.markUnexpectedLogout(applicationContext)
+                                AuthStateHelper.clearKickAuth(applicationContext)
+                                AuthStateHelper.clearLegacyWebAuth(applicationContext)
                                 onMessage(ChatMessage(systemMsg = applicationContext.getString(R.string.chat_send_msg_error, applicationContext.getString(R.string.token_expired))))
                             }
                         } else {
@@ -3932,7 +3967,7 @@ class ChatViewModel @Inject constructor(
                     }
                 } else {
                     val reason = if (accessToken.isNullOrBlank()) {
-                        "missing kick auth scope"
+                        applicationContext.getString(R.string.token_expired)
                     } else {
                         "missing kick broadcaster user id"
                     }
@@ -4030,7 +4065,12 @@ class ChatViewModel @Inject constructor(
         val kickWebHeaders = KickApiHelper.getKickWebHeaders(applicationContext, true)
         fun missingAuth() {
             viewModelScope.launch {
-                onMessage(ChatMessage(systemMsg = applicationContext.getString(R.string.chat_send_msg_error, applicationContext.getString(R.string.token_expired))))
+                val errorMsg = if (AuthStateHelper.isKickLoggedIn(applicationContext)) {
+                    applicationContext.getString(R.string.kick_scope_required, "OAuth")
+                } else {
+                    applicationContext.getString(R.string.token_expired)
+                }
+                onMessage(ChatMessage(systemMsg = applicationContext.getString(R.string.chat_send_msg_error, errorMsg)))
             }
         }
         suspend fun emitError(error: Throwable) {
@@ -4050,10 +4090,11 @@ class ChatViewModel @Inject constructor(
                 ).data.firstOrNull()?.channelId
             }.getOrNull()
                 ?: runCatching {
-                    kickRepository.getChannel(login).id?.toString()
-                        ?: kickRepository.getChannel(login).user?.id?.toString()
+                    val channel = kickRepository.getChannel(login)
+                    channel.id?.toString() ?: channel.user?.id?.toString()
                 }.getOrNull()
         }
+        val hasDirectKickSession = !channelLogin.isNullOrBlank() && (AuthStateHelper.isKickGoogleSession(applicationContext) || kickRepository.hasKickWebsiteSessionCookieOnly())
         when {
             command.startsWith("/announce", true) -> {
                 val splits = message.split(" ", limit = 2)
@@ -4075,24 +4116,36 @@ class ChatViewModel @Inject constructor(
                 if (splits.size >= 2) {
                     viewModelScope.launch {
                         runCatching {
-                            val targetId = resolveTargetUserId(splits[1])
-                            val broadcasterUserId = channelId?.toLongOrNull()
-                            val targetUserId = targetId?.toLongOrNull()
-                            if (broadcasterUserId != null && targetUserId != null) {
-                                kickRepository.banOfficialUser(
-                                    networkLibrary = networkLibrary,
-                                    broadcasterUserId = broadcasterUserId,
-                                    targetUserId = targetUserId,
-                                    reason = if (splits.size >= 3) splits[2] else null,
+                            val targetUsername = splits[1].removePrefix("@").trim()
+                            val reason = if (splits.size >= 3) splits[2] else null
+                            if (hasDirectKickSession) {
+                                kickRepository.banKickChannelUser(
+                                    channelSlug = requireNotNull(channelLogin),
+                                    targetUsername = targetUsername,
+                                    permanent = true,
+                                    reason = reason,
                                 )
                                 null
-                            } else if (hasPublicToken) {
-                                kickPublicApiRepository.banUser(
-                                    networkLibrary, kickPublicApiHeaders, channelId, accountId, targetId,
-                                    reason = if (splits.size >= 3) splits[2] else null,
-                                )
                             } else {
-                                throw IllegalStateException(applicationContext.getString(R.string.token_expired))
+                                val targetId = resolveTargetUserId(targetUsername)
+                                val broadcasterUserId = channelId?.toLongOrNull()
+                                val targetUserId = targetId?.toLongOrNull()
+                                if (broadcasterUserId != null && targetUserId != null) {
+                                    kickRepository.banOfficialUser(
+                                        networkLibrary = networkLibrary,
+                                        broadcasterUserId = broadcasterUserId,
+                                        targetUserId = targetUserId,
+                                        reason = reason,
+                                    )
+                                    null
+                                } else if (hasPublicToken) {
+                                    kickPublicApiRepository.banUser(
+                                        networkLibrary, kickPublicApiHeaders, channelId, accountId, targetId,
+                                        reason = reason,
+                                    )
+                                } else {
+                                    throw IllegalStateException(applicationContext.getString(R.string.token_expired))
+                                }
                             }
                         }.onSuccess { emitInfo(it) }.onFailure { emitError(it) }
                     }
@@ -4103,20 +4156,30 @@ class ChatViewModel @Inject constructor(
                 if (splits.size >= 2) {
                     viewModelScope.launch {
                         runCatching {
-                            val targetId = resolveTargetUserId(splits[1])
-                            val broadcasterUserId = channelId?.toLongOrNull()
-                            val targetUserId = targetId?.toLongOrNull()
-                            if (broadcasterUserId != null && targetUserId != null) {
-                                kickRepository.unbanOfficialUser(
-                                    networkLibrary = networkLibrary,
-                                    broadcasterUserId = broadcasterUserId,
-                                    targetUserId = targetUserId,
+                            val targetUsername = splits[1].removePrefix("@").trim()
+                            if (hasDirectKickSession) {
+                                val targetId = resolveTargetUserId(targetUsername)
+                                kickRepository.unbanKickChannelUser(
+                                    channelSlug = requireNotNull(channelLogin),
+                                    targetUserIdOrUsername = targetId ?: targetUsername,
                                 )
                                 null
-                            } else if (hasPublicToken) {
-                                kickPublicApiRepository.unbanUser(networkLibrary, kickPublicApiHeaders, channelId, accountId, targetId)
                             } else {
-                                throw IllegalStateException(applicationContext.getString(R.string.token_expired))
+                                val targetId = resolveTargetUserId(targetUsername)
+                                val broadcasterUserId = channelId?.toLongOrNull()
+                                val targetUserId = targetId?.toLongOrNull()
+                                if (broadcasterUserId != null && targetUserId != null) {
+                                    kickRepository.unbanOfficialUser(
+                                        networkLibrary = networkLibrary,
+                                        broadcasterUserId = broadcasterUserId,
+                                        targetUserId = targetUserId,
+                                    )
+                                    null
+                                } else if (hasPublicToken) {
+                                    kickPublicApiRepository.unbanUser(networkLibrary, kickPublicApiHeaders, channelId, accountId, targetId)
+                                } else {
+                                    throw IllegalStateException(applicationContext.getString(R.string.token_expired))
+                                }
                             }
                         }.onSuccess { emitInfo(it) }.onFailure { emitError(it) }
                     }
@@ -4127,9 +4190,7 @@ class ChatViewModel @Inject constructor(
                 if (splits.size >= 2) {
                     viewModelScope.launch {
                         runCatching {
-                            val targetId = resolveTargetUserId(splits[1])
-                            val broadcasterUserId = channelId?.toLongOrNull()
-                            val targetUserId = targetId?.toLongOrNull()
+                            val targetUsername = splits[1].removePrefix("@").trim()
                             val durationSeconds = if (splits.size >= 3) {
                                 splits[2].toIntOrNull()
                                     ?: KickApiHelper.getDuration(splits[2])?.toInt()
@@ -4137,23 +4198,38 @@ class ChatViewModel @Inject constructor(
                             } else {
                                 600
                             }
-                            if (broadcasterUserId != null && targetUserId != null) {
-                                kickRepository.banOfficialUser(
-                                    networkLibrary = networkLibrary,
-                                    broadcasterUserId = broadcasterUserId,
-                                    targetUserId = targetUserId,
+                            val reason = if (splits.size >= 4) splits[3] else null
+                            if (hasDirectKickSession) {
+                                kickRepository.banKickChannelUser(
+                                    channelSlug = requireNotNull(channelLogin),
+                                    targetUsername = targetUsername,
+                                    permanent = false,
                                     durationSeconds = durationSeconds,
-                                    reason = if (splits.size >= 4) splits[3] else null,
+                                    reason = reason,
                                 )
                                 null
-                            } else if (hasPublicToken) {
-                                kickPublicApiRepository.banUser(
-                                    networkLibrary, kickPublicApiHeaders, channelId, accountId, targetId,
-                                    duration = durationSeconds.toString(),
-                                    reason = if (splits.size >= 4) splits[3] else null,
-                                )
                             } else {
-                                throw IllegalStateException(applicationContext.getString(R.string.token_expired))
+                                val targetId = resolveTargetUserId(targetUsername)
+                                val broadcasterUserId = channelId?.toLongOrNull()
+                                val targetUserId = targetId?.toLongOrNull()
+                                if (broadcasterUserId != null && targetUserId != null) {
+                                    kickRepository.banOfficialUser(
+                                        networkLibrary = networkLibrary,
+                                        broadcasterUserId = broadcasterUserId,
+                                        targetUserId = targetUserId,
+                                        durationSeconds = durationSeconds,
+                                        reason = reason,
+                                    )
+                                    null
+                                } else if (hasPublicToken) {
+                                    kickPublicApiRepository.banUser(
+                                        networkLibrary, kickPublicApiHeaders, channelId, accountId, targetId,
+                                        duration = durationSeconds.toString(),
+                                        reason = reason,
+                                    )
+                                } else {
+                                    throw IllegalStateException(applicationContext.getString(R.string.token_expired))
+                                }
                             }
                         }.onSuccess { emitInfo(it) }.onFailure { emitError(it) }
                     }
@@ -4175,8 +4251,16 @@ class ChatViewModel @Inject constructor(
                 if (splits.size >= 2) {
                     viewModelScope.launch {
                         runCatching {
-                            kickRepository.deleteOfficialChatMessage(networkLibrary, splits[1])
-                            null
+                            val chatroomId = currentKickChatroomId
+                                ?: channelId?.let { getCachedKickRealtimeChatroomId(it, channelLogin) }
+                                ?: resolveKickRealtimeChatroomId(channelId.orEmpty(), channelLogin.orEmpty())
+                            if (!chatroomId.isNullOrBlank() && (AuthStateHelper.isKickGoogleSession(applicationContext) || kickRepository.hasKickWebsiteSessionCookieOnly())) {
+                                kickRepository.deleteKickChatMessage(chatroomId, splits[1])
+                                null
+                            } else {
+                                kickRepository.deleteOfficialChatMessage(networkLibrary, splits[1])
+                                null
+                            }
                         }.onSuccess { emitInfo(it) }.onFailure { error ->
                             if (hasPublicToken) {
                                 runCatching {

@@ -1,6 +1,10 @@
 <androidx.preference.PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto">
 
+    <PreferenceCategory
+        android:title="@string/livestream_alerts"
+        app:iconSpaceReserved="false" />
+
     <SwitchPreferenceCompat
         android:defaultValue="false"
         android:key="live_notifications_enabled"
@@ -44,38 +48,6 @@
         android:dependency="reward_auto_claim_enabled"
         android:key="reward_claim_notifications_enabled"
         android:title="@string/reward_claim_notifications"
-        app:iconSpaceReserved="false"
-        app:singleLineTitle="false" />
-
-    <PreferenceCategory
-        android:title="@string/updates"
-        app:iconSpaceReserved="false" />
-
-    <Preference
-        android:key="action_check_updates"
-        android:title="@string/check_updates"
-        app:iconSpaceReserved="false"
-        app:singleLineTitle="false" />
-
-    <Preference
-        android:key="nav_update_settings"
-        android:title="@string/update_settings"
-        app:iconSpaceReserved="false"
-        app:singleLineTitle="false" />
-
-    <PreferenceCategory
-        android:title="@string/backup_and_restore"
-        app:iconSpaceReserved="false" />
-
-    <Preference
-        android:key="action_backup_settings"
-        android:title="@string/backup_settings"
-        app:iconSpaceReserved="false"
-        app:singleLineTitle="false" />
-
-    <Preference
-        android:key="action_restore_settings"
-        android:title="@string/restore_settings"
         app:iconSpaceReserved="false"
         app:singleLineTitle="false" />
 

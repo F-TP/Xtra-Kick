@@ -1,0 +1,92 @@
+<androidx.preference.PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto">
+
+    <SwitchPreferenceCompat
+        android:defaultValue="true"
+        android:key="player_background_audio"
+        android:title="@string/use_background_audio"
+        app:iconSpaceReserved="false"
+        app:singleLineTitle="false" />
+
+    <SwitchPreferenceCompat
+        android:defaultValue="true"
+        android:key="player_background_audio_locked"
+        android:title="@string/use_background_audio_locked"
+        app:iconSpaceReserved="false"
+        app:singleLineTitle="false" />
+
+    <SwitchPreferenceCompat
+        android:defaultValue="true"
+        android:key="player_picture_in_picture"
+        android:title="@string/picture_in_picture"
+        app:iconSpaceReserved="false"
+        app:singleLineTitle="false" />
+
+    <SwitchPreferenceCompat
+        android:defaultValue="true"
+        android:dependency="player_picture_in_picture"
+        android:key="pip_show_audio_only"
+        android:summary="@string/pip_show_audio_only_summary"
+        android:title="@string/pip_show_audio_only"
+        app:iconSpaceReserved="false"
+        app:singleLineTitle="false" />
+
+    <SwitchPreferenceCompat
+        android:defaultValue="true"
+        android:dependency="player_picture_in_picture"
+        android:key="pip_show_mute"
+        android:summary="@string/pip_show_mute_summary"
+        android:title="@string/pip_show_mute"
+        app:iconSpaceReserved="false"
+        app:singleLineTitle="false" />
+
+    <SeekBarPreference
+        android:defaultValue="0"
+        android:dependency="pip_show_mute"
+        android:key="pip_reduced_volume_level"
+        android:max="50"
+        android:min="0"
+        android:summary="@string/pip_reduced_volume_level_summary"
+        android:title="@string/pip_reduced_volume_level"
+        app:iconSpaceReserved="false"
+        app:showSeekBarValue="true"
+        app:singleLineTitle="false" />
+
+    <SwitchPreferenceCompat
+        android:defaultValue="false"
+        android:dependency="player_picture_in_picture"
+        android:key="pip_unmute_on_fullscreen"
+        android:summary="@string/pip_unmute_on_fullscreen_summary"
+        android:title="@string/pip_unmute_on_fullscreen"
+        app:iconSpaceReserved="false"
+        app:singleLineTitle="false" />
+
+    <SwitchPreferenceCompat
+        android:defaultValue="true"
+        android:key="player_disable_background_video"
+        android:title="@string/disable_background_video"
+        app:iconSpaceReserved="false"
+        app:singleLineTitle="false" />
+
+    <SwitchPreferenceCompat
+        android:defaultValue="false"
+        android:key="player_use_background_audio_track"
+        android:title="@string/use_background_audio_track"
+        app:iconSpaceReserved="false"
+        app:singleLineTitle="false" />
+
+    <SwitchPreferenceCompat
+        android:defaultValue="false"
+        android:key="player_background_audio_pip_closed"
+        android:title="@string/use_background_audio_pip_closed"
+        app:iconSpaceReserved="false"
+        app:singleLineTitle="false" />
+
+    <SwitchPreferenceCompat
+        android:defaultValue="true"
+        android:key="player_background_audio_pip_locked"
+        android:title="@string/use_background_audio_pip_locked"
+        app:iconSpaceReserved="false"
+        app:singleLineTitle="false" />
+
+</androidx.preference.PreferenceScreen>

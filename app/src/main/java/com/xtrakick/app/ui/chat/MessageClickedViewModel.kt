@@ -158,7 +158,7 @@ class MessageClickedViewModel @Inject constructor(
                 )
             }
         } else {
-            if (!currentKickPublicApiHeaders[AppConstants.HEADER_TOKEN].isNullOrBlank()) {
+            if (currentKickPublicApiHeaders.isNotEmpty()) {
                 try {
                     kickPublicApiRepository.getUsers(
                         networkLibrary = currentNetworkLibrary,
@@ -209,7 +209,6 @@ class MessageClickedViewModel @Inject constructor(
             uiState.value = uiState.value.copy(isFollowActionInProgress = true)
             try {
                 if (currentIsKick) {
-                    // Kick follows are local-only; do not call Twitch GQL FollowButton ops.
                     val followUserId = userId ?: channelLogin.orEmpty()
                     if (isFollowing) {
                         localFollowChannelRepository.removeLocalFollow(userId, channelLogin)
@@ -224,6 +223,10 @@ class MessageClickedViewModel @Inject constructor(
                             )
                         )
                         _events.emit("You're now following ${displayName ?: currentChannelName ?: channelLogin ?: "channel"}")
+                    }
+                    val targetSlug = channelLogin ?: currentChannelName
+                    if (!targetSlug.isNullOrBlank() && kickRepository.hasKickAccountFollowCapability()) {
+                        runCatching { kickRepository.setKickAccountFollow(targetSlug, !isFollowing) }
                     }
                     uiState.value = uiState.value.copy(isFollowing = !isFollowing)
                 }

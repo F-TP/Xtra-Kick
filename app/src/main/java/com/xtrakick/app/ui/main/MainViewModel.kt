@@ -1003,7 +1003,7 @@ class MainViewModel @Inject constructor(
                     putString(AppConstants.USERNAME, loginName)
                 }
             } catch (e: Exception) {
-                if (e is IllegalStateException && e.message == "401") {
+                if ((e is IllegalStateException && e.message == "401") || KickAuthRequestException.isUnauthorized(e)) {
                     AuthStateHelper.markUnexpectedLogout(activity)
                     Toast.makeText(activity, R.string.token_expired, Toast.LENGTH_LONG).show()
                     AuthStateHelper.clearKickAuth(activity)

@@ -565,7 +565,7 @@ class StreamDownloadWorker @AssistedInject constructor(
                             val channelId = offlineVideo.channelId
                             val stream = try {
                                 val kickPublicApiHeaders = KickApiHelper.getKickPublicApiHeaders(context)
-                                if (kickPublicApiHeaders[AppConstants.HEADER_TOKEN].isNullOrBlank()) null else try {
+                                if (kickPublicApiHeaders.isEmpty()) null else try {
                                     kickPublicApiRepository.getStreams(
                                         networkLibrary = networkLibrary,
                                         headers = kickPublicApiHeaders,

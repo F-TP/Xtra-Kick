@@ -135,7 +135,7 @@ class ChannelPagerViewModel @Inject constructor(
                         null
                     }
                 } else {
-                    if (!kickPublicApiHeaders[AppConstants.HEADER_TOKEN].isNullOrBlank()) {
+                    if (kickPublicApiHeaders.isNotEmpty()) {
                         try {
                             kickPublicApiRepository.getStreams(
                                 networkLibrary = networkLibrary,
@@ -189,7 +189,7 @@ class ChannelPagerViewModel @Inject constructor(
                         null
                     }
                 } else {
-                    if (!kickPublicApiHeaders[AppConstants.HEADER_TOKEN].isNullOrBlank()) {
+                    if (kickPublicApiHeaders.isNotEmpty()) {
                         try {
                             kickPublicApiRepository.getUsers(
                                 networkLibrary = networkLibrary,

@@ -182,7 +182,7 @@ class ChannelVideosViewModel @Inject constructor(
                     }
                 }
                 val userTypes = video.channelId?.let {
-                    if (!kickPublicApiHeaders[AppConstants.HEADER_TOKEN].isNullOrBlank()) {
+                    if (kickPublicApiHeaders.isNotEmpty()) {
                         try {
                             kickPublicApiRepository.getUsers(
                                 networkLibrary = networkLibrary,
