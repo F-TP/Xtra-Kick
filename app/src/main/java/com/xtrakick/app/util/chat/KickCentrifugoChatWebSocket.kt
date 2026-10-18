@@ -16,6 +16,7 @@ class KickCentrifugoChatWebSocket(
     private val chatroomId: String,
     private val channelId: String?,
     private val publicChannelNames: List<String> = emptyList(),
+    private val privateChannelNames: List<String> = emptyList(),
     private val fetchConnectionUrl: suspend () -> String?,
     private val fetchAuthToken: suspend () -> String?,
     private val fetchChannelToken: suspend (String) -> String? = { null },
@@ -30,6 +31,7 @@ class KickCentrifugoChatWebSocket(
             chatroomId: String,
             channelId: String?,
             publicChannelNames: List<String> = emptyList(),
+            privateChannelNames: List<String> = emptyList(),
         ): List<String> = buildList {
             add("chatrooms.$chatroomId.v2")
             add("chatroom_$chatroomId")
@@ -38,6 +40,7 @@ class KickCentrifugoChatWebSocket(
                 add("channel_$it")
             }
             addAll(publicChannelNames)
+            addAll(privateChannelNames)
         }
     }
 
@@ -45,7 +48,7 @@ class KickCentrifugoChatWebSocket(
     private var webSocket: WebSocket? = null
     private var hasEmittedConnect = false
     private val commandId = AtomicInteger(1)
-    private val channelNames = buildChannelNames(chatroomId, channelId, publicChannelNames)
+    private val channelNames = buildChannelNames(chatroomId, channelId, publicChannelNames, privateChannelNames)
 
     fun connect(coroutineScope: CoroutineScope): Job {
         return coroutineScope.launch(Dispatchers.IO) {

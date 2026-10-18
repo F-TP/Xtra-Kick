@@ -40,8 +40,8 @@ import androidx.media3.session.DefaultMediaNotificationProvider
 import coil3.imageLoader
 import coil3.request.Disposable
 import coil3.request.ImageRequest
-import coil3.request.target
 import coil3.toBitmap
+import com.amazonaws.ivs.player.Quality
 import com.xtrakick.app.BuildConfig
 import com.amazonaws.ivs.player.MediaPlayer
 import com.amazonaws.ivs.player.Player
@@ -122,6 +122,7 @@ class IvsPlayerService : Service() {
     private var retryCount = 0
     private var startedAtMs = 0L
     private var surfaceAttached = false
+    private var attachedSurfaceRef: android.view.Surface? = null
     private var suspendedByFocusLoss = false
     private var deadStreamWatchdog: Runnable? = null
     private var wakeLock: PowerManager.WakeLock? = null
@@ -623,7 +624,9 @@ class IvsPlayerService : Service() {
 
                 override fun onVideoSizeChanged(width: Int, height: Int) = Unit
 
-                override fun onQualityChanged(quality: com.amazonaws.ivs.player.Quality) = Unit
+                override fun onQualityChanged(quality: com.amazonaws.ivs.player.Quality) {
+                    playerDebugLog("onQualityChanged -> ${quality.name} (${quality.width}x${quality.height}, ${quality.bitrate} bps)")
+                }
             }
         )
         val rewindMs = (prefs().getString(AppConstants.PLAYER_REWIND, "10")?.toLongOrNull() ?: 10) * 1000
@@ -993,6 +996,10 @@ class IvsPlayerService : Service() {
     }
 
     fun attachSurface(surface: android.view.Surface?) {
+        if (attachedSurfaceRef == surface && surfaceAttached == (surface != null)) {
+            return
+        }
+        attachedSurfaceRef = surface
         surfaceAttached = surface != null
         runPlayerOp("attachSurface attached=$surfaceAttached") { it.setSurface(surface) }
         playerDebugLog("attachSurface attached=$surfaceAttached")
@@ -1005,6 +1012,62 @@ class IvsPlayerService : Service() {
         backgroundPlaybackEnabled = enabled
         playerDebugLog("setBackgroundPlaybackEnabled enabled=$enabled")
         updateNotification()
+    }
+
+    private var backgroundSaverQuality: Quality? = null
+    private var deferredAudioSaverRunnable: Runnable? = null
+
+    fun isBackgroundAudioSaverActive(): Boolean =
+        backgroundSaverQuality != null || deferredAudioSaverRunnable != null
+
+    fun scheduleBackgroundAudioSaver(saver: Quality) {
+        cancelBackgroundAudioSaver()
+        backgroundSaverQuality = saver
+        val runnable = Runnable {
+            deferredAudioSaverRunnable = null
+            playerDebugLog("executing background audio saver downshift to ${saver.name} (${saver.bitrate} bps)")
+            runPlayerOp("audio-saver-ceiling") {
+                playerDebugLog("applying saver downshift to ${saver.name}")
+                if (!it.isAutoQualityMode) {
+                    it.setAutoQualityMode(true)
+                }
+                it.setAutoMaxQuality(saver)
+                playerDebugLog("saver downshift applied successfully")
+            }
+        }
+        deferredAudioSaverRunnable = runnable
+        applicationHandler?.postDelayed(runnable, 2_000L)
+        playerDebugLog("scheduled background audio saver to ${saver.name} in 2000ms")
+    }
+
+    fun cancelBackgroundAudioSaver() {
+        deferredAudioSaverRunnable?.let {
+            applicationHandler?.removeCallbacks(it)
+            playerDebugLog("cancelled pending background audio saver")
+        }
+        deferredAudioSaverRunnable = null
+    }
+
+    fun restoreForegroundQuality(target: Quality?, shouldLock: Boolean) {
+        val hadPendingDownshift = deferredAudioSaverRunnable != null
+        cancelBackgroundAudioSaver()
+        val previousSaver = backgroundSaverQuality
+        backgroundSaverQuality = null
+        if (previousSaver == null) return
+        if (hadPendingDownshift) {
+            playerDebugLog("restoreForegroundQuality: downshift was still pending, cancelled without touching player")
+            return
+        }
+        playerDebugLog("restoring foreground quality: target=${target?.name}, shouldLock=$shouldLock")
+        runPlayerOp("foreground-ceiling-restore") {
+            if (shouldLock && target != null) {
+                it.setAutoQualityMode(false)
+                it.setQuality(target)
+            } else {
+                it.setAutoQualityMode(true)
+                it.setAutoMaxQuality(target)
+            }
+        }
     }
 
     fun isBackgroundPlaybackEnabled(): Boolean = backgroundPlaybackEnabled
@@ -1039,6 +1102,8 @@ class IvsPlayerService : Service() {
     }
 
     fun resetForReload() {
+        cancelBackgroundAudioSaver()
+        backgroundSaverQuality = null
         backgroundPlaybackEnabled = false
         playbackRequested = false
         disarmDeadStreamWatchdog()
@@ -1061,6 +1126,8 @@ class IvsPlayerService : Service() {
     }
 
     fun stopPlayback() {
+        cancelBackgroundAudioSaver()
+        backgroundSaverQuality = null
         watchOwner.clearMetadata()
         clearActiveLiveChannel()
         // Drop the stale URL synchronously so a fragment binding mid-switch can't
@@ -1072,6 +1139,7 @@ class IvsPlayerService : Service() {
         suspendedByFocusLoss = false
         disarmDeadStreamWatchdog()
         surfaceAttached = false
+        attachedSurfaceRef = null
         abandonAudioFocus()
         // Queued behind in-flight load/play so play() can't resurrect after stop.
         runPlayerOp("stop") {

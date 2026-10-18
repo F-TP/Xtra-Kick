@@ -67,18 +67,24 @@ class KickPusherChatWebSocket(
         return "wss://$host/app/$appKey?protocol=7&client=android&version=1.0&flash=false"
     }
 
+    private var connectJob: Job? = null
+
     fun connect(coroutineScope: CoroutineScope): Job {
         val socketUrl = buildSocketUrl()
         if (debugLogging) {
             Log.d(tag, "connect host=$host channels=$channelNames")
         }
         webSocket = WebSocket(socketUrl, trustManager, WebSocketListener())
-        return coroutineScope.launch(Dispatchers.IO) {
+        val job = coroutineScope.launch(Dispatchers.IO) {
             webSocket?.start()
         }
+        connectJob = job
+        return job
     }
 
     suspend fun disconnect(job: Job?) = withContext(Dispatchers.IO) {
+        connectJob?.cancel()
+        connectJob = null
         job?.cancel()
         webSocket?.disconnect()
     }
@@ -184,10 +190,17 @@ class KickPusherChatWebSocket(
                     }
                     "pusher:error" -> {
                         val dataObj = parseJsonOrNull(root.opt("data"))
+                        val code = dataObj?.optInt("code", -1) ?: -1
                         DiagnosticLogger.e(
                             tag,
-                            "pusher_error channel=${root.optString("channel")} code=${dataObj?.opt("code")} message=${dataObj?.opt("message")} raw=${root.opt("data")}"
+                            "pusher_error channel=${root.optString("channel")} code=$code message=${dataObj?.opt("message")} raw=${root.opt("data")}"
                         )
+                        // Pusher codes 4000..4099 are fatal client/app-key errors (e.g. 4001: app key not in cluster).
+                        // Terminate the connection immediately and do not loop or reconnect.
+                        if (code in 4000..4099) {
+                            connectJob?.cancel()
+                            webSocket.disconnect()
+                        }
                     }
                     else -> {
                         if (!event.startsWith("pusher:") && !event.startsWith("pusher_internal:")) {

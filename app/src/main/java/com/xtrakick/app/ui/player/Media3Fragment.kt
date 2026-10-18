@@ -1194,17 +1194,6 @@ class Media3Fragment : PlayerFragment() {
                                 player.clearVideoSurface()
                                 binding.playerSurface.visibility = View.GONE
                             }
-                            if (prefs.getBoolean(AppConstants.PLAYER_USE_BACKGROUND_AUDIO_TRACK, false)) {
-                                quality.value.second?.let {
-                                    val position = player.currentPosition
-                                    if (viewModel.qualities.containsKey(AUTO_QUALITY)) {
-                                        viewModel.playlistUrl = mediaItemUri(mediaItem)
-                                    }
-                                    player.setMediaItem(mediaItem.buildUpon().setUri(it).setMediaId(it).build())
-                                    player.prepare()
-                                    player.seekTo(position)
-                                }
-                            }
                         }
                     }
                 }
@@ -1290,17 +1279,6 @@ class Media3Fragment : PlayerFragment() {
                                     player.trackSelectionParameters = player.trackSelectionParameters.buildUpon().apply {
                                         setTrackTypeDisabled(androidx.media3.common.C.TRACK_TYPE_VIDEO, true)
                                     }.build()
-                                }
-                                if (prefs.getBoolean(AppConstants.PLAYER_USE_BACKGROUND_AUDIO_TRACK, false)) {
-                                    quality.value.second?.let {
-                                        val position = player.currentPosition
-                                        if (viewModel.qualities.containsKey(AUTO_QUALITY)) {
-                                            viewModel.playlistUrl = mediaItemUri(mediaItem)
-                                        }
-                                        player.setMediaItem(mediaItem.buildUpon().setUri(it).setMediaId(it).build())
-                                        player.prepare()
-                                        player.seekTo(position)
-                                    }
                                 }
                             }
                         }

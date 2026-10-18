@@ -70,13 +70,6 @@
 
     <SwitchPreferenceCompat
         android:defaultValue="false"
-        android:key="player_use_background_audio_track"
-        android:title="@string/use_background_audio_track"
-        app:iconSpaceReserved="false"
-        app:singleLineTitle="false" />
-
-    <SwitchPreferenceCompat
-        android:defaultValue="false"
         android:key="player_background_audio_pip_closed"
         android:title="@string/use_background_audio_pip_closed"
         app:iconSpaceReserved="false"

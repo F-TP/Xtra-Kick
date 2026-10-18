@@ -536,23 +536,20 @@ object KickApiHelper {
                 "msg_duplicate" -> ContextCompat.getString(context, R.string.irc_notice_msg_duplicate)
                 "msg_emoteonly" -> ContextCompat.getString(context, R.string.irc_notice_msg_emoteonly)
                 "msg_followersonly" -> ContextCompat.getString(context, R.string.irc_notice_msg_followersonly).format(
-                    message?.substringAfter("This room is in ", "")?.substringBefore(" followers-only mode", "") ?: "",
-                    message?.substringAfter("Follow ", "")?.substringBefore(" to join", "") ?: ""
+                    message?.substringAfter("This room is in ", "")?.substringBefore(" followers-only mode", "") ?: ""
                 )
                 "msg_followersonly_followed" -> ContextCompat.getString(context, R.string.irc_notice_msg_followersonly_followed).format(
                     message?.substringAfter("This room is in ", "")?.substringBefore(" followers-only mode", "") ?: "",
                     message?.substringAfter("following for ", "")?.substringBefore(". Continue", "") ?: ""
                 )
-                "msg_followersonly_zero" -> ContextCompat.getString(context, R.string.irc_notice_msg_followersonly_zero).format(
-                    message?.substringAfter(". Follow ", "")?.substringBefore(" to join the", "") ?: "")
+                "msg_followersonly_zero" -> ContextCompat.getString(context, R.string.irc_notice_msg_followersonly_zero)
                 "msg_r9k" -> ContextCompat.getString(context, R.string.irc_notice_msg_r9k)
                 "msg_ratelimit" -> ContextCompat.getString(context, R.string.irc_notice_msg_ratelimit)
                 "msg_rejected" -> ContextCompat.getString(context, R.string.irc_notice_msg_rejected)
                 "msg_rejected_mandatory" -> ContextCompat.getString(context, R.string.irc_notice_msg_rejected_mandatory)
                 "msg_slowmode" -> ContextCompat.getString(context, R.string.irc_notice_msg_slowmode).format(
                     message?.substringAfter("talk again in ", "")?.substringBefore(" seconds.", "") ?: "")
-                "msg_subsonly" -> ContextCompat.getString(context, R.string.irc_notice_msg_subsonly).format(
-                    message?.substringAfter("/products/", "")?.substringBefore("/ticket?ref", "") ?: "")
+                "msg_subsonly" -> ContextCompat.getString(context, R.string.irc_notice_msg_subsonly)
                 "msg_suspended" -> ContextCompat.getString(context, R.string.irc_notice_msg_suspended)
                 "msg_timedout" -> ContextCompat.getString(context, R.string.irc_notice_msg_timedout).format(
                     message?.substringAfter("timed out for ", "")?.substringBefore(" more seconds.", "") ?: "")

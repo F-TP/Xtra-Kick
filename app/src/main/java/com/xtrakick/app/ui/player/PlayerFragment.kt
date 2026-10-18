@@ -82,6 +82,7 @@ import com.xtrakick.app.model.ui.OfflineVideo
 import com.xtrakick.app.model.ui.Stream
 import com.xtrakick.app.model.ui.Video
 import com.xtrakick.app.ui.channel.ChannelPagerFragmentDirections
+import com.xtrakick.app.ui.channel.FollowChannelBottomSheet
 import com.xtrakick.app.ui.chat.ChatFragment
 import com.xtrakick.app.ui.common.BaseNetworkFragment
 import com.xtrakick.app.ui.common.IntegrityDialog
@@ -1984,11 +1985,11 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                             channelNameArg?.equals(myUsername, ignoreCase = true) == true
                         )
                         val showFollowChoiceBottomSheet = {
-                            childFragmentManager.setFragmentResultListener(com.xtrakick.app.ui.channel.FollowChannelBottomSheet.REQUEST_KEY, viewLifecycleOwner) { _, bundle ->
-                                val kickFollow = bundle.getBoolean(com.xtrakick.app.ui.channel.FollowChannelBottomSheet.RESULT_KICK_FOLLOW, true)
+                            childFragmentManager.setFragmentResultListener(FollowChannelBottomSheet.REQUEST_KEY, viewLifecycleOwner) { _, bundle ->
+                                val kickFollow = bundle.getBoolean(FollowChannelBottomSheet.RESULT_KICK_FOLLOW, true)
                                 executeSaveFollow(kickFollow)
                             }
-                            com.xtrakick.app.ui.channel.FollowChannelBottomSheet.newInstance(displayName, isOwnChannel).show(childFragmentManager, "follow_sheet")
+                            FollowChannelBottomSheet.newInstance(displayName, isOwnChannel).show(childFragmentManager, "follow_sheet")
                         }
                         follow.setOnClickListener {
                             viewModel.isFollowing.value?.let {

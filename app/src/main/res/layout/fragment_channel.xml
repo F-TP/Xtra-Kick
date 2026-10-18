@@ -209,15 +209,28 @@
                     tools:text="Last broadcast %s"
                     tools:visibility="visible" />
 
-                <TextView
+                <com.google.android.material.button.MaterialButton
                     android:id="@+id/watchLive"
+                    style="@style/MaterialPrimaryButton"
                     android:layout_width="wrap_content"
-                    android:layout_height="50dp"
+                    android:layout_height="wrap_content"
+                    android:minWidth="160dp"
+                    android:minHeight="46dp"
+                    android:layout_marginTop="12dp"
+                    android:layout_marginBottom="10dp"
                     android:gravity="center"
+                    android:paddingStart="24dp"
+                    android:paddingEnd="24dp"
                     android:text="@string/open_player"
                     android:textAllCaps="true"
-                    android:textAppearance="?attr/textAppearanceTitleMedium"
-                    android:textSize="17sp" />
+                    android:textAppearance="?attr/textAppearanceTitleSmall"
+                    android:textStyle="bold"
+                    android:letterSpacing="0.04"
+                    app:cornerRadius="23dp"
+                    app:icon="@drawable/ic_play_arrow"
+                    app:iconGravity="textStart"
+                    app:iconPadding="8dp"
+                    app:iconSize="20dp" />
 
             </LinearLayout>
 

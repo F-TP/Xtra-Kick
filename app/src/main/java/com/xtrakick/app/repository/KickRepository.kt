@@ -3365,7 +3365,7 @@ class KickRepository @Inject constructor(
                     })
                 })
             }.toString()
-            val raw = executeKickWebSessionRequest(url, payload, post = true)
+            val raw = executeKickWebSessionRequest(url, payload, post = true, requireAuth = false)
             val root = JSONObject(raw)
             val connections = root.optJSONObject("data")?.optJSONArray("connections")
             var wsUrl: String? = null
@@ -3375,7 +3375,7 @@ class KickRepository @Inject constructor(
                     val conn = connections.optJSONObject(i) ?: continue
                     val provider = conn.optString("provider")
                     if (provider.isNotBlank()) providers += provider
-                    if (provider == "centrifugo" && wsUrl.isNullOrBlank()) {
+                    if (provider.equals("centrifugo", ignoreCase = true) && wsUrl.isNullOrBlank()) {
                         wsUrl = conn.optJSONObject("credentials")?.optString("url")
                     }
                 }
@@ -3401,7 +3401,7 @@ class KickRepository @Inject constructor(
             val payload = JSONObject().apply {
                 put("client_id", boundClientId)
             }.toString()
-            val raw = executeKickWebSessionRequest(url, payload, post = true)
+            val raw = executeKickWebSessionRequest(url, payload, post = true, requireAuth = false)
             val root = JSONObject(raw)
             root.optJSONObject("data")?.optString("token")?.takeIf { it.isNotBlank() }
         }.onFailure {
@@ -3417,7 +3417,7 @@ class KickRepository @Inject constructor(
             val payload = JSONObject().apply {
                 put("channel", channel)
             }.toString()
-            val raw = executeKickWebSessionRequest(url, payload, post = true)
+            val raw = executeKickWebSessionRequest(url, payload, post = true, requireAuth = false)
             val root = JSONObject(raw)
             root.optJSONObject("data")?.optString("token")?.takeIf { it.isNotBlank() }
         }.onFailure {
@@ -5820,13 +5820,16 @@ class KickRepository @Inject constructor(
         post: Boolean = body != null,
         extraHeaders: Map<String, String> = emptyMap(),
         method: String = if (post) "POST" else "GET",
+        requireAuth: Boolean = true,
     ): String {
         val cookies = getKickCookieHeader()
         val sessionBearer = cookies?.let { AuthStateHelper.extractKickSessionToken(it) }?.let { "Bearer $it" }
             ?: cookies?.let { extractKickWebAuthToken(it) }?.let { "Bearer $it" }
         val oauthBearer = AuthStateHelper.getKickBearerToken(context)
         val bearer = sessionBearer ?: oauthBearer
-            ?: throw IOException("Kick login is required.")
+        if (requireAuth && bearer == null) {
+            throw IOException("Kick login is required.")
+        }
         val engine = cronetEngine?.get()
             ?: return executeKickWebSessionRequestWithOkHttp(url, body, post, extraHeaders, method)
         DiagnosticLogger.i(tag, "executeKickWebSessionRequest [Cronet] $method $url")
@@ -5843,7 +5846,9 @@ class KickRepository @Inject constructor(
                         .addHeader("Origin", "https://kick.com")
                         .addHeader("Referer", buildKickWebReferer(url))
                         .addHeader("x-app-platform", "web")
-                        .addHeader("Authorization", bearer)
+                    if (bearer != null) {
+                        builder.addHeader("Authorization", bearer)
+                    }
                     extraHeaders.forEach { (name, value) -> builder.addHeader(name, value) }
                     if (cookies != null) {
                         builder.addHeader("Cookie", cookies)

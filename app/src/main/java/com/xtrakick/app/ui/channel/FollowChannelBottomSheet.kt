@@ -1,18 +1,25 @@
 package com.xtrakick.app.ui.channel
 
+import android.app.Dialog
 import android.content.Context
+import android.content.res.Configuration
 import android.os.Bundle
+import android.view.Gravity
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import android.view.WindowManager
 import androidx.core.content.edit
+import androidx.core.view.isVisible
 import androidx.fragment.app.setFragmentResult
 import com.google.android.material.bottomsheet.BottomSheetBehavior
 import com.google.android.material.bottomsheet.BottomSheetDialogFragment
 import com.xtrakick.app.R
 import com.xtrakick.app.databinding.DialogFollowChannelSheetBinding
 import com.xtrakick.app.util.AppConstants
+import com.xtrakick.app.util.getAlertDialogBuilder
 import com.xtrakick.app.util.prefs
+import kotlin.math.roundToInt
 
 class FollowChannelBottomSheet : BottomSheetDialogFragment() {
 
@@ -25,6 +32,7 @@ class FollowChannelBottomSheet : BottomSheetDialogFragment() {
         const val RESULT_KICK_FOLLOW = "result_kick_follow"
         private const val ARG_CHANNEL_NAME = "arg_channel_name"
         private const val ARG_IS_OWN_CHANNEL = "arg_is_own_channel"
+        private const val KEY_SELECTED_KICK_FOLLOW = "selected_kick_follow"
 
         fun newInstance(channelName: String? = null, isOwnChannel: Boolean = false): FollowChannelBottomSheet {
             return FollowChannelBottomSheet().apply {
@@ -40,26 +48,66 @@ class FollowChannelBottomSheet : BottomSheetDialogFragment() {
     private val binding get() = _binding!!
     private var callback: Callback? = null
     private var selectedKickFollow: Boolean = true
+    private var isLandscapeDialog: Boolean = false
 
     override fun onAttach(context: Context) {
         super.onAttach(context)
         callback = (parentFragment as? Callback) ?: (context as? Callback)
     }
 
+    override fun onCreateDialog(savedInstanceState: Bundle?): Dialog {
+        val isLandscape = resources.configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
+        if (isLandscape) {
+            isLandscapeDialog = true
+            _binding = DialogFollowChannelSheetBinding.inflate(layoutInflater)
+            setupViews(savedInstanceState, isLandscape = true)
+            val dialog = requireContext().getAlertDialogBuilder()
+                .setView(binding.root)
+                .create()
+            dialog.setOnShowListener {
+                val metrics = resources.displayMetrics
+                val maxPx = (400 * metrics.density).roundToInt()
+                val targetWidth = maxPx.coerceAtMost((metrics.widthPixels * 0.85f).roundToInt())
+                dialog.window?.setLayout(targetWidth, WindowManager.LayoutParams.WRAP_CONTENT)
+                dialog.window?.setGravity(Gravity.CENTER)
+            }
+            return dialog
+        }
+        isLandscapeDialog = false
+        return super.onCreateDialog(savedInstanceState)
+    }
+
     override fun onCreateView(
         inflater: LayoutInflater,
         container: ViewGroup?,
         savedInstanceState: Bundle?
-    ): View {
+    ): View? {
+        if (isLandscapeDialog) {
+            return null
+        }
         _binding = DialogFollowChannelSheetBinding.inflate(inflater, container, false)
         return binding.root
     }
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
-        val behavior = BottomSheetBehavior.from(view.parent as View)
-        behavior.skipCollapsed = true
-        behavior.state = BottomSheetBehavior.STATE_EXPANDED
+        if (!isLandscapeDialog) {
+            setupViews(savedInstanceState, isLandscape = false)
+        }
+    }
+
+    override fun onStart() {
+        super.onStart()
+        if (!isLandscapeDialog) {
+            val sheet = dialog?.findViewById<View>(com.google.android.material.R.id.design_bottom_sheet) ?: return
+            val behavior = BottomSheetBehavior.from(sheet)
+            behavior.skipCollapsed = true
+            behavior.state = BottomSheetBehavior.STATE_EXPANDED
+        }
+    }
+
+    private fun setupViews(savedInstanceState: Bundle?, isLandscape: Boolean) {
+        binding.dragHandle.isVisible = !isLandscape
 
         val channelName = arguments?.getString(ARG_CHANNEL_NAME).orEmpty()
         val isOwnChannel = arguments?.getBoolean(ARG_IS_OWN_CHANNEL, false) ?: false
@@ -85,7 +133,7 @@ class FollowChannelBottomSheet : BottomSheetDialogFragment() {
         selectedKickFollow = if (isOwnChannel) {
             false
         } else {
-            savedInstanceState?.getBoolean("selected_kick_follow") ?: (defaultSetting == 0)
+            savedInstanceState?.getBoolean(KEY_SELECTED_KICK_FOLLOW) ?: (defaultSetting == 0)
         }
         updateRadioSelection(selectedKickFollow)
         binding.rememberChoiceCheckbox.isChecked = isRemembered
@@ -123,7 +171,7 @@ class FollowChannelBottomSheet : BottomSheetDialogFragment() {
 
     override fun onSaveInstanceState(outState: Bundle) {
         super.onSaveInstanceState(outState)
-        outState.putBoolean("selected_kick_follow", selectedKickFollow)
+        outState.putBoolean(KEY_SELECTED_KICK_FOLLOW, selectedKickFollow)
     }
 
     private fun updateRadioSelection(kickFollow: Boolean) {

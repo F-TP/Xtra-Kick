@@ -582,13 +582,11 @@ class ChatViewModel @Inject constructor(
                 val reqMinutes = currentRoomState.followers.toIntOrNull() ?: 0
                 val reqDurationSeconds = (reqMinutes * 60).toString()
                 val reqDurationStr = KickApiHelper.getDurationFromSeconds(applicationContext, reqDurationSeconds) ?: "${reqMinutes}m"
-                val targetName = channelName ?: channelLogin ?: "this channel"
-
                 if (!isLoggedIn || relationship?.followingSince.isNullOrBlank()) {
                     val msg = if (reqMinutes > 0) {
-                        applicationContext.getString(R.string.irc_notice_msg_followersonly, reqDurationStr, targetName)
+                        applicationContext.getString(R.string.irc_notice_msg_followersonly, reqDurationStr)
                     } else {
-                        applicationContext.getString(R.string.irc_notice_msg_followersonly_zero, targetName)
+                        applicationContext.getString(R.string.irc_notice_msg_followersonly_zero)
                     }
                     val hint = if (reqMinutes > 0) {
                         applicationContext.getString(R.string.chat_mode_followers_for, reqDurationStr)
@@ -2910,12 +2908,23 @@ class ChatViewModel @Inject constructor(
             val centrifugoEnabledByServer = centrifugoConnection == null ||
                 centrifugoConnection.providers.isEmpty() ||
                 centrifugoConnection.providers.any { it.equals("centrifugo", ignoreCase = true) }
+            val pusherEnabledByServer = centrifugoConnection?.providers?.any {
+                it.equals("pusher", ignoreCase = true)
+            } == true
+
+            val hasKickWebsiteSession = kickRepository.hasUsableKickWebsiteSession()
+            val publicChannelNames = if (!categoryId.isNullOrBlank()) listOf("drops_category_$categoryId") else emptyList()
+            val privateChannelNames = if (hasKickWebsiteSession) {
+                KickPusherChatWebSocket.buildPrivateChannelNames(accountId, livestreamId)
+            } else {
+                emptyList()
+            }
+
             kickCentrifugoChatWebSocket = KickCentrifugoChatWebSocket(
                 chatroomId = kickChatroomId,
                 channelId = effectiveChannelId,
-                publicChannelNames = buildList {
-                    categoryId?.let { add("drops_category_$it") }
-                },
+                publicChannelNames = publicChannelNames,
+                privateChannelNames = privateChannelNames,
                 fetchConnectionUrl = {
                     val refreshed = kickRepository.getCentrifugoChatConnection(effectiveChannelId)
                     if (refreshed != null) centrifugoConnection = refreshed
@@ -2926,16 +2935,7 @@ class ChatViewModel @Inject constructor(
                 fetchAuthToken = { kickRepository.getCentrifugoToken(centrifugoConnection?.clientId) },
                 fetchChannelToken = { channelName -> kickRepository.getCentrifugoChannelToken(channelName) },
                 trustManager = trustManager,
-                // Centrifugo is a best-effort fallback alongside Pusher (which web
-                // still uses: ws-us2.pusher.com chatrooms.{id}.v2). It shares chat-event
-                // handling for dedup via kickMessageIds, but must never own connection
-                // state: a Centrifugo token/url failure must stay silent instead of
-                // emitting disconnect/reconnect timeline noise or restarting Pusher.
-                listener = object : KickPusherChatWebSocket.Listener {
-                    override suspend fun onChatEvent(eventName: String, channelName: String?, messageJson: String) {
-                        kickPusherListener.onChatEvent(eventName, channelName, messageJson)
-                    }
-                },
+                listener = kickPusherListener,
                 debugLogging = debugKickRealtimeChat
             )
             val centrifugoJob = if (centrifugoEnabledByServer) {
@@ -2947,26 +2947,26 @@ class ChatViewModel @Inject constructor(
                 null
             }
 
-            val hasKickWebsiteSession = kickRepository.hasUsableKickWebsiteSession()
-            kickPusherChatWebSocket = KickPusherChatWebSocket(
-                chatroomId = kickChatroomId,
-                channelId = effectiveChannelId,
-                publicChannelNames = buildList {
-                    categoryId?.let { add("drops_category_$it") }
-                },
-                privateChannelNames = if (hasKickWebsiteSession) {
-                    KickPusherChatWebSocket.buildPrivateChannelNames(accountId, livestreamId)
-                } else {
-                    emptyList()
-                },
-                authorizePrivateChannel = { privateChannelName, socketId ->
-                    kickRepository.authorizeKickPusherPrivateChannel(socketId, privateChannelName)
-                },
-                trustManager = trustManager,
-                listener = kickPusherListener,
-                debugLogging = debugKickRealtimeChat
-            )
-            val pusherJob = kickPusherChatWebSocket?.connect(this)
+            val pusherJob = if (pusherEnabledByServer) {
+                kickPusherChatWebSocket = KickPusherChatWebSocket(
+                    chatroomId = kickChatroomId,
+                    channelId = effectiveChannelId,
+                    publicChannelNames = publicChannelNames,
+                    privateChannelNames = privateChannelNames,
+                    authorizePrivateChannel = { privateChannelName, socketId ->
+                        kickRepository.authorizeKickPusherPrivateChannel(socketId, privateChannelName)
+                    },
+                    trustManager = trustManager,
+                    listener = kickPusherListener,
+                    debugLogging = debugKickRealtimeChat
+                )
+                kickPusherChatWebSocket?.connect(this)
+            } else {
+                if (debugKickRealtimeChat) {
+                    Log.d("KickRealtimeChat", "pusher skipped: server provider config excludes it")
+                }
+                null
+            }
             listOfNotNull(centrifugoJob, pusherJob).joinAll()
         }
         updateChannelPointsBalance(null)

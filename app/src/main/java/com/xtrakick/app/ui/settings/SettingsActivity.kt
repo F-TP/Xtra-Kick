@@ -740,8 +740,7 @@ class SettingsActivity : AppCompatActivity() {
             listOf(
                 AppConstants.PLAYER_BACKGROUND_AUDIO,
                 AppConstants.PLAYER_BACKGROUND_AUDIO_LOCKED,
-                AppConstants.PLAYER_DISABLE_BACKGROUND_VIDEO,
-                AppConstants.PLAYER_USE_BACKGROUND_AUDIO_TRACK
+                AppConstants.PLAYER_DISABLE_BACKGROUND_VIDEO
             ).forEach { key ->
                 findPreference<Preference>(key)?.onPreferenceChangeListener = changeListener
             }

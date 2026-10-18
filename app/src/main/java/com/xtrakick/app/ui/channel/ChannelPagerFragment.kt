@@ -3,10 +3,12 @@ package com.xtrakick.app.ui.channel
 import android.Manifest
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.content.res.ColorStateList
 import android.content.res.Configuration
 import android.graphics.Color
 import android.os.Build
 import android.os.Bundle
+import android.util.TypedValue
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -189,7 +191,11 @@ class ChannelPagerFragment : BaseNetworkFragment(), Scrollable, FragmentHost, In
             if (resources.configuration.orientation == Configuration.ORIENTATION_LANDSCAPE) {
                 appBar.setExpanded(false, false)
             }
-            if (viewModel.stream.value == null) {
+            val initialStream = viewModel.stream.value
+            val isLive = initialStream?.viewerCount != null || (initialStream == null && args.streamId != null)
+            watchLive.text = if (isLive) getString(R.string.watch_live) else getString(R.string.open_player)
+            applyWatchLiveButtonStyle(isLive)
+            if (initialStream == null) {
                 watchLive.setOnClickListener {
                     activity.startStream(
                         Stream(
@@ -202,6 +208,8 @@ class ChannelPagerFragment : BaseNetworkFragment(), Scrollable, FragmentHost, In
                         )
                     )
                 }
+            } else {
+                watchLive.setOnClickListener { activity.startStream(initialStream) }
             }
             args.channelName.let {
                 if (it != null) {
@@ -648,7 +656,13 @@ class ChannelPagerFragment : BaseNetworkFragment(), Scrollable, FragmentHost, In
             if (stream?.viewerCount != null) {
                 watchLive.text = getString(R.string.watch_live)
                 watchLive.setOnClickListener { activity.startStream(stream) }
+                applyWatchLiveButtonStyle(isLive = true)
             } else {
+                watchLive.text = getString(R.string.open_player)
+                if (stream != null) {
+                    watchLive.setOnClickListener { activity.startStream(stream) }
+                }
+                applyWatchLiveButtonStyle(isLive = false)
                 if (stream?.user?.lastBroadcast != null) {
                     KickApiHelper.formatTimeString(requireContext(), stream.user.lastBroadcast!!).let {
                         if (it != null)  {
@@ -763,6 +777,42 @@ class ChannelPagerFragment : BaseNetworkFragment(), Scrollable, FragmentHost, In
                         }
                     }
                 }
+            }
+        }
+    }
+
+    private fun applyWatchLiveButtonStyle(isLive: Boolean) {
+        val ctx = context ?: return
+        with(binding.watchLive) {
+            val typedValue = TypedValue()
+            if (isLive) {
+                // Primary theme-styled button for active live stream
+                val btnColor = if (ctx.theme.resolveAttribute(R.attr.primaryButtonColor, typedValue, true)) {
+                    typedValue.data
+                } else {
+                    ContextCompat.getColor(ctx, R.color.accent)
+                }
+                val txtColor = if (ctx.theme.resolveAttribute(R.attr.primaryButtonTextColor, typedValue, true)) {
+                    typedValue.data
+                } else {
+                    Color.WHITE
+                }
+                backgroundTintList = ColorStateList.valueOf(btnColor)
+                setTextColor(txtColor)
+                iconTint = ColorStateList.valueOf(txtColor)
+                strokeWidth = 0
+            } else {
+                // Outlined secondary style when offline
+                backgroundTintList = ColorStateList.valueOf(Color.TRANSPARENT)
+                val secColor = if (ctx.theme.resolveAttribute(android.R.attr.textColorSecondary, typedValue, true)) {
+                    typedValue.data
+                } else {
+                    ContextCompat.getColor(ctx, R.color.secondaryTextColorDark)
+                }
+                setTextColor(secColor)
+                iconTint = ColorStateList.valueOf(secColor)
+                strokeColor = ColorStateList.valueOf(secColor)
+                strokeWidth = (1 * resources.displayMetrics.density).toInt().coerceAtLeast(1)
             }
         }
     }

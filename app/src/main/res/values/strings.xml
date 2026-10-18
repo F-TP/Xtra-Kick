@@ -234,8 +234,8 @@
     <string name="chat_disconnect">Disconnecting from %1$s - %2$s</string>
     <string name="chat_reconnecting">Reconnecting to %s</string>
     <string name="chat_send_msg_error">Error sending message - %s</string>
-    <string name="kick_chat_send_followers_only">This room is in followers-only mode. Follow the channel before chatting.</string>
-    <string name="kick_chat_send_followers_for">This room is in followers-only mode. Follow for %s before chatting.</string>
+    <string name="kick_chat_send_followers_only">This room is in followers-only mode.</string>
+    <string name="kick_chat_send_followers_for">This room is in %s followers-only mode.</string>
     <string name="kick_chat_send_bot_protection">Kick rejected the message because bot protection is active.</string>
     <string name="kick_chat_send_forbidden">Message rejected by Kick.</string>
     <string name="kick_chat_send_followers_wait">Can chat in %s</string>
@@ -310,15 +310,15 @@
     <string name="irc_notice_msg_channel_suspended">This channel does not exist or has been suspended.</string>
     <string name="irc_notice_msg_duplicate">Your message was not sent because it is identical to the previous one you sent, less than 30 seconds ago.</string>
     <string name="irc_notice_msg_emoteonly">This room is in emote-only mode. You can find your currently available emoticons using the smiley in the chat text area.</string>
-    <string name="irc_notice_msg_followersonly">This room is in %1$s followers-only mode. Follow %2$s to join the community!</string>
+    <string name="irc_notice_msg_followersonly">This room is in %s followers-only mode.</string>
     <string name="irc_notice_msg_followersonly_followed">This room is in %1$s followers-only mode. You have been following for %2$s. Continue following to chat!</string>
-    <string name="irc_notice_msg_followersonly_zero">This room is in followers-only mode. Follow %s to join the community!</string>
+    <string name="irc_notice_msg_followersonly_zero">This room is in followers-only mode.</string>
     <string name="irc_notice_msg_r9k">This room is in unique-chat mode and the message you attempted to send is not unique.</string>
     <string name="irc_notice_msg_ratelimit">Your message was not sent because you are sending messages too quickly.</string>
     <string name="irc_notice_msg_rejected">Hey! Your message is being checked by mods and has not been sent.</string>
     <string name="irc_notice_msg_rejected_mandatory">Your message wasn\'t posted due to conflicts with the channel\'s moderation settings.</string>
     <string name="irc_notice_msg_slowmode">This room is in slow mode and you are sending messages too quickly. You will be able to talk again in %s seconds.</string>
-    <string name="irc_notice_msg_subsonly">This room is in subscribers only mode. To talk, purchase a channel subscription at Kick subscriptions.</string>
+    <string name="irc_notice_msg_subsonly">This room is in subscribers only mode.</string>
     <string name="irc_notice_msg_suspended">You don\'t have permission to perform that action.</string>
     <string name="irc_notice_msg_timedout">You are timed out for %s more seconds.</string>
     <string name="irc_notice_msg_verified_email">This room requires a verified account to chat. Please verify your account at your account settings.</string>
@@ -606,7 +606,6 @@
     <string name="show_multivariant_playlist_tags">Show multivariant playlist tags</string>
     <string name="use_gamepager">Use tabs for \"Games\" page</string>
     <string name="disable_background_video">Disable video rendering in the background</string>
-    <string name="use_background_audio_track">Switch to audio-only track in the background</string>
     <string name="get_webview_integrity">Get integrity token using WebView</string>
     <string name="show_title">Show title</string>
     <string name="show_category">Show category</string>
