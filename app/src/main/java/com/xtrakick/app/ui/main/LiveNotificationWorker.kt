@@ -43,6 +43,7 @@ class LiveNotificationWorker @AssistedInject constructor(
         )
         if (streams.isNotEmpty()) {
             shownNotifications.showLiveNotifications(applicationContext, streams)
+            com.xtrakick.app.ui.widget.LiveChannelsWidgetProvider.notifyDataChanged(applicationContext)
         }
         return Result.success().also {
             // Staleness marker for diagnostics: Settings can compare this against

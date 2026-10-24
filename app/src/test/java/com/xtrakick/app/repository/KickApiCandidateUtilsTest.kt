@@ -218,28 +218,6 @@ class KickApiCandidateUtilsTest {
     }
 
     @Test
-    fun `private pusher auth short-circuits after first failure in cycle`() {
-        assertTrue(
-            KickApiCandidateUtils.shouldAttemptPrivatePusherAuth(
-                previousAuthFailedInCycle = false,
-                hasSocketId = true,
-            ),
-        )
-        assertFalse(
-            KickApiCandidateUtils.shouldAttemptPrivatePusherAuth(
-                previousAuthFailedInCycle = true,
-                hasSocketId = true,
-            ),
-        )
-        assertFalse(
-            KickApiCandidateUtils.shouldAttemptPrivatePusherAuth(
-                previousAuthFailedInCycle = false,
-                hasSocketId = false,
-            ),
-        )
-    }
-
-    @Test
     fun `badge catalog candidates drop dead chatrooms and numeric chatroom when slug present`() {
         // Log: GET api/v1|v2/chatrooms/{n} 405/404; channels/{userId}/chatroom 404.
         val candidates = KickApiCandidateUtils.buildBadgeCatalogCandidates(

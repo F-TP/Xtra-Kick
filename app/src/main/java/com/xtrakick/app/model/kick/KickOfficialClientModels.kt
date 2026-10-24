@@ -242,6 +242,8 @@ data class KickOfficialKicksGiftedEvent(
     val amount: Long? = null,
     @SerialName("pinned_time_seconds")
     val pinnedTimeSeconds: Int? = null,
+    val message: String? = null,
+    val content: String? = null,
     @SerialName("created_at")
     val createdAt: String? = null,
 )

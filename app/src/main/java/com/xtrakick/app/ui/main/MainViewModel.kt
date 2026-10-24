@@ -118,6 +118,12 @@ class MainViewModel @Inject constructor(
         }
     }
 
+    fun syncFcmSubscriptions() {
+        viewModelScope.launch(Dispatchers.IO) {
+            runCatching { fcmSyncManager.get().syncSubscriptions() }
+        }
+    }
+
     enum class KickValidationState {
         IDLE,
         RUNNING,

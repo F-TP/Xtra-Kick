@@ -70,6 +70,7 @@ import com.xtrakick.app.model.ui.OfflineVideo
 import com.xtrakick.app.model.ui.Stream
 import com.xtrakick.app.model.ui.Video
 import com.xtrakick.app.ui.channel.ChannelPagerFragmentDirections
+import com.xtrakick.app.ui.login.LoginActivity
 import com.xtrakick.app.ui.common.IntegrityDialog
 import com.xtrakick.app.ui.common.CompactDialogs.constrainSheets
 import com.xtrakick.app.ui.common.Scrollable
@@ -93,6 +94,7 @@ import com.xtrakick.app.util.KickOAuthConfig
 import com.xtrakick.app.util.KickApiHelper
 import com.xtrakick.app.util.KickLink
 import com.xtrakick.app.util.KickLinkRouter
+import com.xtrakick.app.util.NotificationPermissionHelper
 import com.xtrakick.app.util.applyTheme
 import com.xtrakick.app.util.cancelLiveNotificationsPollingWork
 import com.xtrakick.app.util.enqueueLiveNotificationsPollingWork
@@ -116,6 +118,8 @@ class MainActivity : AppCompatActivity() {
     companion object {
         private const val TAG = "MainActivity"
         const val KEY_VIDEO = "video"
+        const val KEY_AUDIO_ONLY = "key_audio_only"
+        const val KEY_OPEN_CHAT = "key_open_chat"
 
         const val INTENT_INSTALL_UPDATE = "com.xtrakick.app.INSTALL_UPDATE"
         const val INTENT_LIVE_NOTIFICATION = "com.xtrakick.app.LIVE_NOTIFICATION"
@@ -186,6 +190,22 @@ class MainActivity : AppCompatActivity() {
     var settingsResultLauncher: ActivityResultLauncher<Intent>? = null
     var loginResultLauncher: ActivityResultLauncher<Intent>? = null
     var logoutResultLauncher: ActivityResultLauncher<Intent>? = null
+    private val notificationPermissionLauncher = registerForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.RequestPermission()
+    ) { isGranted: Boolean ->
+        if (isGranted) {
+            viewModel.syncFcmSubscriptions()
+        }
+    }
+
+    fun requestNotificationPermissionWithPrimer(forcePrompt: Boolean = false) {
+        if (isFinishing || isDestroyed) return
+        NotificationPermissionHelper.requestWithPrimerIfNeeded(
+            this,
+            notificationPermissionLauncher,
+            forcePrompt = forcePrompt
+        )
+    }
 
     private fun logPlayerShell(message: String) {
         if (BuildConfig.DEBUG && prefs.getBoolean(AppConstants.DEBUG_PLAYER_SHELL_LOGS, false)) {
@@ -235,6 +255,22 @@ class MainActivity : AppCompatActivity() {
                 }
             }
         }
+        lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
+                localFollowChannelRepository.followsChanged.collectLatest {
+                    com.xtrakick.app.ui.widget.LiveChannelsWidgetProvider.notifyDataChanged(this@MainActivity)
+                }
+            }
+        }
+        lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
+                AuthStateHelper.authStateChanged.collectLatest { loggedIn ->
+                    if (loggedIn) {
+                        viewModel.syncFcmSubscriptions()
+                    }
+                }
+            }
+        }
         applyTheme()
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
@@ -275,9 +311,21 @@ class MainActivity : AppCompatActivity() {
                 } else {
                     navController?.navigate(R.id.followPagerFragment)
                 }
+                lifecycleScope.launch {
+                    kotlinx.coroutines.delay(600)
+                    if (!isFinishing && !isDestroyed && NotificationPermissionHelper.shouldPromptContextual(this@MainActivity)) {
+                        val hasFollows = runCatching {
+                            localFollowChannelRepository.loadFollows().isNotEmpty()
+                        }.getOrDefault(false)
+                        if (hasFollows) {
+                            requestNotificationPermissionWithPrimer()
+                        }
+                    }
+                }
             }
         }
         logoutResultLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {
+            prefs.edit().putBoolean(AppConstants.KEY_CHAT_BAR_VISIBLE, true).apply()
             viewModel.startKickValidationIfNeeded(this)
             localFollowChannelRepository.notifyFollowsChanged()
             val navHostFragment = supportFragmentManager.findFragmentById(R.id.navHostFragment) as? NavHostFragment
@@ -561,6 +609,11 @@ class MainActivity : AppCompatActivity() {
         } else {
             RewardClaimScheduler.disable(this)
         }
+        if (!prefs.getBoolean(AppConstants.KEY_ONBOARDING_COMPLETED, false)) {
+            WelcomeDialogFragment.showIfNeeded(this) {
+                loginResultLauncher?.launch(Intent(this, LoginActivity::class.java))
+            }
+        }
     }
 
     private fun setNavBarColor(isPortrait: Boolean) {
@@ -837,7 +890,11 @@ class MainActivity : AppCompatActivity() {
                                 }
                             }
                             if (livestream != null) {
+                                val isAudioOnly = intent.getBooleanExtra(KEY_AUDIO_ONLY, false)
                                 startStream(stream)
+                                if (isAudioOnly) {
+                                    playerFragment?.startAudioOnly()
+                                }
                             } else {
                                 Toast.makeText(this@MainActivity, R.string.stream_ended, Toast.LENGTH_SHORT).show()
                                 playerFragment?.minimize()

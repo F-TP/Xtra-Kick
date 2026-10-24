@@ -4,9 +4,19 @@ import android.content.Context
 import android.webkit.CookieManager
 import android.webkit.WebStorage
 import androidx.core.content.edit
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import java.net.URLDecoder
 
 object AuthStateHelper {
+
+    private val _authStateChanged = MutableSharedFlow<Boolean>(replay = 1, extraBufferCapacity = 1)
+    val authStateChanged: SharedFlow<Boolean> = _authStateChanged.asSharedFlow()
+
+    fun notifyAuthStateChanged(isLoggedIn: Boolean) {
+        _authStateChanged.tryEmit(isLoggedIn)
+    }
 
     private const val ACCESS_TOKEN_EXPIRY_BUFFER_SECONDS = 30L
 
@@ -157,7 +167,9 @@ object AuthStateHelper {
             remove(AppConstants.KICK_AUTH_STATE)
             remove(AppConstants.KICK_PKCE_VERIFIER)
         }
+        context.prefs().edit().putBoolean(AppConstants.KEY_CHAT_BAR_VISIBLE, true).apply()
         clearWebViewSession()
+        notifyAuthStateChanged(false)
     }
 
     /**

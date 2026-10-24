@@ -11,6 +11,7 @@ import androidx.media3.common.Tracks
 import com.xtrakick.app.R
 import com.xtrakick.app.databinding.PlayerSettingsBinding
 import com.xtrakick.app.util.AppConstants
+import com.xtrakick.app.util.AuthStateHelper
 import com.xtrakick.app.util.DiagnosticLogger
 import com.xtrakick.app.util.prefs
 import com.google.android.material.bottomsheet.BottomSheetBehavior
@@ -80,13 +81,15 @@ class PlayerSettingsDialog : BottomSheetDialogFragment() {
                     }
                 }
                 if (!requireContext().prefs().getBoolean(AppConstants.CHAT_DISABLE, false)) {
-                    val isLoggedIn = com.xtrakick.app.util.AuthStateHelper.isKickLoggedIn(requireContext())
-                    if (isLoggedIn && requireContext().prefs().getBoolean(AppConstants.PLAYER_MENU_CHAT_BAR, true)) {
+                    val isLoggedIn = AuthStateHelper.isKickLoggedIn(requireContext())
+                    if (requireContext().prefs().getBoolean(AppConstants.PLAYER_MENU_CHAT_BAR, true)) {
                         menuChatBar.visibility = View.VISIBLE
-                        if (requireContext().prefs().getBoolean(AppConstants.KEY_CHAT_BAR_VISIBLE, true)) {
-                            menuChatBar.text = getString(R.string.hide_chat_bar)
-                        } else {
-                            menuChatBar.text = getString(R.string.show_chat_bar)
+                        val isChatBarVisible = requireContext().prefs().getBoolean(AppConstants.KEY_CHAT_BAR_VISIBLE, true)
+                        menuChatBar.text = when {
+                            !isLoggedIn && isChatBarVisible -> getString(R.string.hide_login_prompt)
+                            !isLoggedIn && !isChatBarVisible -> getString(R.string.show_login_prompt)
+                            isChatBarVisible -> getString(R.string.hide_chat_bar)
+                            else -> getString(R.string.show_chat_bar)
                         }
                         menuChatBar.setOnClickListener {
                             (parentFragment as? PlayerFragment)?.toggleChatBar()

@@ -60,6 +60,7 @@ class XtraFirebaseMessagingService : FirebaseMessagingService() {
                     event,
                     ShownNotificationsRepository.EVENT_SOURCE_FCM,
                 )
+                com.xtrakick.app.ui.widget.LiveChannelsWidgetProvider.notifyDataChanged(applicationContext)
             }
         }
     }

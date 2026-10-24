@@ -17,7 +17,7 @@ This is a small personal project maintained by one developer in occasional spare
 
 ### Chat
 
-- Real-time Kick chat over websocket. Reading works without an account; sending requires logging in with Kick OAuth.
+- Real-time Kick chat over websocket. Reading works anonymously without an account (with an unobtrusive guest sign-in prompt in the input bar and a hide/show toggle in the player menu); sending requires logging in with Kick OAuth.
 - Message sending and replies for logged-in users, plus moderator slash commands (/ban, /timeout, /clear). Note that the moderation commands are implemented but not yet verified against a real moderator account.
 - Kick native emotes and badges plus 7TV emotes and badges, with an emote picker, search, autocomplete, and recent emotes.
 - Message history on join, VOD chat replay synced to playback, deleted message markers, mention highlights, optional timestamps, and extensive appearance settings.
@@ -28,12 +28,13 @@ This is a small personal project maintained by one developer in occasional spare
 - Live streams, categories, and clips browsing with sorting and language filters.
 - Search across streams, channels, categories, and videos with recent search history.
 - Channel pages with VODs, clips, about info, follower counts, verified badges, and social links.
+- First-launch welcome dialog explaining app capabilities and security architecture.
 
 ### Follows and notifications
 
 - Local follows for channels and categories stored on your device, not on Kick.
 - Automatic follow import from kick.com upon login, with manual import dialog fallback.
-- Notifications when followed channels go live.
+- Notifications when followed channels go live, backed by contextual Android 13+ permission primers when following and a dismissible banner in the Following feed.
 
 ### Downloads and extras
 

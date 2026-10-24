@@ -339,6 +339,23 @@ class ShownNotificationsRepository @Inject constructor(
                         PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
                     )
                 )
+                val audioIntent = Intent(context, MainActivity::class.java).apply {
+                    flags = Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
+                    action = MainActivity.INTENT_LIVE_NOTIFICATION
+                    putExtra(MainActivity.KEY_VIDEO, stream)
+                    putExtra(MainActivity.KEY_AUDIO_ONLY, true)
+                }
+                val audioPendingIntent = PendingIntent.getActivity(
+                    context,
+                    notificationId + 100_000,
+                    audioIntent,
+                    PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+                )
+                addAction(
+                    R.drawable.ic_volume_high,
+                    context.getString(R.string.notification_action_audio_only),
+                    audioPendingIntent
+                )
             }.build()
             notificationManager.notify(notificationId, notification)
         }

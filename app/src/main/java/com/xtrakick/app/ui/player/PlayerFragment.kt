@@ -93,8 +93,10 @@ import com.xtrakick.app.ui.game.GameMediaFragmentDirections
 import com.xtrakick.app.ui.game.GamePagerFragmentDirections
 import com.xtrakick.app.ui.main.MainActivity
 import com.xtrakick.app.util.AppConstants
+import com.xtrakick.app.util.AuthStateHelper
 import com.xtrakick.app.util.DiagnosticLogger
 import com.xtrakick.app.util.KickApiHelper
+import com.xtrakick.app.util.NotificationPermissionHelper
 import com.xtrakick.app.util.getAlertDialogBuilder
 import com.xtrakick.app.util.isKeyboardShown
 import com.xtrakick.app.util.prefs
@@ -1596,9 +1598,9 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                         if (prefs.getBoolean(AppConstants.PLAYER_CHATBARTOGGLE, false) && !prefs.getBoolean(AppConstants.CHAT_DISABLE, false)) {
                             toggleChatInput.visibility = View.VISIBLE
                             toggleChatInput.setOnClickListener {
-                        showController(force = true)
-                        toggleChatBar()
-                    }
+                                showController(force = true)
+                                toggleChatBar()
+                            }
                         }
                         slidingLayout.viewTreeObserver.addOnGlobalLayoutListener {
                             if (slidingLayout.isKeyboardShown) {
@@ -2046,6 +2048,22 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                         }
                         viewLifecycleOwner.lifecycleScope.launch {
                             repeatOnLifecycle(Lifecycle.State.STARTED) {
+                                viewModel.followsChanged.collectLatest {
+                                    refreshFollowStatus()
+                                }
+                            }
+                        }
+                        viewLifecycleOwner.lifecycleScope.launch {
+                            repeatOnLifecycle(Lifecycle.State.STARTED) {
+                                AuthStateHelper.authStateChanged.collectLatest { loggedIn ->
+                                    val chatBarToggleEnabled = prefs.getBoolean(AppConstants.PLAYER_CHATBARTOGGLE, false) && !prefs.getBoolean(AppConstants.CHAT_DISABLE, false)
+                                    toggleChatInput.isVisible = loggedIn && chatBarToggleEnabled
+                                    refreshFollowStatus()
+                                }
+                            }
+                        }
+                        viewLifecycleOwner.lifecycleScope.launch {
+                            repeatOnLifecycle(Lifecycle.State.STARTED) {
                                 viewModel.follow.collectLatest { pair ->
                                     if (pair != null) {
                                         val following = pair.first
@@ -2055,6 +2073,9 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                                         } else {
                                             if (following) {
                                                 Toast.makeText(requireContext(), getString(R.string.now_following, displayName), Toast.LENGTH_SHORT).show()
+                                                if (!NotificationPermissionHelper.hasPermission(requireContext())) {
+                                                    (activity as? MainActivity)?.requestNotificationPermissionWithPrimer()
+                                                }
                                             } else {
                                                 Toast.makeText(requireContext(), getString(R.string.unfollowed, displayName), Toast.LENGTH_SHORT).show()
                                             }
@@ -2359,19 +2380,28 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
 
     fun toggleChatBar() {
         with(binding) {
-            requireView().findViewById<LinearLayout>(R.id.messageView)?.let {
-                if (it.isVisible) {
-                    (requireContext().getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager).hideSoftInputFromWindow(chatLayout.windowToken, 0)
-                    chatLayout.clearFocus()
-                    if (videoType == STREAM && chatFragment?.emoteMenuIsVisible() == true) {
-                        chatFragment?.toggleEmoteMenu(false)
+            val messageView = requireView().findViewById<View>(R.id.messageView)
+            val guestPrompt = requireView().findViewById<View>(R.id.guestLoginPromptView)
+            val isGuest = !AuthStateHelper.isKickLoggedIn(requireContext())
+            val targetView = if (isGuest) guestPrompt else messageView
+            if (targetView != null) {
+                if (targetView.isVisible) {
+                    if (!isGuest) {
+                        (requireContext().getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager).hideSoftInputFromWindow(chatLayout.windowToken, 0)
+                        chatLayout.clearFocus()
+                        if (videoType == STREAM && chatFragment?.emoteMenuIsVisible() == true) {
+                            chatFragment?.toggleEmoteMenu(false)
+                        }
                     }
-                    it.visibility = View.GONE
+                    targetView.visibility = View.GONE
                     prefs.edit { putBoolean(AppConstants.KEY_CHAT_BAR_VISIBLE, false) }
                 } else {
-                    it.visibility = View.VISIBLE
+                    targetView.visibility = View.VISIBLE
                     prefs.edit { putBoolean(AppConstants.KEY_CHAT_BAR_VISIBLE, true) }
                 }
+            } else {
+                val current = prefs.getBoolean(AppConstants.KEY_CHAT_BAR_VISIBLE, true)
+                prefs.edit { putBoolean(AppConstants.KEY_CHAT_BAR_VISIBLE, !current) }
             }
         }
     }
@@ -3385,17 +3415,27 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
         }
     }
 
+    fun refreshFollowStatus() {
+        if (!isAdded || isDetached) return
+        val args = arguments ?: return
+        if (args.getString(KEY_TYPE) != OFFLINE_VIDEO) {
+            val ctx = context ?: return
+            viewModel.isFollowingChannel(
+                ctx.tokenPrefs().getString(AppConstants.USER_ID, null),
+                args.getString(KEY_CHANNEL_ID),
+                args.getString(KEY_CHANNEL_LOGIN),
+                prefs.getString(AppConstants.UI_FOLLOW_BUTTON, "0")?.toIntOrNull() ?: 0,
+                ctx.prefs().getString(AppConstants.NETWORK_LIBRARY, "OkHttp"),
+                KickApiHelper.getKickWebHeaders(ctx, true),
+                KickApiHelper.getKickPublicApiHeaders(ctx),
+                force = true,
+            )
+        }
+    }
+
     override fun initialize() {
         if (requireArguments().getString(KEY_TYPE) != OFFLINE_VIDEO) {
-            viewModel.isFollowingChannel(
-                requireContext().tokenPrefs().getString(AppConstants.USER_ID, null),
-                requireArguments().getString(KEY_CHANNEL_ID),
-                requireArguments().getString(KEY_CHANNEL_LOGIN),
-                prefs.getString(AppConstants.UI_FOLLOW_BUTTON, "0")?.toIntOrNull() ?: 0,
-                requireContext().prefs().getString(AppConstants.NETWORK_LIBRARY, "OkHttp"),
-                KickApiHelper.getKickWebHeaders(requireContext(), true),
-                KickApiHelper.getKickPublicApiHeaders(requireContext()),
-            )
+            refreshFollowStatus()
             if (videoType == VIDEO) {
                 val videoId = requireArguments().getString(KEY_VIDEO_ID)
                 if (!videoId.isNullOrBlank() &&

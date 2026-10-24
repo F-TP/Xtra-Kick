@@ -101,6 +101,7 @@ class LoginActivity : AppCompatActivity() {
         applyTheme()
 
         if (intent.getBooleanExtra(AppConstants.LOGIN_LOGOUT_ONLY, false)) {
+            AuthStateHelper.notifyAuthStateChanged(false)
             logoutAndFinish()
             return
         }
@@ -481,6 +482,7 @@ class LoginActivity : AppCompatActivity() {
                 pendingKickCallback = null
                 // Schedule follow import asynchronously and return to the app immediately with zero delay
                 followImporter.schedulePostLoginImport(networkLibrary)
+                AuthStateHelper.notifyAuthStateChanged(true)
                 setResult(RESULT_OK)
                 finish()
             } catch (e: Exception) {
@@ -676,6 +678,7 @@ class LoginActivity : AppCompatActivity() {
                 }
                 val networkLibrary = prefs().getString(AppConstants.NETWORK_LIBRARY, "OkHttp")
                 followImporter.schedulePostLoginImport(networkLibrary)
+                AuthStateHelper.notifyAuthStateChanged(true)
                 setResult(RESULT_OK)
                 finish()
             } catch (e: kotlinx.coroutines.CancellationException) {

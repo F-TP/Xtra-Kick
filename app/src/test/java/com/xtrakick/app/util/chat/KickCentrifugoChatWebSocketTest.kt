@@ -65,4 +65,51 @@ class KickCentrifugoChatWebSocketTest {
             channels
         )
     }
+
+    @Test
+    fun buildsPrivateLivestreamAndAccountChannelsWhenIdsPresent() {
+        val privateChannels = KickCentrifugoChatWebSocket.buildPrivateChannelNames(
+            accountId = "98765",
+            livestreamId = "124297944"
+        )
+
+        assertEquals(
+            listOf(
+                "private-channelpoints-98765",
+                "private-userfeed.98765",
+                "private-98765",
+                "private-livestream.124297944"
+            ),
+            privateChannels
+        )
+        assertTrue(privateChannels.contains("private-livestream.124297944"))
+    }
+
+    @Test
+    fun omitsMissingIdsInPrivateSubscriptions() {
+        val onlyLivestream = KickCentrifugoChatWebSocket.buildPrivateChannelNames(
+            accountId = null,
+            livestreamId = "124297944"
+        )
+        assertEquals(listOf("private-livestream.124297944"), onlyLivestream)
+
+        val onlyAccount = KickCentrifugoChatWebSocket.buildPrivateChannelNames(
+            accountId = "98765",
+            livestreamId = null
+        )
+        assertEquals(
+            listOf(
+                "private-channelpoints-98765",
+                "private-userfeed.98765",
+                "private-98765"
+            ),
+            onlyAccount
+        )
+
+        val empty = KickCentrifugoChatWebSocket.buildPrivateChannelNames(
+            accountId = "",
+            livestreamId = ""
+        )
+        assertTrue(empty.isEmpty())
+    }
 }

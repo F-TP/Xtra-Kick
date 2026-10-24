@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="22dp"
+    android:height="22dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <!-- Emerald Gemstone -->
+    <!-- Top Crown Table -->
+    <path
+        android:fillColor="#00E7C5"
+        android:pathData="M7,4h10l3,5h-16z" />
+    <!-- Pavilion Left Shading -->
+    <path
+        android:fillColor="#00A389"
+        android:pathData="M4,9l8,11v-11z" />
+    <!-- Pavilion Right Shading -->
+    <path
+        android:fillColor="#00E7C5"
+        android:pathData="M12,9v11l8,-11z" />
+    <!-- Center facet highlight -->
+    <path
+        android:fillColor="#33FFFFFF"
+        android:pathData="M8,9l4,11l4,-11h-8z" />
+</vector>

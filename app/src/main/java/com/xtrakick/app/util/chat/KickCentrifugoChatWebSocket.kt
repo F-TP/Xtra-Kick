@@ -21,7 +21,7 @@ class KickCentrifugoChatWebSocket(
     private val fetchAuthToken: suspend () -> String?,
     private val fetchChannelToken: suspend (String) -> String? = { null },
     private val trustManager: X509TrustManager?,
-    private val listener: KickPusherChatWebSocket.Listener,
+    private val listener: Listener,
     private val debugLogging: Boolean = false,
 ) {
     companion object {
@@ -42,6 +42,26 @@ class KickCentrifugoChatWebSocket(
             addAll(publicChannelNames)
             addAll(privateChannelNames)
         }
+
+        fun buildPrivateChannelNames(
+            accountId: String?,
+            livestreamId: String?,
+        ): List<String> = buildList {
+            accountId?.takeIf { it.isNotBlank() }?.let {
+                add("private-channelpoints-$it")
+                add("private-userfeed.$it")
+                add("private-$it")
+            }
+            livestreamId?.takeIf { it.isNotBlank() }?.let {
+                add("private-livestream.$it")
+            }
+        }
+    }
+
+    interface Listener {
+        suspend fun onConnect() {}
+        suspend fun onChatEvent(eventName: String, channelName: String?, messageJson: String) {}
+        suspend fun onDisconnect(message: String, fullMsg: String?) {}
     }
 
     private val tag = "KickCentrifugoChat"

@@ -1,6 +1,7 @@
 package com.xtrakick.app.ui.chat
 
 import android.content.Context
+import android.content.Intent
 import android.content.SharedPreferences
 import android.content.res.Configuration
 import android.graphics.Color
@@ -93,6 +94,7 @@ import com.xtrakick.app.repository.KickRepository
 import com.xtrakick.app.ui.channel.ChannelPagerFragmentDirections
 import com.xtrakick.app.ui.common.BaseNetworkFragment
 import com.xtrakick.app.ui.common.IntegrityDialog
+import com.xtrakick.app.ui.login.LoginActivity
 import com.xtrakick.app.ui.main.MainActivity
 import com.xtrakick.app.ui.multipov.MultiPovFragment
 import com.xtrakick.app.ui.player.PlayerFragment
@@ -100,6 +102,7 @@ import com.xtrakick.app.ui.view.GridAutofitLayoutManager
 import com.xtrakick.app.ui.view.AutoCompleteAdapter
 import com.xtrakick.app.ui.view.SlashCommand
 import com.xtrakick.app.util.AppConstants
+import com.xtrakick.app.util.AuthStateHelper
 import com.xtrakick.app.util.KickApiHelper
 import com.xtrakick.app.util.KickOAuthConfig
 import com.xtrakick.app.util.chat.ChatAdapterUtils
@@ -241,6 +244,19 @@ class ChatFragment : BaseNetworkFragment(), MessageClickedDialog.OnButtonClickLi
         raidCountdownTimer = null
         binding.raidLayout.visibility = View.GONE
         viewModel.raidClosed = true
+    }
+
+    private val chatLoginLauncher = registerForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        if (result.resultCode == android.app.Activity.RESULT_OK) {
+            val isLoggedIn = AuthStateHelper.isKickLoggedIn(requireContext())
+            AuthStateHelper.notifyAuthStateChanged(isLoggedIn)
+            updateMessagingState(isLoggedIn)
+            if (isLoggedIn) {
+                reconnect()
+            }
+        }
     }
 
     private fun configureRaidAction(raid: com.xtrakick.app.model.chat.Raid) {
@@ -877,7 +893,7 @@ class ChatFragment : BaseNetworkFragment(), MessageClickedDialog.OnButtonClickLi
     }
 
     private fun requireKickRewardScopes(vararg scopes: String): Boolean {
-        if (!com.xtrakick.app.util.AuthStateHelper.isKickLoggedIn(requireContext())) {
+        if (!AuthStateHelper.isKickLoggedIn(requireContext())) {
             requireContext().getAlertDialogBuilder()
                 .setMessage(getString(R.string.log_in))
                 .setPositiveButton(getString(R.string.close), null)
@@ -2346,7 +2362,7 @@ class ChatFragment : BaseNetworkFragment(), MessageClickedDialog.OnButtonClickLi
                 val channelLogin = args.getString(KEY_CHANNEL_LOGIN)
                 val isLive = args.getBoolean(KEY_IS_LIVE)
                 val accountLogin = requireContext().tokenPrefs().getString(AppConstants.KICK_USER_LOGIN, null)
-                val isLoggedIn = com.xtrakick.app.util.AuthStateHelper.isKickLoggedIn(requireContext())
+                val isLoggedIn = AuthStateHelper.isKickLoggedIn(requireContext())
                 val chatUrl = args.getString(KEY_CHAT_URL)
                 val suppressReplayUnavailable = args.getBoolean(KEY_SUPPRESS_REPLAY_UNAVAILABLE)
                 val kickReplayFallback = args.getBoolean(KEY_KICK_REPLAY_FALLBACK)
@@ -2413,13 +2429,15 @@ class ChatFragment : BaseNetworkFragment(), MessageClickedDialog.OnButtonClickLi
                                 (requireContext().getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager).hideSoftInputFromWindow(editText.windowToken, 0)
                                 editText.clearFocus()
                                 tappedMessageDialogSeed = tappedMessage
-                                MessageClickedDialog.newInstance(enableMessaging, channelId, requireArguments().getString(KEY_CHANNEL_LOGIN)).show(this@ChatFragment.childFragmentManager, "messageDialog")
+                                val canMessage = isLive && AuthStateHelper.isKickLoggedIn(requireContext())
+                                MessageClickedDialog.newInstance(canMessage, channelId, requireArguments().getString(KEY_CHANNEL_LOGIN)).show(this@ChatFragment.childFragmentManager, "messageDialog")
                             }
                         },
                         replyClickListener = {
                             (requireContext().getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager).hideSoftInputFromWindow(editText.windowToken, 0)
                             editText.clearFocus()
-                            ReplyClickedDialog.newInstance(enableMessaging).show(this@ChatFragment.childFragmentManager, "replyDialog")
+                            val canMessage = isLive && AuthStateHelper.isKickLoggedIn(requireContext())
+                            ReplyClickedDialog.newInstance(canMessage).show(this@ChatFragment.childFragmentManager, "replyDialog")
                         },
                         imageClickListener = { url, name, format, isAnimated, source, thirdParty, emoteId ->
                             (requireContext().getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager).hideSoftInputFromWindow(editText.windowToken, 0)
@@ -2484,111 +2502,102 @@ class ChatFragment : BaseNetworkFragment(), MessageClickedDialog.OnButtonClickLi
                             it.visibility = View.GONE
                         }
                     }
-                    if (enableMessaging) {
-                        viewModel.loadRecentEmotes()
-                        viewLifecycleOwner.lifecycleScope.launch {
-                            repeatOnLifecycle(Lifecycle.State.STARTED) {
-                                viewModel.recentEmotes.collectLatest {
-                                    recentEmotes = it
-                                    refreshEmotePickerSections()
-                                }
-                            }
-                        }
-
-                        autoCompleteAdapter = AutoCompleteAdapter(requireContext()) { item ->
-                            insertAutoComplete(item)
-                        }
-                        autoCompleteRecyclerView.apply {
-                            layoutManager = LinearLayoutManager(requireContext())
-                            adapter = autoCompleteAdapter
-                        }
-                        (autoCompleteContainer.parent as? View)?.addOnLayoutChangeListener { _, _, top, _, bottom, _, oldTop, _, oldBottom ->
-                            if ((bottom - top) != (oldBottom - oldTop) && autoCompleteContainer.isVisible) {
-                                updateAutoComplete(editText.text)
-                            }
-                        }
-                        editText.setOnFocusChangeListener { _, hasFocus ->
-                            if (!hasFocus) {
-                                hideAutoComplete()
-                            } else {
-                                updateAutoComplete(editText.text)
-                            }
-                        }
-                        editText.addTextChangedListener(onTextChanged = { text, _, _, _ ->
-                            if (text?.isNotBlank() == true) {
-                                send.visibility = View.VISIBLE
-                                clear.visibility = View.VISIBLE
-                            } else {
-                                send.visibility = View.GONE
-                                clear.visibility = View.GONE
-                            }
-                            updateAutoComplete(text)
-                        })
-                        editText.setTokenizer(spaceTokenizer)
-                        editText.setOnKeyListener { _, keyCode, event ->
-                            if (event.action == KeyEvent.ACTION_DOWN && keyCode == KeyEvent.KEYCODE_ENTER) {
-                                sendMessage()
-                            } else {
-                                false
-                            }
-                        }
-                        clear.setOnClickListener {
-                            val text = editText.text.toString().trimEnd()
-                            editText.setText(text.substring(0, max(text.lastIndexOf(' '), 0)))
-                            editText.setSelection(editText.length())
+                    editText.setOnFocusChangeListener { _, hasFocus ->
+                        if (!hasFocus) {
                             hideAutoComplete()
+                        } else {
+                            updateAutoComplete(editText.text)
                         }
-                        clear.setOnLongClickListener {
-                            editText.text.clear()
-                            hideAutoComplete()
+                    }
+                    editText.addTextChangedListener(onTextChanged = { text, _, _, _ ->
+                        if (text?.isNotBlank() == true) {
+                            send.visibility = View.VISIBLE
+                            clear.visibility = View.VISIBLE
+                        } else {
+                            send.visibility = View.GONE
+                            clear.visibility = View.GONE
+                        }
+                        updateAutoComplete(text)
+                    })
+                    editText.setTokenizer(spaceTokenizer)
+                    editText.setOnKeyListener { _, keyCode, event ->
+                        if (event.action == KeyEvent.ACTION_DOWN && keyCode == KeyEvent.KEYCODE_ENTER) {
+                            sendMessage()
+                        } else {
+                            false
+                        }
+                    }
+                    clear.setOnClickListener {
+                        val text = editText.text.toString().trimEnd()
+                        editText.setText(text.substring(0, max(text.lastIndexOf(' '), 0)))
+                        editText.setSelection(editText.length())
+                        hideAutoComplete()
+                    }
+                    clear.setOnLongClickListener {
+                        editText.text.clear()
+                        hideAutoComplete()
+                        true
+                    }
+                    replyView.visibility = View.GONE
+                    send.setOnClickListener { sendMessage() }
+                    emotes.setOnClickListener {
+                        if (emoteMenu.isGone) {
+                            toggleEmoteMenu(true)
+                        } else {
+                            toggleEmoteMenu(false)
+                        }
+                    }
+                    if (BuildConfig.DEBUG) {
+                        emotes.setOnLongClickListener {
+                            viewModel.simulateGiftTrain()
                             true
                         }
-                        replyView.visibility = View.GONE
-                        send.setOnClickListener { sendMessage() }
-                        val isPlayerContext = parentFragment is PlayerFragment || parentFragment is MultiPovFragment || (view.parent?.parent?.parent?.parent as? View)?.id == R.id.slidingLayout
-                        if (isPlayerContext && !requireContext().prefs().getBoolean(AppConstants.KEY_CHAT_BAR_VISIBLE, true)) {
-                            messageView.visibility = View.GONE
-                        } else {
-                            messageView.visibility = View.VISIBLE
-                        }
-                        setupEmotePicker()
-                        viewLifecycleOwner.lifecycleScope.launch {
-                            repeatOnLifecycle(Lifecycle.State.STARTED) {
-                                viewModel.userEmotesUpdated.collectLatest {
-                                    refreshEmotePickerSections()
-                                }
-                            }
-                        }
-                        viewLifecycleOwner.lifecycleScope.launch {
-                            repeatOnLifecycle(Lifecycle.State.STARTED) {
-                                viewModel.thirdPartyEmotesUpdated.collectLatest {
-                                    refreshEmotePickerSections()
-                                }
-                            }
-                        }
-                        viewLifecycleOwner.lifecycleScope.launch {
-                            repeatOnLifecycle(Lifecycle.State.STARTED) {
-                                viewModel.kickEmoteGroups.collectLatest {
-                                    refreshEmotePickerSections()
-                                }
-                            }
-                        }
-                        emotes.setOnClickListener {
-                            //TODO add animation
-                            if (emoteMenu.isGone) {
-                                toggleEmoteMenu(true)
-                            } else {
-                                toggleEmoteMenu(false)
-                            }
-                        }
-                        if (BuildConfig.DEBUG) {
-                            emotes.setOnLongClickListener {
-                                viewModel.simulateGiftTrain()
-                                true
-                            }
-                        }
-                        messagingEnabled = true
                     }
+                    btnGuestLoginChat.setOnClickListener {
+                        chatLoginLauncher.launch(Intent(requireContext(), LoginActivity::class.java))
+                    }
+
+                    viewLifecycleOwner.lifecycleScope.launch {
+                        repeatOnLifecycle(Lifecycle.State.STARTED) {
+                            viewModel.recentEmotes.collectLatest {
+                                recentEmotes = it
+                                refreshEmotePickerSections()
+                            }
+                        }
+                    }
+                    viewLifecycleOwner.lifecycleScope.launch {
+                        repeatOnLifecycle(Lifecycle.State.STARTED) {
+                            viewModel.userEmotesUpdated.collectLatest {
+                                refreshEmotePickerSections()
+                            }
+                        }
+                    }
+                    viewLifecycleOwner.lifecycleScope.launch {
+                        repeatOnLifecycle(Lifecycle.State.STARTED) {
+                            viewModel.thirdPartyEmotesUpdated.collectLatest {
+                                refreshEmotePickerSections()
+                            }
+                        }
+                    }
+                    viewLifecycleOwner.lifecycleScope.launch {
+                        repeatOnLifecycle(Lifecycle.State.STARTED) {
+                            viewModel.kickEmoteGroups.collectLatest {
+                                refreshEmotePickerSections()
+                            }
+                        }
+                    }
+                    viewLifecycleOwner.lifecycleScope.launch {
+                        repeatOnLifecycle(Lifecycle.State.STARTED) {
+                            AuthStateHelper.authStateChanged.collectLatest { loggedIn ->
+                                updateMessagingState(loggedIn)
+                                if (loggedIn) {
+                                    reconnect()
+                                }
+                            }
+                        }
+                    }
+
+                    updateMessagingState(isLoggedIn)
                     viewLifecycleOwner.lifecycleScope.launch {
                         repeatOnLifecycle(Lifecycle.State.STARTED) {
                             viewModel.channelPointsSummary.collectLatest {
@@ -3173,6 +3182,7 @@ class ChatFragment : BaseNetworkFragment(), MessageClickedDialog.OnButtonClickLi
 
     override fun onResume() {
         super.onResume()
+        updateMessagingState()
         view?.post { renderBufferedMessages() }
         val args = requireArguments()
         val channelId = args.getString(KEY_CHANNEL_ID)
@@ -3204,11 +3214,58 @@ class ChatFragment : BaseNetworkFragment(), MessageClickedDialog.OnButtonClickLi
         viewModel.disconnect()
     }
 
+    fun updateMessagingState(isLoggedIn: Boolean? = null) {
+        if (!isAdded || _binding == null) return
+        val ctx = context ?: return
+        val currentLoggedIn = isLoggedIn ?: AuthStateHelper.isKickLoggedIn(ctx)
+        val args = arguments ?: return
+        val isLive = args.getBoolean(KEY_IS_LIVE)
+        val enableMessaging = isLive && currentLoggedIn
+        val isPlayerContext = parentFragment is PlayerFragment || parentFragment is MultiPovFragment || (view?.parent?.parent?.parent?.parent as? View)?.id == R.id.slidingLayout
+        val accountLogin = ctx.tokenPrefs().getString(AppConstants.KICK_USER_LOGIN, null)
+
+        with(binding) {
+            adapter?.loggedInUser = if (enableMessaging) accountLogin else null
+
+            if (enableMessaging) {
+                guestLoginPromptView.visibility = View.GONE
+                if (isPlayerContext && !ctx.prefs().getBoolean(AppConstants.KEY_CHAT_BAR_VISIBLE, true)) {
+                    messageView.visibility = View.GONE
+                } else {
+                    messageView.visibility = View.VISIBLE
+                }
+                if (autoCompleteAdapter == null) {
+                    autoCompleteAdapter = AutoCompleteAdapter(ctx) { item ->
+                        insertAutoComplete(item)
+                    }
+                    autoCompleteRecyclerView.apply {
+                        layoutManager = LinearLayoutManager(ctx)
+                        adapter = autoCompleteAdapter
+                    }
+                    (autoCompleteContainer.parent as? View)?.addOnLayoutChangeListener { _, _, top, _, bottom, _, oldTop, _, oldBottom ->
+                        if ((bottom - top) != (oldBottom - oldTop) && autoCompleteContainer.isVisible) {
+                            updateAutoComplete(editText.text)
+                        }
+                    }
+                }
+                viewModel.loadRecentEmotes()
+                setupEmotePicker()
+                messagingEnabled = true
+            } else {
+                messageView.visibility = View.GONE
+                val isChatBarVisible = !isPlayerContext || ctx.prefs().getBoolean(AppConstants.KEY_CHAT_BAR_VISIBLE, true)
+                guestLoginPromptView.visibility = if (isLive && !currentLoggedIn && isChatBarVisible) View.VISIBLE else View.GONE
+                messagingEnabled = false
+            }
+        }
+    }
+
     fun reconnect() {
         val channelLogin = requireArguments().getString(KEY_CHANNEL_LOGIN)
         if (channelLogin != null) {
             viewModel.autoReconnect = true
             refreshKickRewardState()
+            updateMessagingState()
             viewModel.startLiveChat(requireArguments().getString(KEY_CHANNEL_ID), channelLogin)
             if (requireContext().prefs().getBoolean(AppConstants.CHAT_RECENT, true)) {
                 viewModel.loadRecentMessages(

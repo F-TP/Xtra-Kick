@@ -275,13 +275,12 @@ class ChannelPagerFragment : BaseNetworkFragment(), Scrollable, FragmentHost, In
                                 requireContext().prefs().getBoolean(AppConstants.ENABLE_INTEGRITY, false)
                             )
                         } else {
-                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
-                                ActivityCompat.checkSelfPermission(activity, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
-                            ) {
-                                // The row is inserted by enableNotifications below only after
-                                // the permission exists — without it every event would be
-                                // dropped at the gate and the bell would silently do nothing.
-                                notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                            if (!com.xtrakick.app.util.NotificationPermissionHelper.hasPermission(activity)) {
+                                com.xtrakick.app.util.NotificationPermissionHelper.requestWithPrimerIfNeeded(
+                                    activity,
+                                    notificationPermissionLauncher,
+                                    forcePrompt = true
+                                )
                                 return@setOnMenuItemClickListener true
                             }
                             enableChannelNotifications()

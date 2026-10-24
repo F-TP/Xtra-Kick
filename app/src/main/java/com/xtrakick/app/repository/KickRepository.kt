@@ -15,7 +15,9 @@ import com.xtrakick.app.model.chat.ChannelPointReward
 import com.xtrakick.app.model.chat.ChatEmote
 import com.xtrakick.app.model.chat.ChatMessage
 import com.xtrakick.app.model.chat.Emote
+import com.xtrakick.app.model.chat.GiftedSubInfo
 import com.xtrakick.app.model.chat.KickGiftTrainSnapshot
+import com.xtrakick.app.model.chat.KicksDonation
 import com.xtrakick.app.model.chat.PinnedGift
 import com.xtrakick.app.model.chat.Poll
 import com.xtrakick.app.model.chat.Prediction
@@ -353,11 +355,15 @@ class KickRepository @Inject constructor(
 
     data class KickRealtimeParsedEvent(
         val chatMessage: ChatMessage,
+        val chatMessages: List<ChatMessage> = emptyList(),
         val clearTargetUserId: String? = null,
         val clearTargetUserLogin: String? = null,
         val clearTargetUserName: String? = null,
         val giftTrain: KickGiftTrainSnapshot? = null,
-    )
+    ) {
+        val allChatMessages: List<ChatMessage>
+            get() = if (chatMessages.isNotEmpty()) chatMessages else listOf(chatMessage)
+    }
 
     private fun ChannelPointRewardsResult.merge(other: ChannelPointRewardsResult): ChannelPointRewardsResult {
         val mergedRewards = LinkedHashMap<String, ChannelPointReward>()
@@ -1708,9 +1714,22 @@ class KickRepository @Inject constructor(
             }
             "channel.subscription.gifts" -> {
                 val event = decodeKickOfficialRealtimePayload<KickOfficialChannelSubscriptionGiftsEvent>(messageJson) ?: return null
-                val kickMessage = officialGiftEventToKickMessage(event)
+                val gifter = event.gifter ?: event.subscriber
+                val gifterName = gifter?.username ?: gifter?.channelSlug ?: return null
+                val gifteeNames = event.giftees.mapNotNull { it.username?.takeIf(String::isNotBlank) ?: it.channelSlug?.takeIf(String::isNotBlank) }
+                val (communityMsg, allMessages) = buildKickSubscriptionGiftMessages(
+                    gifterName = gifterName,
+                    gifterColor = gifter?.identity?.usernameColor,
+                    gifterUserId = gifter?.userId?.toString(),
+                    gifterUserLogin = gifter?.channelSlug,
+                    gifteeNames = gifteeNames,
+                    giftCount = gifteeNames.size.coerceAtLeast(1),
+                    createdAt = event.createdAt,
+                    rawPayload = messageJson,
+                )
                 KickRealtimeParsedEvent(
-                    chatMessage = toChatMessage(kickMessage, eventName),
+                    chatMessage = communityMsg,
+                    chatMessages = allMessages,
                     giftTrain = event.toGiftTrainSnapshot(),
                 )
             }
@@ -1839,16 +1858,21 @@ class KickRepository @Inject constructor(
             "kicks.gifted" -> {
                 val event = decodeKickOfficialRealtimePayload<KickOfficialKicksGiftedEvent>(messageJson) ?: return null
                 val senderName = event.sender?.username ?: event.sender?.channelSlug ?: return null
-                val amount = event.giftedAmount ?: event.amount ?: return null
+                val amount = (event.giftedAmount ?: event.amount)?.takeIf { it > 0 } ?: return null
                 val recipientName = event.recipient?.username ?: event.recipient?.channelSlug
-                val message = if (!recipientName.isNullOrBlank()) {
-                    context.getString(R.string.kick_kicks_gifted_notice, senderName, amount, recipientName)
-                } else {
-                    context.getString(R.string.kick_kicks_gifted_notice_without_recipient, senderName, amount)
-                }
-                KickRealtimeParsedEvent(
-                    chatMessage = createKickNoticeMessage(message, event.createdAt)
+                val donorMessage = event.message ?: event.content
+                val chatMessage = buildKickKicksDonationMessage(
+                    senderName = senderName,
+                    senderColor = event.sender?.identity?.usernameColor,
+                    senderUserId = event.sender?.userId?.toString(),
+                    senderUserLogin = event.sender?.channelSlug,
+                    amount = amount,
+                    recipientName = recipientName,
+                    donorMessage = donorMessage,
+                    createdAt = event.createdAt,
+                    rawPayload = messageJson,
                 )
+                KickRealtimeParsedEvent(chatMessage = chatMessage)
             }
             "kicksgifted" -> {
                 val root = runCatching { json.parseToJsonElement(messageJson).jsonObject }.getOrNull() ?: return null
@@ -1858,11 +1882,29 @@ class KickRepository @Inject constructor(
                     ?: sender?.primitiveOrNull("channel_slug")
                     ?: sender?.primitiveOrNull("slug")
                     ?: return null
-                val amount = gift?.firstLongOrNull("amount", "gift_amount", "kicks")?.toInt()
-                    ?: root.firstLongOrNull("amount", "gifted_amount", "kicks")?.toInt()
+                val amount = (gift?.firstLongOrNull("amount", "gift_amount", "kicks")
+                    ?: root.firstLongOrNull("amount", "gifted_amount", "kicks"))?.takeIf { it > 0 }
                     ?: return null
-                val message = context.getString(R.string.kick_kicks_gifted_notice_without_recipient, senderName, amount)
-                KickRealtimeParsedEvent(chatMessage = createKickNoticeMessage(message, root.primitiveOrNull("created_at")))
+                val donorMessage = root.firstPrimitiveOrNull("message", "content", "pinned_message")
+                    ?: gift?.firstPrimitiveOrNull("message", "content")
+                val userColor = sender?.firstPrimitiveOrNull("username_color", "color")
+                    ?: (sender?.get("identity") as? JsonObject)?.firstPrimitiveOrNull("username_color", "color")
+                val recipient = (root["recipient"] as? JsonObject)
+                val recipientName = recipient?.primitiveOrNull("username") ?: recipient?.primitiveOrNull("slug")
+                val createdAt = root.primitiveOrNull("created_at")
+                val senderId = sender?.firstPrimitiveOrNull("id", "user_id")
+                val chatMessage = buildKickKicksDonationMessage(
+                    senderName = senderName,
+                    senderColor = userColor,
+                    senderUserId = senderId,
+                    senderUserLogin = sender?.firstPrimitiveOrNull("slug", "channel_slug"),
+                    amount = amount,
+                    recipientName = recipientName,
+                    donorMessage = donorMessage,
+                    createdAt = createdAt,
+                    rawPayload = messageJson,
+                )
+                KickRealtimeParsedEvent(chatMessage = chatMessage)
             }
             "giftedsubscriptionsevent",
             "app\\events\\giftedsubscriptionsevent",
@@ -1871,18 +1913,27 @@ class KickRepository @Inject constructor(
             "app\\events\\luckyuserswhogotgiftsubscriptionsevent" -> {
                 val root = runCatching { json.parseToJsonElement(messageJson).jsonObject }.getOrNull() ?: return null
                 val gifterName = root.firstPrimitiveOrNull("gifter_username", "gifterUsername", "username") ?: return null
+                val gifterColor = root.firstPrimitiveOrNull("gifter_color", "username_color", "color")
+                    ?: (root["gifter"] as? JsonObject)?.firstPrimitiveOrNull("username_color", "color")
                 val giftedUsernames = root.arrayOrNull("gifted_usernames")
                     ?.mapNotNull { (it as? JsonPrimitive)?.contentOrNull?.takeIf(String::isNotBlank) }
                     ?: root.arrayOrNull("usernames")
                         ?.mapNotNull { (it as? JsonPrimitive)?.contentOrNull?.takeIf(String::isNotBlank) }
                         .orEmpty()
-                val message = when (giftedUsernames.size) {
-                    0 -> context.getString(R.string.kick_gifted_sub, gifterName)
-                    1 -> context.getString(R.string.kick_gifted_sub_to, gifterName, giftedUsernames.first())
-                    else -> context.getString(R.string.kick_gifted_subs, gifterName, giftedUsernames.size)
-                }
+                val giftCount = giftedUsernames.size.coerceAtLeast(
+                    root.firstLongOrNull("count", "gifted_count", "gifts_count", "quantity")?.toInt() ?: 1
+                )
+                val (communityMsg, allMessages) = buildKickSubscriptionGiftMessages(
+                    gifterName = gifterName,
+                    gifterColor = gifterColor,
+                    gifteeNames = giftedUsernames,
+                    giftCount = giftCount,
+                    createdAt = root.primitiveOrNull("created_at"),
+                    rawPayload = messageJson,
+                )
                 KickRealtimeParsedEvent(
-                    chatMessage = createKickNoticeMessage(message, root.primitiveOrNull("created_at")),
+                    chatMessage = communityMsg,
+                    chatMessages = allMessages,
                     giftTrain = KickGiftTrainSnapshot(
                         gifterName = gifterName,
                         giftees = giftedUsernames,
@@ -2018,23 +2069,6 @@ class KickRepository @Inject constructor(
             ?: throw IllegalArgumentException("channel slug is required")
         val url = "https://kick.com/api/v2/channels/${urlEncode(normalizedChannelSlug)}/predictions/latest"
         realtimeEventParsers.parseKickWebPredictionResponse(executeKickWebSessionRequest(url))
-    }
-
-    suspend fun authorizeKickPusherPrivateChannel(socketId: String, channelName: String): String? = withContext(Dispatchers.IO) {
-        if (socketId.isBlank() || channelName.isBlank()) {
-            return@withContext null
-        }
-        val url = "https://kick.com/broadcasting/auth"
-        val body = JSONObject().apply {
-            put("socket_id", socketId)
-            put("channel_name", channelName)
-        }.toString()
-        runCatching {
-            val raw = executeKickWebSessionRequest(url, body, post = true)
-            JSONObject(raw).optString("auth").takeIf { it.isNotBlank() }
-        }.onFailure {
-            Log.w(tag, "kick pusher auth failed channel=$channelName message=${it.message}")
-        }.getOrNull()
     }
 
     /** True when the WebView jar holds a website session cookie (no login fallback). */
@@ -3294,7 +3328,6 @@ class KickRepository @Inject constructor(
                 })
                 put("capabilities", JSONObject().apply {
                     put("accepted_providers", org.json.JSONArray().apply {
-                        put(JSONObject().apply { put("provider", "pusher") })
                         put(JSONObject().apply { put("provider", "centrifugo") })
                     })
                 })
@@ -4160,6 +4193,115 @@ class KickRepository @Inject constructor(
             timestamp = normalizeDate(createdAt)?.let(KickApiHelper::parseIso8601DateUTC),
             fullMsg = message,
         )
+    }
+
+    private fun buildKickKicksDonationMessage(
+        senderName: String,
+        senderColor: String?,
+        senderUserId: String? = null,
+        senderUserLogin: String? = null,
+        amount: Long,
+        recipientName: String? = null,
+        donorMessage: String? = null,
+        createdAt: String?,
+        rawPayload: String,
+    ): ChatMessage {
+        val fallbackNotice = if (!recipientName.isNullOrBlank()) {
+            context.getString(R.string.kick_kicks_gifted_notice, senderName, amount, recipientName)
+        } else {
+            context.getString(R.string.kick_kicks_gifted_notice_without_recipient, senderName, amount)
+        }
+        val (cleanedMessage, extractedEmotes) = donorMessage?.takeIf(String::isNotBlank)?.let(::extractContentAndEmotes) ?: (null to null)
+        return ChatMessage(
+            id = "kick_kicks:${senderUserId ?: senderName}:${createdAt.orEmpty()}:${amount}",
+            userId = senderUserId,
+            userLogin = senderUserLogin,
+            userName = senderName,
+            color = senderColor,
+            message = cleanedMessage,
+            emotes = extractedEmotes,
+            systemMsg = fallbackNotice,
+            msgId = "kick_usernotice",
+            fullMsg = rawPayload,
+            timestamp = normalizeDate(createdAt)?.let(KickApiHelper::parseIso8601DateUTC),
+            kicksDonation = KicksDonation(
+                amount = amount,
+                message = cleanedMessage,
+                recipientName = recipientName,
+                senderName = senderName,
+                senderColor = senderColor,
+            ),
+        )
+    }
+
+    private fun buildKickSubscriptionGiftMessages(
+        gifterName: String,
+        gifterColor: String?,
+        gifterUserId: String? = null,
+        gifterUserLogin: String? = null,
+        gifteeNames: List<String>,
+        giftCount: Int,
+        createdAt: String?,
+        rawPayload: String,
+    ): Pair<ChatMessage, List<ChatMessage>> {
+        val count = giftCount.coerceAtLeast(gifteeNames.size.coerceAtLeast(1))
+        val fallbackNotice = when {
+            count > 1 -> context.getString(R.string.kick_gifted_subs, gifterName, count)
+            gifteeNames.isNotEmpty() -> context.getString(R.string.kick_gifted_sub_to, gifterName, gifteeNames.first())
+            else -> context.getString(R.string.kick_gifted_sub, gifterName)
+        }
+        val baseTime = normalizeDate(createdAt)?.let(KickApiHelper::parseIso8601DateUTC) ?: System.currentTimeMillis()
+
+        val communityMsg = ChatMessage(
+            id = "kick_gifted_community:${gifterUserId ?: gifterName}:${createdAt.orEmpty()}:${count}",
+            userId = gifterUserId,
+            userLogin = gifterUserLogin,
+            userName = gifterName,
+            color = gifterColor,
+            systemMsg = fallbackNotice,
+            msgId = "kick_usernotice",
+            fullMsg = rawPayload,
+            timestamp = baseTime,
+            giftedSubInfo = GiftedSubInfo(
+                gifterName = gifterName,
+                gifterColor = gifterColor,
+                count = count,
+                gifteeNames = gifteeNames,
+                isCommunityGift = true,
+            ),
+        )
+
+        val maxIndividualCards = 10
+        val individualCards = gifteeNames.take(maxIndividualCards).mapIndexed { index, giftee ->
+            ChatMessage(
+                id = "kick_gifted_individual:${gifterUserId ?: gifterName}:${giftee}:${createdAt.orEmpty()}:${index}",
+                userId = gifterUserId,
+                userLogin = gifterUserLogin,
+                userName = gifterName,
+                color = gifterColor,
+                systemMsg = context.getString(R.string.kick_gifted_sub_to, gifterName, giftee),
+                msgId = "kick_usernotice",
+                fullMsg = rawPayload,
+                timestamp = baseTime + index + 1L,
+                giftedSubInfo = GiftedSubInfo(
+                    gifterName = gifterName,
+                    gifterColor = gifterColor,
+                    count = 1,
+                    gifteeName = giftee,
+                    isCommunityGift = false,
+                ),
+            )
+        }
+
+        val allMessages = if (count > 1 && individualCards.isNotEmpty()) {
+            listOf(communityMsg) + individualCards
+        } else if (count == 1 && gifteeNames.isNotEmpty()) {
+            individualCards
+        } else {
+            listOf(communityMsg)
+        }
+
+        return communityMsg to allMessages
     }
 
     fun toChatMessage(message: KickMessage, eventName: String? = null): ChatMessage {

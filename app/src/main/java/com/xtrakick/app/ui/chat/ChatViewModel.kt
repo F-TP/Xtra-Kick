@@ -35,6 +35,8 @@ import com.xtrakick.app.model.chat.StvBadge
 import com.xtrakick.app.model.chat.StvUser
 import com.xtrakick.app.model.chat.ChatBadge
 import com.xtrakick.app.model.chat.ChatEmote
+import com.xtrakick.app.model.chat.GiftedSubInfo
+import com.xtrakick.app.model.chat.KicksDonation
 import com.xtrakick.app.model.kick.KickMessage
 import com.xtrakick.app.model.kick.KickOfficialReward
 import com.xtrakick.app.repository.KickPublicApiRepository
@@ -55,7 +57,6 @@ import com.xtrakick.app.util.chat.ChatReplayPacing
 import com.xtrakick.app.util.chat.ChatUtils
 import com.xtrakick.app.util.chat.KickCentrifugoChatWebSocket
 import com.xtrakick.app.util.chat.KickChatSendErrorMapper
-import com.xtrakick.app.util.chat.KickPusherChatWebSocket
 import com.xtrakick.app.util.chat.StvEventApiUtils
 import com.xtrakick.app.util.chat.StvEventApiWebSocket
 import com.xtrakick.app.util.chat.WebSocketDisconnectUtils
@@ -164,7 +165,6 @@ class ChatViewModel @Inject constructor(
     private var currentChatChannelName: String? = null
     private var currentChatChannelLogin: String? = null
 
-    private var kickPusherChatWebSocket: KickPusherChatWebSocket? = null
     private var kickCentrifugoChatWebSocket: KickCentrifugoChatWebSocket? = null
     @Volatile
     private var currentKickChatroomId: String? = null
@@ -421,6 +421,56 @@ class ChatViewModel @Inject constructor(
         val gifter = giftTrainSimulatorGifters[press % giftTrainSimulatorGifters.size]
         val batch = List(5) { giftTrainSimulatorGiftees[(press * 5 + it) % giftTrainSimulatorGiftees.size] }
         updateGiftTrain(KickGiftTrainSnapshot(gifterName = gifter, giftees = batch))
+
+        val now = System.currentTimeMillis()
+        viewModelScope.launch {
+            if (press % 2 == 1) {
+                val kicksMsg = ChatMessage(
+                    id = "sim_kicks_$now",
+                    userName = gifter,
+                    color = "#FF4444",
+                    message = "Let's go!! W stream!",
+                    timestamp = now,
+                    kicksDonation = KicksDonation(
+                        amount = 1000L,
+                        message = "Let's go!! W stream!",
+                        senderName = gifter,
+                        senderColor = "#FF4444",
+                    )
+                )
+                emitKickMessages(listOf(kicksMsg))
+            } else {
+                val community = ChatMessage(
+                    id = "sim_gift_community_$now",
+                    userName = gifter,
+                    color = "#00E701",
+                    timestamp = now,
+                    giftedSubInfo = GiftedSubInfo(
+                        gifterName = gifter,
+                        gifterColor = "#00E701",
+                        count = batch.size,
+                        gifteeNames = batch,
+                        isCommunityGift = true,
+                    )
+                )
+                val individual = batch.mapIndexed { idx, giftee ->
+                    ChatMessage(
+                        id = "sim_gift_indiv_${now}_$idx",
+                        userName = gifter,
+                        color = "#00E701",
+                        timestamp = now + idx + 1,
+                        giftedSubInfo = GiftedSubInfo(
+                            gifterName = gifter,
+                            gifterColor = "#00E701",
+                            count = 1,
+                            gifteeName = giftee,
+                            isCommunityGift = false,
+                        )
+                    )
+                }
+                emitKickMessages(listOf(community) + individual)
+            }
+        }
     }
 
     private fun updateGiftTrain(snapshot: KickGiftTrainSnapshot) {
@@ -2948,7 +2998,7 @@ class ChatViewModel @Inject constructor(
             if (!isActive || sessionGeneration != chatSessionGeneration) {
                 return@launch
             }
-            val kickPusherListener = KickPusherChatListener(
+            val kickCentrifugoListener = KickCentrifugoChatListener(
                 channelLogin,
                 effectiveChannelId,
                 nameDisplay,
@@ -2972,14 +3022,11 @@ class ChatViewModel @Inject constructor(
             val centrifugoEnabledByServer = centrifugoConnection == null ||
                 centrifugoConnection.providers.isEmpty() ||
                 centrifugoConnection.providers.any { it.equals("centrifugo", ignoreCase = true) }
-            val pusherEnabledByServer = centrifugoConnection?.providers?.any {
-                it.equals("pusher", ignoreCase = true)
-            } == true
 
             val hasKickWebsiteSession = kickRepository.hasUsableKickWebsiteSession()
             val publicChannelNames = if (!categoryId.isNullOrBlank()) listOf("drops_category_$categoryId") else emptyList()
             val privateChannelNames = if (hasKickWebsiteSession) {
-                KickPusherChatWebSocket.buildPrivateChannelNames(accountId, livestreamId)
+                KickCentrifugoChatWebSocket.buildPrivateChannelNames(accountId, livestreamId)
             } else {
                 emptyList()
             }
@@ -2999,7 +3046,7 @@ class ChatViewModel @Inject constructor(
                 fetchAuthToken = { kickRepository.getCentrifugoToken(centrifugoConnection?.clientId) },
                 fetchChannelToken = { channelName -> kickRepository.getCentrifugoChannelToken(channelName) },
                 trustManager = trustManager,
-                listener = kickPusherListener,
+                listener = kickCentrifugoListener,
                 debugLogging = debugKickRealtimeChat
             )
             val centrifugoJob = if (centrifugoEnabledByServer) {
@@ -3011,27 +3058,7 @@ class ChatViewModel @Inject constructor(
                 null
             }
 
-            val pusherJob = if (pusherEnabledByServer) {
-                kickPusherChatWebSocket = KickPusherChatWebSocket(
-                    chatroomId = kickChatroomId,
-                    channelId = effectiveChannelId,
-                    publicChannelNames = publicChannelNames,
-                    privateChannelNames = privateChannelNames,
-                    authorizePrivateChannel = { privateChannelName, socketId ->
-                        kickRepository.authorizeKickPusherPrivateChannel(socketId, privateChannelName)
-                    },
-                    trustManager = trustManager,
-                    listener = kickPusherListener,
-                    debugLogging = debugKickRealtimeChat
-                )
-                kickPusherChatWebSocket?.connect(this)
-            } else {
-                if (debugKickRealtimeChat) {
-                    Log.d("KickRealtimeChat", "pusher skipped: server provider config excludes it")
-                }
-                null
-            }
-            listOfNotNull(centrifugoJob, pusherJob).joinAll()
+            listOfNotNull(centrifugoJob).joinAll()
         }
         updateChannelPointsBalance(null)
         updateChannelPointRewards(emptyList(), false)
@@ -3166,14 +3193,6 @@ class ChatViewModel @Inject constructor(
         synchronized(kickMessageIds) {
             kickMessageIds.clear()
         }
-        // Close the captured session, never whichever socket a subsequent start installs.
-        val pusherSocket = kickPusherChatWebSocket
-        if (pusherSocket != null) {
-            MainScope().launch(Dispatchers.IO) {
-                pusherSocket.disconnect(readJob)
-            }
-        }
-        kickPusherChatWebSocket = null
         val centrifugoSocket = kickCentrifugoChatWebSocket
         if (centrifugoSocket != null) {
             MainScope().launch(Dispatchers.IO) {
@@ -3244,7 +3263,7 @@ class ChatViewModel @Inject constructor(
         autoReconnect = false
     }
 
-    private inner class KickPusherChatListener(
+    private inner class KickCentrifugoChatListener(
         private val channelLogin: String,
         private val channelId: String?,
         private val nameDisplay: String?,
@@ -3256,7 +3275,7 @@ class ChatViewModel @Inject constructor(
         private val showPredictions: Boolean,
         private val debugLogging: Boolean,
         private val sessionGeneration: Long,
-    ) : KickPusherChatWebSocket.Listener {
+    ) : KickCentrifugoChatWebSocket.Listener {
         override suspend fun onConnect() {
             if (sessionGeneration != chatSessionGeneration) return
             kickRealtimeReconnectAttempt = 0
@@ -3381,23 +3400,33 @@ class ChatViewModel @Inject constructor(
                         parsedEvent.clearTargetUserName
                     )
                 }
-                val parsedChatMessage = parsedEvent.chatMessage
-                if (parsedChatMessage.msgId == "kick_usernotice" && !showUserNotice) {
+                val rawMessages = parsedEvent.allChatMessages
+                val messagesToEmit = rawMessages.filter { msg ->
+                    if (msg.msgId == "kick_usernotice" && !showUserNotice) return@filter false
+                    if (msg.msgId == "kick_moderation" && !showClearChat) return@filter false
+                    if (msg.message.isNullOrBlank() &&
+                        msg.systemMsg.isNullOrBlank() &&
+                        msg.msgId == null &&
+                        msg.kicksDonation == null &&
+                        msg.giftedSubInfo == null
+                    ) {
+                        return@filter false
+                    }
+                    true
+                }
+                if (messagesToEmit.isEmpty()) {
                     return
                 }
-                if (parsedChatMessage.msgId == "kick_moderation" && !showClearChat) {
-                    return
+                var emotesUpdated = false
+                messagesToEmit.forEach { msg ->
+                    if (addKickInlineEmotes(msg.fullMsg)) {
+                        emotesUpdated = true
+                    }
                 }
-                if (parsedChatMessage.message.isNullOrBlank() &&
-                    parsedChatMessage.systemMsg.isNullOrBlank() &&
-                    parsedChatMessage.msgId == null
-                ) {
-                    return
-                }
-                if (addKickInlineEmotes(parsedChatMessage.fullMsg)) {
+                if (emotesUpdated) {
                     thirdPartyEmotesUpdated.emit(Unit)
                 }
-                emitKickMessages(listOf(parsedChatMessage))
+                emitKickMessages(messagesToEmit)
                 return
             }
             val realtimeMessage = parseKickRealtimeMessage(eventName, messageJson) ?: run {

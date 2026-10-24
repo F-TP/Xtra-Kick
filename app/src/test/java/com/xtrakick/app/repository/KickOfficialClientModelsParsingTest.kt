@@ -212,6 +212,28 @@ class KickOfficialClientModelsParsingTest {
     }
 
     @Test
+    fun parsesOfficialKicksGiftedEventWithMessage() {
+        val parsed = json.decodeFromString<KickOfficialKicksGiftedEvent>(
+            """
+            {
+              "sender": {
+                "user_id": 30,
+                "username": "ongfrfrnocap",
+                "channel_slug": "ongfrfrnocap"
+              },
+              "gifted_amount": 1000,
+              "message": "fat",
+              "created_at": "2025-01-14T16:10:06Z"
+            }
+            """.trimIndent()
+        )
+
+        assertEquals(1000L, parsed.giftedAmount)
+        assertEquals("fat", parsed.message)
+        assertEquals("ongfrfrnocap", parsed.sender?.username)
+    }
+
+    @Test
     fun parsesOfficialChannelLivestreamAndCategoryExtensions() {
         val category = json.decodeFromString<KickOfficialCategory>(
             """

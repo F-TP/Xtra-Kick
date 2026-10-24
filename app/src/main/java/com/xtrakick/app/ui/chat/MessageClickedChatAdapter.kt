@@ -193,7 +193,7 @@ class MessageClickedChatAdapter(
             useRandomColors, random, useReadableColors, isLightTheme, nameDisplay, useBoldNames, showNamePaints, namePaints, showStvBadges,
             showKickBadges, stvBadges, showPersonalEmotes, personalEmoteSets, stvUsers, enableOverlayEmotes, showSystemMessageEmotes, loggedInUser, chatUrl,
             getEmoteBytes, userColors, savedColors, localChatEmotes,
-            thirdPartyEmotes, globalBadges, channelBadges, cheerEmotes, savedLocalChatEmotes, savedLocalBadges, savedLocalCheerEmotes, savedLocalEmotes
+            thirdPartyEmotes, globalBadges, channelBadges, cheerEmotes, savedLocalChatEmotes, savedLocalBadges, savedLocalCheerEmotes, savedLocalEmotes, holder.textView.context
         )
         holder.bind(chatMessage, result.builder, position, result.backgroundRes)
         if (chatMessage == selectedMessage) {

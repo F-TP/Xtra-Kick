@@ -21,6 +21,8 @@ class ChatMessage(
     val replyParent: ChatMessage? = null,
     val timestamp: Long? = null,
     val fullMsg: String? = null,
+    val kicksDonation: KicksDonation? = null,
+    val giftedSubInfo: GiftedSubInfo? = null,
 ) {
     /**
      * Stable alternating-row slot assigned once when the message enters the list.

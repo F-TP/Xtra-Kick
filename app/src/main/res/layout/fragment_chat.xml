@@ -235,6 +235,31 @@
         </LinearLayout>
 
         <LinearLayout
+            android:id="@+id/guestLoginPromptView"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center"
+            android:orientation="horizontal"
+            android:paddingHorizontal="16dp"
+            android:paddingVertical="8dp"
+            android:visibility="gone"
+            tools:visibility="visible">
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnGuestLoginChat"
+                style="?attr/materialButtonOutlinedStyle"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="@string/chat_guest_login_prompt"
+                android:textAppearance="?attr/textAppearanceBodyMedium"
+                android:textColor="?attr/colorPrimary"
+                app:icon="@drawable/ic_tag_faces_black_24dp"
+                app:iconGravity="textStart"
+                app:iconTint="?attr/colorPrimary"
+                app:strokeColor="?attr/colorPrimary" />
+        </LinearLayout>
+
+        <LinearLayout
             android:id="@+id/emoteMenu"
             android:layout_width="match_parent"
             android:layout_height="300dp"

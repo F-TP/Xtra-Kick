@@ -1,5 +1,6 @@
 package com.xtrakick.app.util.chat
 
+import android.content.Context
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.ColorFilter
@@ -21,6 +22,7 @@ import android.text.style.StyleSpan
 import android.text.style.URLSpan
 import android.util.Patterns
 import android.view.View
+import androidx.core.content.ContextCompat
 import androidx.core.graphics.ColorUtils
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.lifecycleScope
@@ -482,7 +484,7 @@ object ChatAdapterUtils {
             }
     }
 
-    fun prepareChatMessage(chatMessage: ChatMessage, cacheSignature: Long, enableTimestamps: Boolean, timestampFormat: String?, firstMsgVisibility: Int, firstChatMsg: String, redeemedChatMsg: String, redeemedNoMsg: String, rewardChatMsg: String, replyMessage: String, imageClick: ((String?, String?, String?, Boolean?, Int?, Boolean?, String?) -> Unit)?, useRandomColors: Boolean, random: Random, useReadableColors: Boolean, isLightTheme: Boolean, nameDisplay: String?, useBoldNames: Boolean, showNamePaints: Boolean, namePaints: List<NamePaint>, showStvBadges: Boolean, showKickBadges: Boolean, stvBadges: List<StvBadge>, showPersonalEmotes: Boolean, personalEmoteSets: Map<String, List<Emote>>, stvUsers: List<StvUser>, enableOverlayEmotes: Boolean, showSystemMessageEmotes: Boolean, loggedInUser: String?, chatUrl: String?, getEmoteBytes: ((String, Pair<Long, Int>) -> ByteArray?)?, userColors: HashMap<String, Int>, savedColors: HashMap<String, Int>, localChatEmotes: List<ChatEmote>, thirdPartyEmotes: List<Emote>, globalBadges: List<ChatBadge>, channelBadges: List<ChatBadge>, cheerEmotes: List<CheerEmote>, savedLocalChatEmotes: MutableMap<String, ByteArray>, savedLocalBadges: MutableMap<String, ByteArray>, savedLocalCheerEmotes: MutableMap<String, ByteArray>, savedLocalEmotes: MutableMap<String, ByteArray>): MessageResult {
+    fun prepareChatMessage(chatMessage: ChatMessage, cacheSignature: Long, enableTimestamps: Boolean, timestampFormat: String?, firstMsgVisibility: Int, firstChatMsg: String, redeemedChatMsg: String, redeemedNoMsg: String, rewardChatMsg: String, replyMessage: String, imageClick: ((String?, String?, String?, Boolean?, Int?, Boolean?, String?) -> Unit)?, useRandomColors: Boolean, random: Random, useReadableColors: Boolean, isLightTheme: Boolean, nameDisplay: String?, useBoldNames: Boolean, showNamePaints: Boolean, namePaints: List<NamePaint>, showStvBadges: Boolean, showKickBadges: Boolean, stvBadges: List<StvBadge>, showPersonalEmotes: Boolean, personalEmoteSets: Map<String, List<Emote>>, stvUsers: List<StvUser>, enableOverlayEmotes: Boolean, showSystemMessageEmotes: Boolean, loggedInUser: String?, chatUrl: String?, getEmoteBytes: ((String, Pair<Long, Int>) -> ByteArray?)?, userColors: HashMap<String, Int>, savedColors: HashMap<String, Int>, localChatEmotes: List<ChatEmote>, thirdPartyEmotes: List<Emote>, globalBadges: List<ChatBadge>, channelBadges: List<ChatBadge>, cheerEmotes: List<CheerEmote>, savedLocalChatEmotes: MutableMap<String, ByteArray>, savedLocalBadges: MutableMap<String, ByteArray>, savedLocalCheerEmotes: MutableMap<String, ByteArray>, savedLocalEmotes: MutableMap<String, ByteArray>, context: Context? = null): MessageResult {
         synchronized(preparedMessages) {
             preparedMessages[chatMessage]?.get(cacheSignature)?.let { return it.copyForBind() }
         }
@@ -516,6 +518,162 @@ object ChatAdapterUtils {
                 }
                 if (isReplyDirectedAtLoggedInUser(chatMessage, loggedInUser)) {
                     backgroundRes = R.color.chatMessageMention
+                }
+            }
+            chatMessage.kicksDonation != null -> {
+                val donation = chatMessage.kicksDonation
+                if (chatMessage.timestamp != null && enableTimestamps) {
+                    val timestamp = KickApiHelper.getTimestamp(chatMessage.timestamp, timestampFormat)
+                    if (timestamp != null) {
+                        builder.append("$timestamp ")
+                        builder.setSpan(ForegroundColorSpan(getSavedColor("#999999", savedColors, useReadableColors, isLightTheme)), 0, timestamp.length, SPAN_EXCLUSIVE_EXCLUSIVE)
+                        builderIndex += timestamp.length + 1
+                    }
+                }
+                val senderName = donation.senderName ?: chatMessage.userName ?: chatMessage.userLogin ?: "Someone"
+                val rawColor = donation.senderColor ?: chatMessage.color ?: "#00E701"
+                val nameColor = getSavedColor(rawColor, savedColors, useReadableColors, isLightTheme = false)
+
+                val nameStart = builderIndex
+                builder.append(senderName)
+                builder.setSpan(ForegroundColorSpan(nameColor), nameStart, nameStart + senderName.length, SPAN_EXCLUSIVE_EXCLUSIVE)
+                builder.setSpan(StyleSpan(Typeface.BOLD), nameStart, nameStart + senderName.length, SPAN_EXCLUSIVE_EXCLUSIVE)
+                userName = senderName
+                userNameStartIndex = nameStart
+                builderIndex += senderName.length
+
+                val sentLabel = context?.getString(R.string.kick_sent_kicks) ?: "sent"
+                val sentText = if (!donation.recipientName.isNullOrBlank()) {
+                    " $sentLabel kicks to ${donation.recipientName}\n"
+                } else {
+                    " $sentLabel\n"
+                }
+                val sentStart = builderIndex
+                builder.append(sentText)
+                builder.setSpan(ForegroundColorSpan(Color.WHITE), sentStart, sentStart + sentText.length, SPAN_EXCLUSIVE_EXCLUSIVE)
+                builder.setSpan(StyleSpan(Typeface.BOLD), sentStart, sentStart + sentText.length, SPAN_EXCLUSIVE_EXCLUSIVE)
+                builderIndex += sentText.length
+
+                val coinDrawable = context?.let { ContextCompat.getDrawable(it, R.drawable.ic_kick_coin)?.mutate() }
+                if (coinDrawable != null) {
+                    builder.append(". ")
+                    val density = context.resources.displayMetrics.density
+                    val coinSize = (20f * density).toInt()
+                    coinDrawable.setBounds(0, 0, coinSize, coinSize)
+                    builder.setSpan(CenteredImageSpan(coinDrawable), builderIndex, builderIndex + 1, SPAN_EXCLUSIVE_EXCLUSIVE)
+                    builder.setSpan(ForegroundColorSpan(Color.TRANSPARENT), builderIndex, builderIndex + 1, SPAN_EXCLUSIVE_EXCLUSIVE)
+                    builderIndex += 2
+                }
+
+                val formattedAmount = java.text.NumberFormat.getIntegerInstance(java.util.Locale.US).format(donation.amount)
+                val amountStart = builderIndex
+                builder.append(formattedAmount)
+                builder.setSpan(ForegroundColorSpan(Color.WHITE), amountStart, amountStart + formattedAmount.length, SPAN_EXCLUSIVE_EXCLUSIVE)
+                builder.setSpan(StyleSpan(Typeface.BOLD), amountStart, amountStart + formattedAmount.length, SPAN_EXCLUSIVE_EXCLUSIVE)
+                builder.setSpan(RelativeSizeSpan(1.2f), amountStart, amountStart + formattedAmount.length, SPAN_EXCLUSIVE_EXCLUSIVE)
+                builderIndex += formattedAmount.length
+
+                val gemDrawable = context?.let { ContextCompat.getDrawable(it, R.drawable.ic_kick_gem)?.mutate() }
+                if (gemDrawable != null) {
+                    builder.append(" . ")
+                    val density = context.resources.displayMetrics.density
+                    val gemSize = (22f * density).toInt()
+                    gemDrawable.setBounds(0, 0, gemSize, gemSize)
+                    builder.setSpan(CenteredImageSpan(gemDrawable), builderIndex + 1, builderIndex + 2, SPAN_EXCLUSIVE_EXCLUSIVE)
+                    builder.setSpan(ForegroundColorSpan(Color.TRANSPARENT), builderIndex + 1, builderIndex + 2, SPAN_EXCLUSIVE_EXCLUSIVE)
+                    builderIndex += 3
+                }
+
+                val donorMsg = donation.message ?: chatMessage.message
+                if (!donorMsg.isNullOrBlank()) {
+                    builder.append("\n")
+                    builderIndex += 1
+                    val msgStart = builderIndex
+                    builder.append(donorMsg)
+                    builder.setSpan(ForegroundColorSpan(Color.WHITE), msgStart, msgStart + donorMsg.length, SPAN_EXCLUSIVE_EXCLUSIVE)
+                    prepareEmotes(
+                        chatMessage, donorMsg, builder, msgStart, images, imageClick,
+                        useReadableColors, isLightTheme, enableOverlayEmotes, useBoldNames,
+                        loggedInUser, chatUrl, getEmoteBytes, savedColors, localChatEmotes,
+                        showPersonalEmotes, personalEmoteSets, null, thirdPartyEmotes, cheerEmotes,
+                        savedLocalChatEmotes, savedLocalCheerEmotes, savedLocalEmotes
+                    )
+                    builderIndex = builder.length
+                }
+            }
+            chatMessage.giftedSubInfo != null -> {
+                val gift = chatMessage.giftedSubInfo
+                if (chatMessage.timestamp != null && enableTimestamps) {
+                    val timestamp = KickApiHelper.getTimestamp(chatMessage.timestamp, timestampFormat)
+                    if (timestamp != null) {
+                        builder.append("$timestamp ")
+                        builder.setSpan(ForegroundColorSpan(getSavedColor("#999999", savedColors, useReadableColors, isLightTheme)), 0, timestamp.length, SPAN_EXCLUSIVE_EXCLUSIVE)
+                        builderIndex += timestamp.length + 1
+                    }
+                }
+
+                val rawColor = gift.gifterColor ?: chatMessage.color ?: "#00E701"
+                val gifterColor = getSavedColor(rawColor, savedColors, useReadableColors, isLightTheme = false)
+
+                val giftDrawable = context?.let { ContextCompat.getDrawable(it, R.drawable.baseline_card_giftcard_black_24)?.mutate() }
+                if (giftDrawable != null) {
+                    val density = context.resources.displayMetrics.density
+                    val iconSize = (18f * density).toInt()
+                    giftDrawable.setBounds(0, 0, iconSize, iconSize)
+                    giftDrawable.setTint(Color.parseColor("#00E701"))
+                    builder.append(". ")
+                    builder.setSpan(CenteredImageSpan(giftDrawable), builderIndex, builderIndex + 1, SPAN_EXCLUSIVE_EXCLUSIVE)
+                    builder.setSpan(ForegroundColorSpan(Color.TRANSPARENT), builderIndex, builderIndex + 1, SPAN_EXCLUSIVE_EXCLUSIVE)
+                    builderIndex += 2
+                }
+
+                if (gift.isCommunityGift) {
+                    val nameStart = builderIndex
+                    builder.append(gift.gifterName)
+                    builder.setSpan(ForegroundColorSpan(gifterColor), nameStart, nameStart + gift.gifterName.length, SPAN_EXCLUSIVE_EXCLUSIVE)
+                    builder.setSpan(StyleSpan(Typeface.BOLD), nameStart, nameStart + gift.gifterName.length, SPAN_EXCLUSIVE_EXCLUSIVE)
+                    userName = gift.gifterName
+                    userNameStartIndex = nameStart
+                    builderIndex += gift.gifterName.length
+
+                    val notice = if (context != null) {
+                        if (gift.count > 1) {
+                            "\n" + context.getString(R.string.kick_gifted_community_subs, gift.count)
+                        } else {
+                            "\n" + context.getString(R.string.kick_gifted_community_sub)
+                        }
+                    } else {
+                        if (gift.count > 1) {
+                            "\nGifted ${gift.count} subscriptions to the community!"
+                        } else {
+                            "\nGifted a subscription to the community!"
+                        }
+                    }
+                    val noticeStart = builderIndex
+                    builder.append(notice)
+                    builder.setSpan(ForegroundColorSpan(Color.parseColor("#D0D3D6")), noticeStart, noticeStart + notice.length, SPAN_EXCLUSIVE_EXCLUSIVE)
+                    builderIndex += notice.length
+                } else {
+                    val nameStart = builderIndex
+                    builder.append(gift.gifterName)
+                    builder.setSpan(ForegroundColorSpan(gifterColor), nameStart, nameStart + gift.gifterName.length, SPAN_EXCLUSIVE_EXCLUSIVE)
+                    builder.setSpan(StyleSpan(Typeface.BOLD), nameStart, nameStart + gift.gifterName.length, SPAN_EXCLUSIVE_EXCLUSIVE)
+                    userName = gift.gifterName
+                    userNameStartIndex = nameStart
+                    builderIndex += gift.gifterName.length
+
+                    val middleText = " gifted a sub to "
+                    val midStart = builderIndex
+                    builder.append(middleText)
+                    builder.setSpan(ForegroundColorSpan(Color.parseColor("#C8CCD0")), midStart, midStart + middleText.length, SPAN_EXCLUSIVE_EXCLUSIVE)
+                    builderIndex += middleText.length
+
+                    val giftee = gift.gifteeName ?: "a viewer"
+                    val gifteeStart = builderIndex
+                    builder.append(giftee)
+                    builder.setSpan(ForegroundColorSpan(Color.WHITE), gifteeStart, gifteeStart + giftee.length, SPAN_EXCLUSIVE_EXCLUSIVE)
+                    builder.setSpan(StyleSpan(Typeface.BOLD), gifteeStart, gifteeStart + giftee.length, SPAN_EXCLUSIVE_EXCLUSIVE)
+                    builderIndex += giftee.length
                 }
             }
             chatMessage.message.isNullOrBlank() && (chatMessage.systemMsg != null || chatMessage.reward?.title != null) -> {

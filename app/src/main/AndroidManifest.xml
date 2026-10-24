@@ -208,5 +208,23 @@
                 <action android:name="android.app.action.DEVICE_ADMIN_ENABLED" />
             </intent-filter>
         </receiver>
+
+        <receiver
+            android:name=".ui.widget.LiveChannelsWidgetProvider"
+            android:label="@string/live_widget_title"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+                <action android:name="com.xtrakick.app.ACTION_REFRESH_WIDGET" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/live_channels_widget_info" />
+        </receiver>
+
+        <service
+            android:name=".ui.widget.LiveChannelsWidgetService"
+            android:permission="android.permission.BIND_REMOTEVIEWS"
+            android:exported="false" />
     </application>
 </manifest>

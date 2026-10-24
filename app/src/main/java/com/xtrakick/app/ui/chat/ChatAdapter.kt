@@ -2,6 +2,7 @@ package com.xtrakick.app.ui.chat
 
 import android.content.Context
 import android.graphics.Color
+import android.graphics.drawable.Drawable
 import android.graphics.drawable.GradientDrawable
 import android.graphics.drawable.InsetDrawable
 import android.graphics.drawable.Animatable
@@ -86,7 +87,7 @@ class ChatAdapter(
     private var animatedEmoteFps: Int,
     private var enableOverlayEmotes: Boolean,
     private val channelId: String?,
-    private val loggedInUser: String?,
+    var loggedInUser: String?,
     private val messageClickListener: ((String?, ChatMessage?) -> Unit)?,
     private val replyClickListener: (() -> Unit)?,
     private val imageClickListener: ((String?, String?, String?, Boolean?, Int?, Boolean?, String?) -> Unit)?,
@@ -268,7 +269,7 @@ class ChatAdapter(
             rewardChatMsg, replyMessage, null, useRandomColors, random, useReadableColors, isLightTheme, nameDisplay, useBoldNames, showNamePaints,
             namePaints, showStvBadges, showKickBadges, stvBadges, showPersonalEmotes, personalEmoteSets, stvUsers, enableOverlayEmotes, showSystemMessageEmotes,
             loggedInUser, chatUrl, getEmoteBytes, userColors, savedColors, localChatEmotes, thirdPartyEmotes, globalBadges, channelBadges, cheerEmotes, savedLocalChatEmotes, savedLocalBadges,
-            savedLocalCheerEmotes, savedLocalEmotes
+            savedLocalCheerEmotes, savedLocalEmotes, holder.textView.context
         )
         val effectiveEmoteSize = if (chatMessage.isReply) (emoteSize * 0.7f).toInt().coerceAtLeast(12) else emoteSize
         val effectiveBadgeSize = if (chatMessage.isReply) (badgeSize * 0.7f).toInt().coerceAtLeast(10) else badgeSize
@@ -395,6 +396,56 @@ class ChatAdapter(
         }
     }
 
+    private fun createKicksBackgroundDrawable(baseBackgroundColor: Int): Drawable {
+        val density = fragment.resources.displayMetrics.density
+        val cyanBorderColor = Color.parseColor("#00E7C5")
+        val cardColor = ColorUtils.compositeColors(
+            Color.parseColor("#2000E7C5"),
+            ColorUtils.compositeColors(Color.parseColor("#F00C1B20"), baseBackgroundColor)
+        )
+        val cardDrawable = GradientDrawable().apply {
+            shape = GradientDrawable.RECTANGLE
+            cornerRadius = 10f * density
+            setColor(cardColor)
+            setStroke((1.5f * density).toInt().coerceAtLeast(1), cyanBorderColor)
+        }
+        val hInset = (6f * density).toInt()
+        val vInset = (3f * density).toInt()
+        return InsetDrawable(cardDrawable, hInset, vInset, hInset, vInset)
+    }
+
+    private fun createGiftedSubBackgroundDrawable(baseBackgroundColor: Int): LayerDrawable {
+        val density = fragment.resources.displayMetrics.density
+        val accentColor = Color.parseColor("#00E701")
+        val cardColor = ColorUtils.compositeColors(
+            Color.parseColor("#F0181A1D"),
+            baseBackgroundColor
+        )
+        val stripeDrawable = GradientDrawable().apply {
+            shape = GradientDrawable.RECTANGLE
+            cornerRadius = 2f * density
+            setColor(accentColor)
+        }
+        val cardDrawable = GradientDrawable().apply {
+            shape = GradientDrawable.RECTANGLE
+            cornerRadius = 8f * density
+            setColor(cardColor)
+        }
+        val insetCard = InsetDrawable(
+            cardDrawable,
+            (14f * density).toInt(),
+            (2.5f * density).toInt(),
+            (6f * density).toInt(),
+            (2.5f * density).toInt()
+        )
+        return LayerDrawable(arrayOf(stripeDrawable, insetCard)).apply {
+            val leftStripeInset = (8f * density).toInt()
+            val vStripeInset = (2.5f * density).toInt()
+            setLayerInset(0, leftStripeInset, vStripeInset, 0, vStripeInset)
+            setLayerSize(0, (4f * density).toInt().coerceAtLeast(1), -1)
+        }
+    }
+
     override fun onViewAttachedToWindow(holder: ViewHolder) {
         super.onViewAttachedToWindow(holder)
         if (animateGifs) {
@@ -515,11 +566,26 @@ class ChatAdapter(
             val isPrecededByReplyPreview = synchronized(messages) {
                 currentPosition > 0 && ChatListParityUtils.sharesVisualBlockWithPrevious(messages, currentPosition)
             }
+            val isKicksDonation = chatMessage.kicksDonation != null
+            val isGiftedSub = chatMessage.giftedSubInfo != null
             textView.apply {
                 text = formattedMessage
                 textSize = if (chatMessage.isReply) messageTextSize * 0.88f else messageTextSize
                 alpha = if (chatMessage.isDeleted) 0.62f else if (chatMessage.isReply) 0.78f else 1f
                 when {
+                    isKicksDonation -> {
+                        containerView.background = createKicksBackgroundDrawable(resolvedBackgroundColor)
+                        val hPad = (16f * density).toInt()
+                        val vPad = (8f * density).toInt()
+                        setPaddingRelative(hPad, vPad, hPad, vPad)
+                    }
+                    isGiftedSub -> {
+                        containerView.background = createGiftedSubBackgroundDrawable(resolvedBackgroundColor)
+                        val hPadLeft = (22f * density).toInt()
+                        val hPadRight = (12f * density).toInt()
+                        val vPad = (6f * density).toInt()
+                        setPaddingRelative(hPadLeft, vPad, hPadRight, vPad)
+                    }
                     isRewardRedemption && rewardColor != null -> {
                         containerView.background = createRewardBackgroundDrawable(resolvedBackgroundColor, rewardColor)
                         val hPadRewardLeft = (26f * density).toInt()
@@ -607,7 +673,7 @@ class ChatAdapter(
                     }
                 }
             }
-            dividerView.isVisible = dividerColors != null
+            dividerView.isVisible = dividerColors != null && !isKicksDonation && !isGiftedSub
             dividerColors?.let {
                 dividerHighlightView.setBackgroundColor(it.highlightColor)
                 dividerShadowView.setBackgroundColor(it.shadowColor)

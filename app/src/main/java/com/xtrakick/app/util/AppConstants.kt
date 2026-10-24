@@ -35,6 +35,7 @@ object AppConstants {
     const val DOWNLOAD_NOTIFICATION_REQUESTED = "download_notification_requested"
     const val ASPECT_RATIO_LANDSCAPE = "aspectRatioLandscape"
     const val FIRST_LAUNCH = "first_launch"
+    const val KEY_ONBOARDING_COMPLETED = "onboarding_completed_v1"
     const val USAGE_PING_SEED = "usage_ping_seed"
     const val USAGE_PING_LAST_DAY = "usage_ping_last_day"
     const val USAGE_STATS_ENABLED = "usage_stats_enabled"

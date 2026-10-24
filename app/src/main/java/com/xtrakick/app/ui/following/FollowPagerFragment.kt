@@ -43,12 +43,19 @@ import com.xtrakick.app.ui.notifications.NotificationChannelsFragmentDirections
 import android.graphics.Color
 import androidx.appcompat.content.res.AppCompatResources
 import com.google.android.material.color.MaterialColors
+import com.xtrakick.app.repository.LocalFollowChannelRepository
+import com.xtrakick.app.util.AuthStateHelper
+import com.xtrakick.app.util.NotificationPermissionHelper
+import kotlinx.coroutines.flow.merge
 
 @AndroidEntryPoint
 class FollowPagerFragment : Fragment(), Scrollable, FragmentHost, KickFollowImportDialog.CallbackListener {
 
     @Inject
     lateinit var kickFollowImporter: KickFollowImporter
+
+    @Inject
+    lateinit var localFollowChannelRepository: LocalFollowChannelRepository
 
     private var _binding: FragmentMediaPagerBinding? = null
     private val binding get() = _binding!!
@@ -99,12 +106,18 @@ class FollowPagerFragment : Fragment(), Scrollable, FragmentHost, KickFollowImpo
                                             importProgressContainer.alpha = 1f
                                         }
                                         .start()
+                                    activity?.let { act ->
+                                        if (NotificationPermissionHelper.shouldPromptContextual(act)) {
+                                            (act as? MainActivity)?.requestNotificationPermissionWithPrimer()
+                                        }
+                                    }
                                 } else {
                                     importProgressContainer.visibility = View.GONE
                                 }
+                                updateNotificationBanner()
                             }
                             is KickFollowImportState.NeedsManualImport -> {
-                                if (!com.xtrakick.app.util.AuthStateHelper.isKickLoggedIn(requireContext())) {
+                                if (!AuthStateHelper.isKickLoggedIn(requireContext())) {
                                     importProgressContainer.visibility = View.GONE
                                     importProgressContainer.setOnClickListener(null)
                                 } else {
@@ -257,6 +270,40 @@ class FollowPagerFragment : Fragment(), Scrollable, FragmentHost, KickFollowImpo
                 }
                 windowInsets
             }
+
+            btnEnableNotifications.setOnClickListener {
+                activity.requestNotificationPermissionWithPrimer(forcePrompt = true)
+            }
+            btnDismissNotificationBanner.setOnClickListener {
+                val ctx = context ?: return@setOnClickListener
+                NotificationPermissionHelper.markBannerDismissed(ctx)
+                notificationPermissionBanner.visibility = View.GONE
+            }
+            viewLifecycleOwner.lifecycleScope.launch {
+                viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
+                    merge(localFollowChannelRepository.followsChanged, AuthStateHelper.authStateChanged).collect {
+                        updateNotificationBanner()
+                    }
+                }
+            }
+            updateNotificationBanner()
+        }
+    }
+
+    private fun updateNotificationBanner() {
+        val context = context ?: return
+        if (_binding == null) return
+        if (NotificationPermissionHelper.hasPermission(context) ||
+            NotificationPermissionHelper.isBannerDismissed(context)
+        ) {
+            binding.notificationPermissionBanner.visibility = View.GONE
+            return
+        }
+        viewLifecycleOwner.lifecycleScope.launch {
+            val hasFollows = localFollowChannelRepository.loadFollows().isNotEmpty()
+            if (_binding != null && isAdded) {
+                binding.notificationPermissionBanner.visibility = if (hasFollows) View.VISIBLE else View.GONE
+            }
         }
     }
 
@@ -275,9 +322,10 @@ class FollowPagerFragment : Fragment(), Scrollable, FragmentHost, KickFollowImpo
     override fun onResume() {
         super.onResume()
         _binding?.let { b ->
-            val isLoggedIn = com.xtrakick.app.util.AuthStateHelper.isKickLoggedIn(requireContext())
+            val isLoggedIn = AuthStateHelper.isKickLoggedIn(requireContext())
             val isRewardsEnabled = requireContext().prefs().getBoolean(AppConstants.KICK_DAILY_REWARDS_ENABLED, true)
             b.toolbar.menu.findItem(R.id.dailyReward)?.isVisible = isLoggedIn && isRewardsEnabled
+            updateNotificationBanner()
         }
     }
 

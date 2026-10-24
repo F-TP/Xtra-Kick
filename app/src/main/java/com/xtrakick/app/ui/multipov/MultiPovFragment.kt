@@ -78,6 +78,7 @@ import com.xtrakick.app.ui.player.PlayerViewerListDialog
 import com.xtrakick.app.ui.player.VideoZoomController
 import com.xtrakick.app.util.DiagnosticLogger
 import com.xtrakick.app.util.AppConstants
+import com.xtrakick.app.util.AuthStateHelper
 import com.xtrakick.app.util.KickApiHelper
 import com.xtrakick.app.util.NetworkMonitor
 import com.xtrakick.app.util.prefs
@@ -1002,9 +1003,15 @@ class MultiPovFragment : Fragment(), MultiPovStreamPickerDialog.Listener {
             )
             add(getString(R.string.restart_player))
             if (!chatDisabled) {
-                if (isLoggedIn && prefs.getBoolean(AppConstants.PLAYER_MENU_CHAT_BAR, true)) {
+                if (prefs.getBoolean(AppConstants.PLAYER_MENU_CHAT_BAR, true)) {
                     val isChatBarVisible = prefs.getBoolean(AppConstants.KEY_CHAT_BAR_VISIBLE, true)
-                    add(getString(if (isChatBarVisible) R.string.hide_chat_bar else R.string.show_chat_bar))
+                    val labelRes = when {
+                        !isLoggedIn && isChatBarVisible -> R.string.hide_login_prompt
+                        !isLoggedIn && !isChatBarVisible -> R.string.show_login_prompt
+                        isChatBarVisible -> R.string.hide_chat_bar
+                        else -> R.string.show_chat_bar
+                    }
+                    add(getString(labelRes))
                 }
                 if (prefs.getBoolean(AppConstants.PLAYER_MENU_CHAT_TOGGLE, true)) {
                     add(getString(if (isChatOpen) R.string.hide_chat else R.string.show_chat))
@@ -2864,28 +2871,33 @@ class MultiPovFragment : Fragment(), MultiPovStreamPickerDialog.Listener {
 
     fun toggleChatBar() {
         val container = _binding?.chatFragmentContainer ?: return
-        val messageView = container.findViewById<LinearLayout>(R.id.messageView)
+        val messageView = container.findViewById<View>(R.id.messageView)
+        val guestPrompt = container.findViewById<View>(R.id.guestLoginPromptView)
+        val isGuest = !AuthStateHelper.isKickLoggedIn(requireContext())
+        val targetView = if (isGuest) guestPrompt else messageView
         val chatFrag = childFragmentManager.findFragmentById(R.id.chatFragmentContainer) as? ChatFragment
         val prefs = requireContext().prefs()
         if (!isChatOpen) {
             settleChatOpen(open = true, animate = !isPortrait)
-            messageView?.visibility = View.VISIBLE
+            targetView?.visibility = View.VISIBLE
             prefs.edit { putBoolean(AppConstants.KEY_CHAT_BAR_VISIBLE, true) }
             return
         }
-        if (messageView != null) {
-            if (messageView.isVisible) {
-                val chatLayout = container.findViewById<View>(R.id.chatLayout) ?: container
-                (requireContext().getSystemService(Context.INPUT_METHOD_SERVICE) as? InputMethodManager)
-                    ?.hideSoftInputFromWindow(chatLayout.windowToken, 0)
-                chatLayout.clearFocus()
-                if (chatFrag?.emoteMenuIsVisible() == true) {
-                    chatFrag.toggleEmoteMenu(false)
+        if (targetView != null) {
+            if (targetView.isVisible) {
+                if (!isGuest) {
+                    val chatLayout = container.findViewById<View>(R.id.chatLayout) ?: container
+                    (requireContext().getSystemService(Context.INPUT_METHOD_SERVICE) as? InputMethodManager)
+                        ?.hideSoftInputFromWindow(chatLayout.windowToken, 0)
+                    chatLayout.clearFocus()
+                    if (chatFrag?.emoteMenuIsVisible() == true) {
+                        chatFrag.toggleEmoteMenu(false)
+                    }
                 }
-                messageView.visibility = View.GONE
+                targetView.visibility = View.GONE
                 prefs.edit { putBoolean(AppConstants.KEY_CHAT_BAR_VISIBLE, false) }
             } else {
-                messageView.visibility = View.VISIBLE
+                targetView.visibility = View.VISIBLE
                 prefs.edit { putBoolean(AppConstants.KEY_CHAT_BAR_VISIBLE, true) }
             }
         } else {

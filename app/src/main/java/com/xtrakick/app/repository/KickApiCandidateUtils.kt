@@ -206,15 +206,6 @@ object KickApiCandidateUtils {
     }
 
     /**
-     * Whether private Pusher auth should be attempted for remaining channels in this
-     * connect cycle. After any auth failure, further private channels are skipped.
-     */
-    fun shouldAttemptPrivatePusherAuth(
-        previousAuthFailedInCycle: Boolean,
-        hasSocketId: Boolean,
-    ): Boolean = hasSocketId && !previousAuthFailedInCycle
-
-    /**
      * Kick web GETs that MultiPOV/chat re-hits heavily and are safe to short-TTL cache
      * (chatroom document, channel envelope, history). Avoid caching auth/mutations.
      */

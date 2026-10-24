@@ -114,6 +114,7 @@ class PlayerViewModel @Inject constructor(
     val loaded = MutableStateFlow(false)
     private val _isFollowing = MutableStateFlow<Boolean?>(null)
     val isFollowing: StateFlow<Boolean?> = _isFollowing
+    val followsChanged = localFollowsChannel.followsChanged
     val follow = MutableStateFlow<Pair<Boolean, String?>?>(null)
 
 
@@ -588,8 +589,8 @@ class PlayerViewModel @Inject constructor(
         }
     }
 
-    fun isFollowingChannel(userId: String?, channelId: String?, channelLogin: String?, setting: Int, networkLibrary: String?, kickWebHeaders: Map<String, String>, kickPublicApiHeaders: Map<String, String>) {
-        if (_isFollowing.value == null) {
+    fun isFollowingChannel(userId: String?, channelId: String?, channelLogin: String?, setting: Int, networkLibrary: String?, kickWebHeaders: Map<String, String>, kickPublicApiHeaders: Map<String, String>, force: Boolean = false) {
+        if (force || _isFollowing.value == null) {
             viewModelScope.launch {
                 try {
                     if (!(channelId ?: channelLogin).isNullOrBlank()) {
