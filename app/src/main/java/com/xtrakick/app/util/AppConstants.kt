@@ -376,6 +376,9 @@ object AppConstants {
     const val MULTIPOV_BANDWIDTH_SAVING = "multipov_bandwidth_saving"
     const val MULTIPOV_PAUSE_INACTIVE_ON_BACKGROUND = "multipov_pause_inactive_on_background"
     const val MULTIPOV_LAYOUT = "multipov_layout"
+    /** Per-orientation memory: portrait and landscape keep separate presets. */
+    const val MULTIPOV_LAYOUT_PORTRAIT = "multipov_layout_portrait"
+    const val MULTIPOV_LAYOUT_LANDSCAPE = "multipov_layout_landscape"
     const val MULTIPOV_RESIZABLE_SPLIT = "multipov_resizable_split"
     const val MULTIPOV_AUDIO_CROSSFADE = "multipov_audio_crossfade"
     const val MULTIPOV_ADAPTIVE_QUALITY = "multipov_adaptive_quality"

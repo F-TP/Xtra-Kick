@@ -1089,7 +1089,11 @@ class MainViewModel @Inject constructor(
                     } else null
                 }
             } catch (e: Exception) {
-                DiagnosticLogger.e("MainViewModel", "checkUpdates failed", e)
+                if (e is java.io.IOException) {
+                    DiagnosticLogger.w("MainViewModel", "checkUpdates network non-fatal error: ${e.message ?: e.javaClass.simpleName}")
+                } else {
+                    DiagnosticLogger.e("MainViewModel", "checkUpdates failed", e)
+                }
                 null
             }
             updateInfo.emit(updateInfoResult)

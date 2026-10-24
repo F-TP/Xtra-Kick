@@ -1,8 +1,10 @@
 package com.xtrakick.app.model.kick
 
+import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonNames
 
 @Serializable
 class KickLivestreamsResponse(
@@ -174,6 +176,7 @@ class KickWebsiteSearchLivestreams(
     val tags: List<KickLivestream> = emptyList(),
 )
 
+@OptIn(ExperimentalSerializationApi::class)
 @Serializable
 class KickSearchChannel(
     val id: Long? = null,
@@ -184,6 +187,7 @@ class KickSearchChannel(
     val playbackUrl: String? = null,
     @SerialName("followers_count")
     val followersCount: Int? = null,
+    @JsonNames("is_live", "isLive")
     @SerialName("is_live")
     val isLive: Boolean? = null,
     val user: KickUser? = null,

@@ -26,6 +26,7 @@ data class MessageClickedUiState(
     val isLoadingUser: Boolean = false,
     val isFollowing: Boolean = false,
     val canFollow: Boolean = false,
+    val isKickTarget: Boolean = false,
     val isFollowActionInProgress: Boolean = false,
     val isMuted: Boolean = false,
     val isMuteActionInProgress: Boolean = false,
@@ -53,7 +54,6 @@ class MessageClickedViewModel @Inject constructor(
     private var currentTargetId: String? = null
     private var currentTargetLogin: String? = null
     private var currentNetworkLibrary: String? = null
-    private var currentKickWebHeaders: Map<String, String> = emptyMap()
     private var currentKickPublicApiHeaders: Map<String, String> = emptyMap()
     private var currentEnableIntegrity = false
     private var currentIsKick = false
@@ -79,7 +79,6 @@ class MessageClickedViewModel @Inject constructor(
         currentTargetId = targetId?.takeIf { it.isNotBlank() }
         currentTargetLogin = targetLogin?.takeIf { it.isNotBlank() }
         currentNetworkLibrary = networkLibrary
-        currentKickWebHeaders = kickWebHeaders
         currentKickPublicApiHeaders = kickPublicApiHeaders
         currentEnableIntegrity = enableIntegrity
         currentIsKick = isKick
@@ -93,6 +92,7 @@ class MessageClickedViewModel @Inject constructor(
                 isLoadingUser = true,
                 isFollowing = existingFollow != null,
                 canFollow = canFollowChannel,
+                isKickTarget = isKick,
                 isMuted = mutedUser != null,
             )
 
@@ -192,44 +192,74 @@ class MessageClickedViewModel @Inject constructor(
         return null
     }
 
-    fun toggleFollow(displayName: String?) {
+    /** Saves the follow with the chosen source, mirroring the channel-page pattern:
+     * Kick follow = local record with the Kick mask + best-effort account mirror;
+     * local-only = local record without touching the Kick account. */
+    fun follow(kickFollow: Boolean, displayName: String?) {
+        if (!currentIsKick) return
         val userId = currentChannelId
         val channelLogin = currentChannelLogin
-        if (currentIsKick) {
-            if (userId.isNullOrBlank() && channelLogin.isNullOrBlank()) return
-        } else if (userId.isNullOrBlank()) {
-            return
-        }
+        if (userId.isNullOrBlank() && channelLogin.isNullOrBlank()) return
         viewModelScope.launch {
-            if (!currentIsKick && currentKickWebHeaders[AppConstants.HEADER_TOKEN].isNullOrBlank()) {
-                _events.emit("Follow requires a signed-in account.")
-                return@launch
-            }
-            val isFollowing = uiState.value.isFollowing
             uiState.value = uiState.value.copy(isFollowActionInProgress = true)
             try {
-                if (currentIsKick) {
-                    val followUserId = userId ?: channelLogin.orEmpty()
-                    if (isFollowing) {
-                        localFollowChannelRepository.removeLocalFollow(userId, channelLogin)
-                        _events.emit("Unfollowed ${displayName ?: currentChannelName ?: channelLogin ?: "channel"}")
-                    } else {
-                        localFollowChannelRepository.saveFollow(
-                            LocalFollowChannel(
-                                userId = followUserId,
-                                userLogin = channelLogin,
-                                userName = currentChannelName ?: displayName,
-                                channelLogo = currentChannelLogo,
-                            )
-                        )
-                        _events.emit("You're now following ${displayName ?: currentChannelName ?: channelLogin ?: "channel"}")
-                    }
-                    val targetSlug = channelLogin ?: currentChannelName
-                    if (!targetSlug.isNullOrBlank() && kickRepository.hasKickAccountFollowCapability()) {
-                        runCatching { kickRepository.setKickAccountFollow(targetSlug, !isFollowing) }
-                    }
-                    uiState.value = uiState.value.copy(isFollowing = !isFollowing)
+                val name = displayName ?: currentChannelName ?: channelLogin ?: "channel"
+                localFollowChannelRepository.saveFollow(
+                    LocalFollowChannel(
+                        userId = userId ?: channelLogin.orEmpty(),
+                        userLogin = channelLogin,
+                        userName = currentChannelName ?: displayName,
+                        channelLogo = currentChannelLogo,
+                        sourceMask = if (kickFollow) {
+                            AppConstants.FOLLOW_SOURCE_MASK_KICK or AppConstants.FOLLOW_SOURCE_MASK_LOCAL
+                        } else {
+                            AppConstants.FOLLOW_SOURCE_MASK_LOCAL
+                        },
+                    )
+                )
+                val slug = channelLogin?.trim()?.takeIf { it.isNotBlank() }
+                val kickApplied = if (kickFollow && slug != null && kickRepository.hasKickAccountFollowCapability()) {
+                    runCatching { kickRepository.setKickAccountFollow(slug, true) }
+                        .onFailure { DiagnosticLogger.w(TAG, "Kick account follow failed for $slug: ${it.message}") }
+                        .getOrNull() == true
+                } else {
+                    null
                 }
+                _events.emit(
+                    when (kickApplied) {
+                        true -> "You're now following $name on Kick"
+                        false -> "You're now following $name (Kick account sync failed)"
+                        else -> "You're now following $name (local only)"
+                    }
+                )
+                uiState.value = uiState.value.copy(isFollowing = true)
+            } catch (e: Exception) {
+                _events.emit(e.message ?: "Unable to update follow state.")
+            }
+            uiState.value = uiState.value.copy(isFollowActionInProgress = false)
+        }
+    }
+
+    fun unfollow(displayName: String?) {
+        if (!currentIsKick) return
+        val userId = currentChannelId
+        val channelLogin = currentChannelLogin
+        if (userId.isNullOrBlank() && channelLogin.isNullOrBlank()) return
+        viewModelScope.launch {
+            uiState.value = uiState.value.copy(isFollowActionInProgress = true)
+            try {
+                val name = displayName ?: currentChannelName ?: channelLogin ?: "channel"
+                // Only mirror the unfollow onto the Kick account when the record
+                // was a Kick follow — local-only follows never touch the account.
+                val wasKickFollow = localFollowChannelRepository.getFollow(userId, channelLogin)?.isKickFollow == true
+                localFollowChannelRepository.removeLocalFollow(userId, channelLogin)
+                val slug = channelLogin?.trim()?.takeIf { it.isNotBlank() }
+                if (wasKickFollow && slug != null && kickRepository.hasKickAccountFollowCapability()) {
+                    runCatching { kickRepository.setKickAccountFollow(slug, false) }
+                        .onFailure { DiagnosticLogger.w(TAG, "Kick account unfollow failed for $slug: ${it.message}") }
+                }
+                _events.emit("Unfollowed $name")
+                uiState.value = uiState.value.copy(isFollowing = false)
             } catch (e: Exception) {
                 _events.emit(e.message ?: "Unable to update follow state.")
             }

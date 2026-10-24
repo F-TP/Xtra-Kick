@@ -80,8 +80,10 @@ import com.xtrakick.app.ui.multipov.MultiPovFragment
 import com.xtrakick.app.ui.multipov.MultiPovSessionStore
 import com.xtrakick.app.ui.multipov.multiPovKey
 import com.xtrakick.app.ui.player.IvsPlayerFragment
+import com.xtrakick.app.ui.player.IvsPlayerService
 import com.xtrakick.app.ui.player.KickLivePlayback
 import com.xtrakick.app.ui.player.Media3Fragment
+import com.xtrakick.app.ui.player.PlaybackService
 import com.xtrakick.app.ui.player.PlayerFragment
 import com.xtrakick.app.ui.top.TopStreamsFragmentDirections
 import com.xtrakick.app.util.AuthStateHelper
@@ -873,7 +875,12 @@ class MainActivity : AppCompatActivity() {
             }
             INTENT_OPEN_PLAYER -> {
                 multiPovFragment?.maximize()
-                playerFragment?.maximize() //TODO if was closed need to reopen
+                if (playerFragment != null) {
+                    playerFragment?.maximize()
+                } else {
+                    PlaybackService.stopService(this)
+                    IvsPlayerService.stopService(this)
+                }
             }
         }
     }
@@ -933,6 +940,8 @@ class MainActivity : AppCompatActivity() {
         if (streams.isEmpty()) return
         playerFragment?.close()
         playerFragment = null
+        PlaybackService.stopService(this)
+        IvsPlayerService.stopService(this)
         closeMultiPovInternal()
         val fragment = MultiPovFragment.newInstance(
             streams = streams,
@@ -1074,6 +1083,12 @@ class MainActivity : AppCompatActivity() {
         logPlayerShell(
             "startPlayer fragment=${fragment.javaClass.simpleName} replacing=${playerFragment?.javaClass?.simpleName}"
         )
+        // Enforce cross-engine mutual exclusivity: starting IVS stops Media3, starting Media3 stops IVS.
+        if (fragment is IvsPlayerFragment) {
+            PlaybackService.stopService(this)
+        } else if (fragment is Media3Fragment) {
+            IvsPlayerService.stopService(this)
+        }
         closeMultiPovInternal()
         playerFragment?.close()
         playerFragment = fragment
@@ -1093,13 +1108,17 @@ class MainActivity : AppCompatActivity() {
     fun closePlayer() {
         val containerFragment = supportFragmentManager.findFragmentById(R.id.playerContainer)
         if (containerFragment != null) {
+            (containerFragment as? PlayerFragment)?.close()
             supportFragmentManager.beginTransaction()
                 .setTransition(FragmentTransaction.TRANSIT_FRAGMENT_FADE)
                 .remove(containerFragment)
                 .commit()
         }
+        playerFragment?.close()
         playerFragment = null
         multiPovFragment = null
+        PlaybackService.stopService(this)
+        IvsPlayerService.stopService(this)
         viewModel.isPlayerOpened = false
         viewModel.isMultiPovOpened = false
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && packageManager.hasSystemFeature(PackageManager.FEATURE_PICTURE_IN_PICTURE)) {

@@ -1,6 +1,7 @@
 package com.xtrakick.app.ui.player
 
 import android.app.PendingIntent
+import android.content.Context
 import android.content.Intent
 import android.content.SharedPreferences
 import android.media.audiofx.DynamicsProcessing
@@ -354,6 +355,16 @@ class PlaybackService : MediaSessionService() {
                             }, 5000L)
                             return
                         }
+                        if (error.errorCode == PlaybackException.ERROR_CODE_DECODING_FAILED ||
+                            error.errorCodeName == "ERROR_CODE_DECODING_FAILED" ||
+                            error.cause is androidx.media3.exoplayer.mediacodec.MediaCodecDecoderException ||
+                            error.cause is android.media.MediaCodec.CodecException) {
+                            DiagnosticLogger.w(TAG, "background decoding error on video renderer: disabling video track and clearing surface")
+                            player.trackSelectionParameters = player.trackSelectionParameters.buildUpon().apply {
+                                setTrackTypeDisabled(androidx.media3.common.C.TRACK_TYPE_VIDEO, true)
+                            }.build()
+                            player.clearVideoSurface()
+                        }
                         // Cap prepare() retries so a persistent error (DNS down, 5xx,
                         // timeouts) can't loop error→prepare forever in the background.
                         if (backgroundPrepareRetryCount >= BACKGROUND_PREPARE_MAX_RETRIES) {
@@ -410,6 +421,7 @@ class PlaybackService : MediaSessionService() {
                             add(SessionCommand(START_VIDEO, Bundle.EMPTY))
                             add(SessionCommand(START_CLIP, Bundle.EMPTY))
                             add(SessionCommand(START_OFFLINE_VIDEO, Bundle.EMPTY))
+                            add(SessionCommand(STOP_PLAYBACK, Bundle.EMPTY))
                             add(SessionCommand(TOGGLE_DYNAMICS_PROCESSING, Bundle.EMPTY))
                             add(SessionCommand(SET_SLEEP_TIMER, Bundle.EMPTY))
                             add(SessionCommand(GET_QUALITIES, Bundle.EMPTY))
@@ -766,9 +778,26 @@ class PlaybackService : MediaSessionService() {
                                     RESULT to enabled
                                 )))
                             }
+                            STOP_PLAYBACK -> {
+                                DiagnosticLogger.i(TAG, "STOP_PLAYBACK custom command received")
+                                watchOwner.clearMetadata()
+                                clearActiveLiveChannel()
+                                savePosition()
+                                stopIdleTimer()
+                                session.player.clearMediaItems()
+                                session.player.stop()
+                                pauseAllPlayersAndStopSelf()
+                                Futures.immediateFuture(SessionResult(SessionResult.RESULT_SUCCESS))
+                            }
                             SET_SLEEP_TIMER -> {
                                 val duration = customCommand.customExtras.getLong(DURATION)
                                 background = duration != -1L
+                                if (background && prefs().getBoolean(AppConstants.PLAYER_DISABLE_BACKGROUND_VIDEO, true)) {
+                                    session.player.trackSelectionParameters = session.player.trackSelectionParameters.buildUpon().apply {
+                                        setTrackTypeDisabled(androidx.media3.common.C.TRACK_TYPE_VIDEO, true)
+                                    }.build()
+                                    session.player.clearVideoSurface()
+                                }
                                 val endTime = sleepTimerEndTime
                                 sleepTimer?.cancel()
                                 sleepTimerEndTime = 0L
@@ -932,6 +961,23 @@ class PlaybackService : MediaSessionService() {
 
     override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaSession? = mediaSession
 
+    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        if (intent?.action == ACTION_STOP_PLAYBACK) {
+            DiagnosticLogger.i(TAG, "ACTION_STOP_PLAYBACK intent received, stopping service")
+            watchOwner.clearMetadata()
+            clearActiveLiveChannel()
+            savePosition()
+            stopIdleTimer()
+            mediaSession?.player?.run {
+                clearMediaItems()
+                stop()
+            }
+            pauseAllPlayersAndStopSelf()
+            return START_NOT_STICKY
+        }
+        return super.onStartCommand(intent, flags, startId)
+    }
+
     override fun onTaskRemoved(rootIntent: Intent?) {
         savePosition()
         clearActiveLiveChannel()
@@ -1030,6 +1076,7 @@ class PlaybackService : MediaSessionService() {
         const val START_VIDEO = "startVideo"
         const val START_CLIP = "startClip"
         const val START_OFFLINE_VIDEO = "startOfflineVideo"
+        const val STOP_PLAYBACK = "stopPlayback"
         const val TOGGLE_DYNAMICS_PROCESSING = "toggleDynamicsProcessing"
         const val SET_SLEEP_TIMER = "setSleepTimer"
         const val GET_QUALITIES = "getQualities"
@@ -1038,6 +1085,18 @@ class PlaybackService : MediaSessionService() {
         const val GET_MEDIA_PLAYLIST = "getMediaPlaylist"
         const val GET_MULTIVARIANT_PLAYLIST = "getMultivariantPlaylist"
         const val UPDATE_CHANNEL_LOGO = "updateChannelLogo"
+        const val ACTION_STOP_PLAYBACK = "com.xtrakick.app.ACTION_STOP_PLAYBACK"
+
+        fun stopService(context: Context) {
+            try {
+                val intent = Intent(context, PlaybackService::class.java).apply {
+                    action = ACTION_STOP_PLAYBACK
+                }
+                context.startService(intent)
+            } catch (e: Exception) {
+                DiagnosticLogger.w(TAG, "Failed to send stop to PlaybackService", e)
+            }
+        }
 
         const val RESULT = "result"
         const val URI = "uri"

@@ -38,6 +38,7 @@ import androidx.core.content.edit
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.session.DefaultMediaNotificationProvider
 import coil3.imageLoader
+import com.xtrakick.app.util.DiagnosticLogger
 import coil3.request.Disposable
 import coil3.request.ImageRequest
 import coil3.toBitmap
@@ -1370,6 +1371,11 @@ class IvsPlayerService : Service() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         if (intent != null) {
+            if (intent.action == ACTION_STOP_PLAYBACK) {
+                DiagnosticLogger.i(TAG, "ACTION_STOP_PLAYBACK intent received, stopping service")
+                stopPlayback()
+                return START_NOT_STICKY
+            }
             if (Intent.ACTION_MEDIA_BUTTON == intent.action) {
                 val keyEvent = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                     intent.getParcelableExtra(Intent.EXTRA_KEY_EVENT, KeyEvent::class.java)
@@ -1644,6 +1650,18 @@ class IvsPlayerService : Service() {
         private const val REQUEST_CODE_PLAY_PAUSE = 1
         private const val INTENT_PLAY_PAUSE = "com.xtrakick.app.IVS_PLAY_PAUSE"
         const val INTENT_RESUME_BACKGROUND_IF_LOCKED = "com.xtrakick.app.IVS_RESUME_BACKGROUND_IF_LOCKED"
+        const val ACTION_STOP_PLAYBACK = "com.xtrakick.app.IVS_STOP_PLAYBACK"
+
+        fun stopService(context: Context) {
+            try {
+                val intent = Intent(context, IvsPlayerService::class.java).apply {
+                    action = ACTION_STOP_PLAYBACK
+                }
+                context.startService(intent)
+            } catch (e: Exception) {
+                DiagnosticLogger.w(TAG, "Failed to send stop to IvsPlayerService", e)
+            }
+        }
         private const val LAST_PLAYBACK_CHANNEL_ID = "last_playback_channel_id"
         private const val LAST_PLAYBACK_LIVESTREAM_ID = "last_playback_livestream_id"
         private const val LAST_PLAYBACK_CHANNEL_LOGIN = "last_playback_channel_login"

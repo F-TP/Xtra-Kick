@@ -28,6 +28,8 @@ import com.xtrakick.app.model.kick.KickChannelLivestream
 import com.xtrakick.app.model.kick.KickLiveNotificationEvent
 import com.xtrakick.app.model.kick.KickLivestream
 import com.xtrakick.app.model.kick.KickLivestreamsResponse
+import com.xtrakick.app.model.kick.KickChannelMoveEvent
+import com.xtrakick.app.model.kick.KickRealtimeChannelPointsUpdate
 import com.xtrakick.app.model.kick.KickMessage
 import com.xtrakick.app.model.kick.KickMessageBadge
 import com.xtrakick.app.model.kick.KickMessageIdentity
@@ -160,14 +162,6 @@ class KickRepository @Inject constructor(
         val nextCursor: String? = null,
     )
 
-    data class KickRealtimeChannelPointsUpdate(
-        val reason: String? = null,
-        val points: Int? = null,
-        val balance: Int? = null,
-        val userId: String? = null,
-        val channelId: String? = null,
-    )
-
     data class KickVideoPage(
         val videos: List<Video>,
         val nextCursor: String? = null,
@@ -236,6 +230,7 @@ class KickRepository @Inject constructor(
     private val kickWebChromiumMajor by lazy {
         Regex("Chrome/(\\d+)").find(kickWebUserAgent)?.groupValues?.getOrNull(1) ?: "145"
     }
+    private val realtimeEventParsers = KickRealtimeEventParsers(json)
     private val emoteRegex = Regex("\\[emote:(\\d+):([^\\]]+)]")
     private val BADGE_SUFFIX_BADGES_REGEX = Regex("_badges?$")
     private val BADGE_SUFFIX_BADGE_DIGITS_REGEX = Regex("_badge_?\\d*$")
@@ -362,13 +357,6 @@ class KickRepository @Inject constructor(
         val clearTargetUserLogin: String? = null,
         val clearTargetUserName: String? = null,
         val giftTrain: KickGiftTrainSnapshot? = null,
-    )
-
-    data class KickChannelMoveEvent(
-        val raid: Raid,
-        val message: String,
-        val rawEventName: String? = null,
-        val rawPayload: String? = null,
     )
 
     private fun ChannelPointRewardsResult.merge(other: ChannelPointRewardsResult): ChannelPointRewardsResult {
@@ -1244,7 +1232,8 @@ class KickRepository @Inject constructor(
         networkLibrary: String?,
         broadcasterUserId: Long,
         targetUserId: Long,
-        durationSeconds: Int? = null,
+        // Kick official API POST /public/v1/moderation/bans: duration is in MINUTES (1..10080).
+        durationMinutes: Int? = null,
         reason: String? = null,
     ) = withContext(Dispatchers.IO) {
         val accessToken = requireKickAccessToken(networkLibrary)
@@ -1253,7 +1242,7 @@ class KickRepository @Inject constructor(
             request = KickOfficialModerationBanRequest(
                 broadcasterUserId = broadcasterUserId,
                 userId = targetUserId,
-                duration = durationSeconds,
+                duration = durationMinutes,
                 reason = reason?.trim()?.takeIf { it.isNotBlank() },
             )
         )
@@ -1305,7 +1294,7 @@ class KickRepository @Inject constructor(
         channelSlug: String,
         targetUsername: String,
         permanent: Boolean = true,
-        durationSeconds: Int? = null,
+        durationMinutes: Int? = null,
         reason: String? = null,
     ) = withContext(Dispatchers.IO) {
         val slug = channelSlug.trim().takeIf { it.isNotBlank() }
@@ -1318,8 +1307,9 @@ class KickRepository @Inject constructor(
             if (!reason.isNullOrBlank()) {
                 put("reason", reason)
             }
-            if (!permanent && durationSeconds != null && durationSeconds > 0) {
-                put("duration", durationSeconds)
+            if (!permanent && durationMinutes != null && durationMinutes > 0) {
+                // kick.com web sends duration in MINUTES (its Timeout listener posts {duration: minutes}).
+                put("duration", durationMinutes)
             }
         }.toString()
         val url = "https://kick.com/api/v2/channels/${urlEncode(slug)}/bans"
@@ -1340,6 +1330,218 @@ class KickRepository @Inject constructor(
         } else {
             executeKickWebSessionRequest(url, body = payload, post = true)
         }
+    }
+
+    /**
+     * Executes a native Kick chat command (what kick.com web runs when you type a
+     * "/" command in chat), e.g. command="slow", parameter="on 30".
+     * Endpoint and payload verified against kick.com web frontend:
+     * POST api/v2/channels/{slug}/chat-commands, JSON {command: "<word>", parameter?: "<rest>"}.
+     */
+    suspend fun sendKickChatCommand(
+        channelSlug: String,
+        command: String,
+        parameter: String? = null,
+    ) = withContext(Dispatchers.IO) {
+        val slug = channelSlug.trim().takeIf { it.isNotBlank() }
+            ?: throw IllegalArgumentException("channelSlug is required")
+        val commandName = command.trim().removePrefix("/").lowercase().takeIf { it.isNotBlank() }
+            ?: throw IllegalArgumentException("command is required")
+        val payload = JSONObject().apply {
+            put("command", commandName)
+            if (!parameter.isNullOrBlank()) {
+                put("parameter", parameter)
+            }
+        }.toString()
+        val url = "https://kick.com/api/v2/channels/${urlEncode(slug)}/chat-commands"
+        if (AuthStateHelper.isKickGoogleSession(context)) {
+            val mobileToken = context.tokenPrefs().getString(AppConstants.KICK_ACCESS_TOKEN, null)
+                ?.removePrefix("Bearer ")?.trim()?.takeIf { it.isNotBlank() }
+                ?: throw IOException("Kick login is required.")
+            val request = createKickMobileRequestBuilder(url, mobileToken)
+                .header("Content-Type", "application/json")
+                .post(payload.toRequestBody("application/json".toMediaTypeOrNull()))
+                .build()
+            okHttpClient.newCall(request).execute().use { response ->
+                if (response.code == 401) throw KickAuthRequestException.HttpFailure(401)
+                if (!response.isSuccessful) {
+                    val errorBody = response.body.string()
+                    Log.i(tag, "chat-commands HTTP ${response.code} payload=$payload body=${errorBody.take(600)}")
+                    throw IOException(kickChatCommandHttpError(response.code, errorBody))
+                }
+            }
+        } else {
+            executeKickWebSessionRequest(url, body = payload, post = true)
+        }
+    }
+
+    private fun kickChatCommandHttpError(responseCode: Int, responseBody: String): String {
+        return runCatching {
+            val root = JSONObject(responseBody)
+            val message = root.optString("message")
+            val errors = root.optJSONObject("errors")
+            val details = errors?.let { json ->
+                json.keys().asSequence().mapNotNull { key ->
+                    val value = json.optJSONArray(key)?.let { array ->
+                        (0 until array.length()).joinToString(", ") { index -> array.optString(index) }
+                    } ?: json.optString(key).takeIf { it.isNotBlank() }
+                    value?.let { "$key: $it" }
+                }.joinToString("; ")
+            }
+            buildString {
+                append("HTTP $responseCode")
+                if (message.isNotBlank()) append(" - $message")
+                if (!details.isNullOrBlank()) append(" [$details]")
+            }
+        }.getOrNull() ?: "HTTP $responseCode: $responseBody"
+    }
+
+    /**
+     * Updates channel chat modes (emote-only, sub-only, followers-only, slow mode).
+     * Verified from kick.com web: PATCH api/v1/channels/{channelId}/chat/settings
+     * with nested objects; emotes_only_mode / subscribers_only_mode carry {"enabled"},
+     * slow_mode and followers_only_mode also carry duration_seconds (followers
+     * seconds = minutes*60, or 1 when minutes are 0 — exactly what web sends).
+     */
+    suspend fun updateKickChatSettings(
+        channelId: String,
+        emotesMode: Boolean? = null,
+        subscribersMode: Boolean? = null,
+        followersMode: Boolean? = null,
+        followingMinDurationMinutes: Int? = null,
+        slowMode: Boolean? = null,
+        messageIntervalSeconds: Int? = null,
+    ) = withContext(Dispatchers.IO) {
+        val id = channelId.trim().takeIf { it.isNotBlank() }
+            ?: throw IllegalArgumentException("channelId is required")
+        val payload = JSONObject().apply {
+            emotesMode?.let { put("emotes_only_mode", JSONObject().put("enabled", it)) }
+            subscribersMode?.let { put("subscribers_only_mode", JSONObject().put("enabled", it)) }
+            followersMode?.let {
+                val minutes = followingMinDurationMinutes ?: 0
+                val seconds = if (minutes > 0) minutes * 60 else 1
+                put(
+                    "followers_only_mode",
+                    JSONObject().put("enabled", it).put("duration_seconds", seconds),
+                )
+            }
+            slowMode?.let {
+                put(
+                    "slow_mode",
+                    JSONObject().put("enabled", it).put("duration_seconds", messageIntervalSeconds ?: 1),
+                )
+            }
+        }
+        require(payload.length() > 0) { "chat settings payload is empty" }
+        Log.i(tag, "chat settings PATCH payload=$payload")
+        executeKickWebSessionRequest(
+            url = "https://web.kick.com/api/v1/channels/${urlEncode(id)}/chat/settings",
+            body = payload.toString(),
+            method = "PATCH",
+        ).let { }
+    }
+
+    /**
+     * Sets the live stream title. Verified from kick.com web: PATCH
+     * api/v2/channels/{slug}/stream-info with {"stream_title": "..."}. Requires a live stream.
+     */
+    suspend fun updateKickStreamTitle(
+        channelSlug: String,
+        streamTitle: String,
+    ) = withContext(Dispatchers.IO) {
+        val slug = channelSlug.trim().takeIf { it.isNotBlank() }
+            ?: throw IllegalArgumentException("channelSlug is required")
+        val title = streamTitle.trim().takeIf { it.isNotBlank() }
+            ?: throw IllegalArgumentException("streamTitle is required")
+        val payload = JSONObject().apply { put("stream_title", title) }.toString()
+        val url = "https://kick.com/api/v2/channels/${urlEncode(slug)}/stream-info"
+        if (AuthStateHelper.isKickGoogleSession(context)) {
+            val mobileToken = context.tokenPrefs().getString(AppConstants.KICK_ACCESS_TOKEN, null)
+                ?.removePrefix("Bearer ")?.trim()?.takeIf { it.isNotBlank() }
+                ?: throw IOException("Kick login is required.")
+            val request = createKickMobileRequestBuilder(url, mobileToken)
+                .header("Content-Type", "application/json")
+                .patch(payload.toRequestBody("application/json".toMediaTypeOrNull()))
+                .build()
+            okHttpClient.newCall(request).execute().use { response ->
+                if (response.code == 401) throw KickAuthRequestException.HttpFailure(401)
+                if (!response.isSuccessful) {
+                    throw IOException(kickChatCommandHttpError(response.code, response.body.string()))
+                }
+            }
+        } else {
+            executeKickWebSessionRequest(url, body = payload, method = "PATCH")
+        }.let { }
+    }
+
+    /**
+     * Adds or removes a community role (moderator, vip, og). Verified from kick.com web:
+     * POST api/internal/v1/channels/{slug}/community/{role}s {"username": ...} to add,
+     * DELETE api/internal/v1/channels/{slug}/community/{role}s/{username} to remove.
+     */
+    private fun kickCommunityRole(role: String): String {
+        return role.trim().lowercase().takeIf { it == "moderator" || it == "vip" || it == "og" }
+            ?: throw IllegalArgumentException("unsupported community role")
+    }
+
+    suspend fun addKickChannelCommunityRole(
+        channelSlug: String,
+        role: String,
+        username: String,
+    ) = withContext(Dispatchers.IO) {
+        val slug = channelSlug.trim().takeIf { it.isNotBlank() }
+            ?: throw IllegalArgumentException("channelSlug is required")
+        val normalizedRole = kickCommunityRole(role)
+        val target = username.trim().removePrefix("@")
+        require(target.isNotBlank()) { "username is required" }
+        val payload = JSONObject().apply { put("username", target) }.toString()
+        val url = "https://kick.com/api/internal/v1/channels/${urlEncode(slug)}/community/${normalizedRole}s"
+        if (AuthStateHelper.isKickGoogleSession(context)) {
+            val mobileToken = context.tokenPrefs().getString(AppConstants.KICK_ACCESS_TOKEN, null)
+                ?.removePrefix("Bearer ")?.trim()?.takeIf { it.isNotBlank() }
+                ?: throw IOException("Kick login is required.")
+            val request = createKickMobileRequestBuilder(url, mobileToken)
+                .header("Content-Type", "application/json")
+                .post(payload.toRequestBody("application/json".toMediaTypeOrNull()))
+                .build()
+            okHttpClient.newCall(request).execute().use { response ->
+                if (response.code == 401) throw KickAuthRequestException.HttpFailure(401)
+                if (!response.isSuccessful) {
+                    throw IOException(kickChatCommandHttpError(response.code, response.body.string()))
+                }
+            }
+        } else {
+            executeKickWebSessionRequest(url, body = payload, post = true)
+        }.let { }
+    }
+
+    suspend fun removeKickChannelCommunityRole(
+        channelSlug: String,
+        role: String,
+        username: String,
+    ) = withContext(Dispatchers.IO) {
+        val slug = channelSlug.trim().takeIf { it.isNotBlank() }
+            ?: throw IllegalArgumentException("channelSlug is required")
+        val normalizedRole = kickCommunityRole(role)
+        val target = username.trim().removePrefix("@")
+        require(target.isNotBlank()) { "username is required" }
+        val url = "https://kick.com/api/internal/v1/channels/${urlEncode(slug)}/community/${normalizedRole}s/${urlEncode(target)}"
+        if (AuthStateHelper.isKickGoogleSession(context)) {
+            val mobileToken = context.tokenPrefs().getString(AppConstants.KICK_ACCESS_TOKEN, null)
+                ?.removePrefix("Bearer ")?.trim()?.takeIf { it.isNotBlank() }
+                ?: throw IOException("Kick login is required.")
+            val request = createKickMobileRequestBuilder(url, mobileToken)
+                .delete()
+                .build()
+            okHttpClient.newCall(request).execute().use { response ->
+                if (response.code == 401) throw KickAuthRequestException.HttpFailure(401)
+                if (!response.isSuccessful && response.code != 404) {
+                    throw IOException(kickChatCommandHttpError(response.code, response.body.string()))
+                }
+            }
+        } else {
+            executeKickWebSessionRequest(url, method = "DELETE")
+        }.let { }
     }
 
     suspend fun unbanKickChannelUser(
@@ -1488,15 +1690,7 @@ class KickRepository @Inject constructor(
     }
 
     fun shouldRefreshRoomStateFromRealtimeEvent(eventName: String?, messageJson: String): Boolean {
-        val normalizedEvent = eventName?.lowercase(Locale.ROOT).orEmpty()
-        if (normalizedEvent.contains("chatroomupdatedevent")) {
-            return true
-        }
-        val root = runCatching { json.parseToJsonElement(messageJson) }.getOrNull() ?: return false
-        return findInterestingKeyPaths(
-            root,
-            setOf("slow", "follower", "follow", "subscriber", "sub", "emote", "unique", "r9k", "interval")
-        ).isNotEmpty()
+        return realtimeEventParsers.shouldRefreshRoomStateFromRealtimeEvent(eventName, messageJson)
     }
 
     fun parseKickRealtimeEvent(eventName: String?, messageJson: String): KickRealtimeParsedEvent? {
@@ -1764,212 +1958,28 @@ class KickRepository @Inject constructor(
     }
 
     fun parseKickChannelMoveEvent(eventName: String?, messageJson: String): KickChannelMoveEvent? {
-        val normalizedEvent = eventName?.trim()?.lowercase(Locale.ROOT).orEmpty()
-        if (normalizedEvent !in setOf(
-                "chatmovetosupportedchannelevent",
-                "app\\events\\chatmovetosupportedchannelevent",
-            )
-        ) {
-            return null
-        }
-        val root = runCatching { json.parseToJsonElement(messageJson).jsonObject }.getOrNull() ?: return null
-        val channel = root.objOrNull("channel")
-        val hosted = root.objOrNull("hosted")
-            ?: channel?.objOrNull("hosted")
-            ?: root.objOrNull("target")
-            ?: root.objOrNull("destination")
-            ?: return null
-        val targetLogin = hosted.firstPrimitiveOrNull("slug", "channel_slug", "login")
-            ?: hosted.primitiveOrNull("username")?.lowercase(Locale.ROOT)
-            ?: root.firstPrimitiveOrNull("slug", "hosted_slug", "target_slug")
-        val targetName = hosted.firstPrimitiveOrNull("username", "name", "slug")
-            ?: targetLogin
-        val targetId = hosted.firstPrimitiveOrNull("id", "channel_id")
-            ?: channel?.firstPrimitiveOrNull("id", "channel_id")
-        if (targetLogin.isNullOrBlank() && targetId.isNullOrBlank()) {
-            return null
-        }
-        val viewerCount = hosted.firstLongOrNull("viewers_count", "viewer_count", "number_viewers", "numberOfViewers")
-            ?: root.firstLongOrNull("viewers_count", "viewer_count", "number_viewers", "numberOfViewers")
-        val countdownSeconds = root.firstLongOrNull(
-            "countdown_seconds",
-            "remaining_seconds",
-            "move_in_seconds",
-            "redirect_in_seconds",
-            "duration",
-            "remaining",
-        ) ?: hosted.firstLongOrNull(
-            "countdown_seconds",
-            "remaining_seconds",
-            "move_in_seconds",
-            "redirect_in_seconds",
-            "duration",
-            "remaining",
-        )
-        val profileImage = hosted.firstPrimitiveOrNull("profile_pic", "profile_picture", "profile_image")
-        val sourceSlug = channel?.firstPrimitiveOrNull("slug", "channel_slug")
-            ?: root.firstPrimitiveOrNull("source_slug", "from_slug", "channel_slug")
-        val message = buildString {
-            if (!sourceSlug.isNullOrBlank()) {
-                append(sourceSlug)
-                append(" moved viewers to ")
-            } else {
-                append("Moving viewers to ")
-            }
-            append(targetName ?: targetLogin ?: targetId)
-            viewerCount?.takeIf { it > 0 }?.let {
-                append(" with ")
-                append(it)
-                append(" viewers")
-            }
-        }
-        val parsedCountdownSeconds = countdownSeconds?.toInt()
-        val effectiveCountdownSeconds = when {
-            parsedCountdownSeconds == null -> 10
-            parsedCountdownSeconds > 0 -> parsedCountdownSeconds
-            else -> null
-        }
-        return KickChannelMoveEvent(
-            raid = Raid(
-                raidId = "kick_move:${targetId ?: targetLogin}:${root.primitiveOrNull("created_at") ?: messageJson.hashCode()}",
-                targetId = targetId,
-                targetLogin = targetLogin,
-                targetName = targetName,
-                targetProfileImage = profileImage,
-                viewerCount = viewerCount?.toInt(),
-                countdownSeconds = effectiveCountdownSeconds,
-                openStream = effectiveCountdownSeconds == null,
-            ),
-            message = message,
-            rawEventName = eventName,
-            rawPayload = messageJson,
-        )
+        return realtimeEventParsers.parseKickChannelMoveEvent(eventName, messageJson)
     }
 
     fun parseKickRealtimeChannelPointsUpdate(eventName: String?, messageJson: String): KickRealtimeChannelPointsUpdate? {
-        val normalizedEvent = eventName?.trim()?.lowercase(Locale.ROOT).orEmpty()
-        if (normalizedEvent != "pointsupdated") {
-            return null
-        }
-        val root = runCatching { json.parseToJsonElement(messageJson).jsonObject }.getOrNull() ?: return null
-        return KickRealtimeChannelPointsUpdate(
-            reason = root.primitiveOrNull("reason"),
-            points = (root["points"] as? JsonPrimitive)?.intOrNull,
-            balance = (root["balance"] as? JsonPrimitive)?.intOrNull,
-            userId = root.primitiveOrNull("user_id"),
-            channelId = root.primitiveOrNull("channel_id"),
-        )
+        return realtimeEventParsers.parseKickRealtimeChannelPointsUpdate(eventName, messageJson)
     }
 
     fun parseKickRealtimePredictionUpdate(eventName: String?, messageJson: String): Prediction? {
-        val normalizedEvent = eventName?.trim()?.lowercase(Locale.ROOT).orEmpty()
-        if (normalizedEvent !in setOf(
-                "predictioncreated",
-                "predictionupdated",
-                "predictionlocked",
-                "predictionended",
-                "predictionresolved",
-                "predictioncancelled",
-            )
-        ) {
-            return null
-        }
-        val root = runCatching { json.parseToJsonElement(messageJson).jsonObject }.getOrNull() ?: return null
-        val predictionObject = root.objOrNull("prediction") ?: root
-        return parseKickPredictionObject(
-            predictionObject = predictionObject,
-            userVoteObject = root.objOrNull("user_vote"),
-            normalizedEvent = normalizedEvent,
-        )
+        return realtimeEventParsers.parseKickRealtimePredictionUpdate(eventName, messageJson)
     }
 
     fun parseKickRealtimePollUpdate(eventName: String?, messageJson: String): Poll? {
-        val normalizedEvent = eventName?.trim()?.lowercase(Locale.ROOT).orEmpty()
-        if (normalizedEvent != "app\\events\\pollupdateevent") {
-            return null
-        }
-        val root = runCatching { json.parseToJsonElement(messageJson).jsonObject }.getOrNull() ?: return null
-        val pollObject = root.objOrNull("poll") ?: root
-        return parseKickPollObject(pollObject)
+        return realtimeEventParsers.parseKickRealtimePollUpdate(eventName, messageJson)
     }
 
     fun parseKickLiveNotificationEvent(eventName: String?, messageJson: String): KickLiveNotificationEvent? {
-        val normalized = eventName?.trim().orEmpty()
-        if (!normalized.equals("NotifyFollowersStreamHasStarted", ignoreCase = true) &&
-            !normalized.equals("App\\Events\\NotifyFollowersStreamHasStarted", ignoreCase = true)
-        ) {
-            return null
-        }
-        return runCatching {
-            json.decodeFromString<KickLiveNotificationEvent>(messageJson)
-        }.getOrNull()
+        return realtimeEventParsers.parseKickLiveNotificationEvent(eventName, messageJson)
     }
 
     /** Viewer count pushed via `App\Events\LivestreamUpdated` (official `useViewCountWSHandler`). */
     fun parseKickLivestreamViewerCount(eventName: String?, messageJson: String): Int? {
-        val normalized = eventName?.trim().orEmpty()
-        if (normalized.isBlank()) return null
-        val lower = normalized.lowercase(Locale.ROOT)
-        val isLivestreamEvent = lower == "app\\events\\livestreamupdated" ||
-            lower == "livestreamupdated" ||
-            lower == "livestream.updated" ||
-            lower == "livestream_update" ||
-            lower == "livestream.viewer_count.updated"
-        if (!isLivestreamEvent) return null
-        return extractViewerCountFromRealtimeJson(messageJson)
-    }
-
-    private fun extractViewerCountFromRealtimeJson(messageJson: String): Int? {
-        val root = runCatching { json.parseToJsonElement(messageJson) }.getOrNull() ?: return null
-        val queue = ArrayDeque<JsonElement>()
-        queue.add(root)
-        var visits = 0
-        while (queue.isNotEmpty() && visits++ < 8) {
-            val element = queue.removeFirst() as? JsonObject ?: continue
-            directViewerCount(element)?.let { return it }
-            element["livestream"]?.let(queue::add)
-            for (key in listOf("data", "payload", "message")) {
-                val child = element[key] ?: continue
-                val inner = (child as? JsonPrimitive)?.contentOrNull?.let { raw ->
-                    runCatching { json.parseToJsonElement(raw) }.getOrNull()
-                }
-                if (inner != null) queue.add(inner) else if (child is JsonObject) queue.add(child)
-            }
-        }
-        return null
-    }
-
-    private fun directViewerCount(obj: JsonObject?): Int? {
-        if (obj == null) return null
-        for (key in listOf("viewer_count", "viewers_count", "viewers", "view_count", "viewerCount", "total_viewers")) {
-            (obj[key] as? JsonPrimitive)?.let { primitive ->
-                val parsed = primitive.intOrNull ?: primitive.contentOrNull?.toIntOrNull()
-                if (parsed != null && parsed >= 0) return parsed
-            }
-        }
-        return null
-    }
-
-    fun parseKickWebPollResponse(raw: String): Poll? {
-        val root = runCatching { json.parseToJsonElement(raw).jsonObject }.getOrNull() ?: return null
-        val data = root.objOrNull("data") ?: root
-        val pollObject = data.objOrNull("poll") ?: return null
-        return parseKickPollObject(pollObject)
-    }
-
-    fun parseKickWebPredictionResponse(raw: String): Prediction? {
-        val root = runCatching { json.parseToJsonElement(raw).jsonObject }.getOrNull() ?: return null
-        val data = root.objOrNull("data") ?: root
-        val predictionObject = data.objOrNull("prediction") ?: return null
-        return parseKickPredictionObject(
-            predictionObject = predictionObject,
-            userVoteObject = data.objOrNull("user_vote") ?: root.objOrNull("user_vote"),
-            normalizedEvent = null,
-        )
-    }
-
-    fun parseKickWebPredictionVoteResponse(raw: String): Prediction? {
-        return parseKickWebPredictionResponse(raw)
+        return realtimeEventParsers.parseKickLivestreamViewerCount(eventName, messageJson)
     }
 
     suspend fun voteKickWebPoll(
@@ -1982,7 +1992,7 @@ class KickRepository @Inject constructor(
         val body = buildJsonObject {
             put("id", JsonPrimitive(choiceId))
         }.toString()
-        parseKickWebPollResponse(executeKickWebSessionRequest(url, body, post = true))
+        realtimeEventParsers.parseKickWebPollResponse(executeKickWebSessionRequest(url, body, post = true))
     }
 
     suspend fun voteKickWebPrediction(
@@ -2000,90 +2010,14 @@ class KickRepository @Inject constructor(
             put("amount", JsonPrimitive(amount))
             put("outcome_id", JsonPrimitive(normalizedOutcomeId))
         }.toString()
-        parseKickWebPredictionResponse(executeKickWebSessionRequest(url, body, post = true))
+        realtimeEventParsers.parseKickWebPredictionResponse(executeKickWebSessionRequest(url, body, post = true))
     }
 
     suspend fun getLatestKickPrediction(channelSlug: String): Prediction? = withContext(Dispatchers.IO) {
         val normalizedChannelSlug = channelSlug.trim().takeIf { it.isNotBlank() }
             ?: throw IllegalArgumentException("channel slug is required")
         val url = "https://kick.com/api/v2/channels/${urlEncode(normalizedChannelSlug)}/predictions/latest"
-        parseKickWebPredictionResponse(executeKickWebSessionRequest(url))
-    }
-
-    private fun parseKickPollObject(pollObject: JsonObject): Poll {
-        val choices = pollObject.arrayOrNull("options").orEmpty().mapNotNull { element ->
-            val option = element as? JsonObject ?: return@mapNotNull null
-            val title = option.firstPrimitiveOrNull("label", "title")?.takeIf { it.isNotBlank() } ?: return@mapNotNull null
-            Poll.PollChoice(
-                id = option.firstLongOrNull("id", "option_id")?.toInt(),
-                title = title,
-                totalVotes = option.firstLongOrNull("votes", "total_votes", "vote_count")?.toInt(),
-            )
-        }
-        val totalVotes = choices.sumOf { it.totalVotes ?: 0 }
-        val remainingSeconds = pollObject.firstLongOrNull("remaining", "remaining_seconds")
-        val status = when {
-            !pollObject.primitiveOrNull("status").isNullOrBlank() -> pollObject.primitiveOrNull("status")
-            remainingSeconds == null -> "ACTIVE"
-            remainingSeconds <= 0L -> "COMPLETED"
-            else -> "ACTIVE"
-        }
-        return Poll(
-            id = pollObject.firstPrimitiveOrNull("poll_id", "id", "title"),
-            title = pollObject.primitiveOrNull("title"),
-            status = status,
-            choices = choices,
-            totalVotes = totalVotes,
-            remainingMilliseconds = remainingSeconds?.times(1000)?.toInt(),
-            resultDisplayMilliseconds = pollObject.firstLongOrNull("result_display_duration", "result_display_seconds")?.times(1000)?.toInt(),
-            hasVoted = pollObject["has_voted"]?.let { (it as? JsonPrimitive)?.contentOrNull?.toBooleanStrictOrNull() ?: (it as? JsonPrimitive)?.intOrNull?.let { intValue -> intValue != 0 } },
-            votedChoiceId = pollObject.firstLongOrNull("voted_option_id", "voted_choice_id")?.toInt(),
-        )
-    }
-
-    private fun parseKickPredictionObject(
-        predictionObject: JsonObject,
-        userVoteObject: JsonObject? = null,
-        normalizedEvent: String? = null,
-    ): Prediction {
-        val outcomes = predictionObject.arrayOrNull("outcomes").orEmpty().mapNotNull { element ->
-            val outcome = element as? JsonObject ?: return@mapNotNull null
-            val title = outcome.primitiveOrNull("title")?.takeIf { it.isNotBlank() } ?: return@mapNotNull null
-            Prediction.PredictionOutcome(
-                id = outcome.primitiveOrNull("id"),
-                title = title,
-                totalPoints = outcome.firstLongOrNull("total_points", "total_vote_amount")?.toInt(),
-                totalUsers = outcome.firstLongOrNull("total_users", "vote_count")?.toInt(),
-                returnRate = (outcome["return_rate"] as? JsonPrimitive)?.contentOrNull?.toDoubleOrNull(),
-                isWinner = outcome.firstBooleanOrNull("is_winner", "winner", "won", "isWinningOutcome")
-                    ?: outcome.firstPrimitiveOrNull("status", "state", "result")?.equals("won", ignoreCase = true),
-            )
-        }
-        val status = predictionObject.firstPrimitiveOrNull("status", "state") ?: when (normalizedEvent) {
-            "predictionlocked" -> "LOCKED"
-            "predictionresolved", "predictionended" -> "RESOLVED"
-            "predictioncancelled" -> "CANCELED"
-            else -> null
-        }
-        val winningOutcomeId = predictionObject.firstPrimitiveOrNull("winning_outcome_id", "winningOutcomeId")
-            ?: outcomes.firstOrNull { it.isWinner == true }?.id
-        return Prediction(
-            id = predictionObject.primitiveOrNull("id"),
-            createdAt = predictionObject.primitiveOrNull("created_at")?.let(KickApiHelper::parseIso8601DateUTC),
-            endedAt = predictionObject.firstPrimitiveOrNull("ended_at", "resolved_at", "closed_at", "updated_at")
-                ?.let(KickApiHelper::parseIso8601DateUTC),
-            outcomes = outcomes,
-            predictionWindowSeconds = predictionObject.firstLongOrNull("prediction_window_seconds", "duration")?.toInt(),
-            status = status,
-            title = predictionObject.primitiveOrNull("title"),
-            winningOutcomeId = winningOutcomeId,
-            userVote = userVoteObject?.let {
-                Prediction.UserVote(
-                    outcomeId = it.primitiveOrNull("outcome_id")?.takeIf { outcomeId -> outcomeId.isNotBlank() },
-                    totalVoteAmount = it.firstLongOrNull("total_vote_amount")?.toInt(),
-                )
-            },
-        )
+        realtimeEventParsers.parseKickWebPredictionResponse(executeKickWebSessionRequest(url))
     }
 
     suspend fun authorizeKickPusherPrivateChannel(socketId: String, channelName: String): String? = withContext(Dispatchers.IO) {
@@ -6090,62 +6024,14 @@ class KickRepository @Inject constructor(
         return URLEncoder.encode(value, Charsets.UTF_8.name())
     }
 
-    private fun JsonObject.primitiveOrNull(key: String): String? {
-        return (this[key] as? JsonPrimitive)?.contentOrNull
-    }
-
-    private fun JsonObject.intOrNull(key: String): Int? {
-        val primitive = this[key] as? JsonPrimitive ?: return null
-        return primitive.intOrNull ?: primitive.contentOrNull?.toIntOrNull()
-    }
-
-    private fun JsonObject.firstPrimitiveOrNull(vararg keys: String): String? {
-        keys.forEach { key ->
-            primitiveOrNull(key)?.let { return it }
-        }
-        return null
-    }
-
-    private fun JsonObject.firstLongOrNull(vararg keys: String): Long? {
-        keys.forEach { key ->
-            (this[key] as? JsonPrimitive)?.let { primitive ->
-                primitive.longOrNull?.let { return it }
-                primitive.contentOrNull?.toLongOrNull()?.let { return it }
-            }
-        }
-        return null
-    }
-
-    private fun JsonObject.firstBooleanOrNull(vararg keys: String): Boolean? {
-        keys.forEach { key ->
-            (this[key] as? JsonPrimitive)?.let { primitive ->
-                primitive.contentOrNull?.toBooleanStrictOrNull()?.let { return it }
-                primitive.intOrNull?.let { return it != 0 }
-            }
-        }
-        return null
-    }
-
-    private fun JsonObject.objOrNull(key: String): JsonObject? {
-        return this[key] as? JsonObject
-    }
-
-    private fun JsonObject.firstObjectOrNull(vararg keys: String): JsonObject? {
-        keys.forEach { key ->
-            objOrNull(key)?.let { return it }
-        }
-        return null
-    }
-
-    private fun JsonObject.arrayOrNull(key: String): JsonArray? {
-        return this[key] as? JsonArray
-    }
-
-    private fun JsonElement?.asBooleanOrNull(): Boolean? {
-        val primitive = this as? JsonPrimitive ?: return null
-        return when (primitive.contentOrNull?.trim()?.lowercase(Locale.ROOT)) {
-            "1", "true", "yes", "active", "subscribed" -> true
-            "0", "false", "no", "inactive", "unsubscribed" -> false
+    private fun JsonElement?.asJsonObjectOrNull(): JsonObject? {
+        return when (this) {
+            is JsonObject -> this
+            is JsonPrimitive -> contentOrNull
+                ?.takeIf { it.isNotBlank() }
+                ?.let { raw ->
+                    runCatching { json.parseToJsonElement(raw) as? JsonObject }.getOrNull()
+                }
             else -> null
         }
     }
@@ -6418,51 +6304,6 @@ class KickRepository @Inject constructor(
         return replace(Regex("\\s+"), " ")
             .trim()
             .take(limit)
-    }
-
-    private fun findInterestingKeyPaths(root: JsonElement?, fragments: Set<String>): List<String> {
-        if (root == null) return emptyList()
-        val matches = mutableListOf<String>()
-
-        fun walk(element: JsonElement, path: List<String>) {
-            when (element) {
-                is JsonObject -> {
-                    element.forEach { (key, value) ->
-                        val lower = key.lowercase(Locale.ROOT)
-                        val nextPath = path + key
-                        if (fragments.any { lower.contains(it) }) {
-                            matches += nextPath.joinToString(".")
-                        }
-                        if (matches.size < 32) {
-                            walk(value, nextPath)
-                        }
-                    }
-                }
-                is JsonArray -> {
-                    element.forEachIndexed { index, child ->
-                        if (matches.size < 32) {
-                            walk(child, path + "[$index]")
-                        }
-                    }
-                }
-                else -> Unit
-            }
-        }
-
-        walk(root, emptyList())
-        return matches.distinct()
-    }
-
-    private fun JsonElement?.asJsonObjectOrNull(): JsonObject? {
-        return when (this) {
-            is JsonObject -> this
-            is JsonPrimitive -> contentOrNull
-                ?.takeIf { it.isNotBlank() }
-                ?.let { raw ->
-                    runCatching { json.parseToJsonElement(raw) as? JsonObject }.getOrNull()
-                }
-            else -> null
-        }
     }
 
     private fun JsonElement?.asLongOrNull(): Long? {

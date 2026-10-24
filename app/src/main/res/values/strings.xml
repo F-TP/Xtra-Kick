@@ -168,6 +168,8 @@
     <string name="chat_mode_subs_only">Subs only</string>
     <string name="chat_mode_emote_only">Emote only</string>
     <string name="chat_mode_unique">Unique chat</string>
+    <string name="chat_modes_updated">Chat modes updated: %s</string>
+    <string name="chat_modes_none">none</string>
     <string name="copy_clip">Copy to clipboard</string>
     <string name="chat_clear">Chat has been cleared by a moderator.</string>
     <string name="chat_timeout">%1$s has been timed out for %2$s.</string>
@@ -435,6 +437,7 @@
     <string name="save" translatable="false">Save</string>
     <string name="kick_scope_required" translatable="false">Kick scope required: %1$s</string>
     <string name="kick_scope_required_multiple" translatable="false">Kick scopes required: %1$s</string>
+    <string name="kick_command_needs_oauth" translatable="false">Kick commands need OAuth login - Google login tokens are rejected by api.kick.com. Log in with Kick instead.</string>
     <string name="kick_reward_empty" translatable="false">No Kick rewards found.</string>
     <string name="kick_redemptions_empty" translatable="false">No Kick redemptions matched the current filter.</string>
     <string name="kick_subscriptions_empty" translatable="false">No Kick event subscriptions found.</string>
@@ -1069,8 +1072,8 @@ These are downloads you removed while keeping the files. Android hides this fold
     <string name="multipov_quality_source">Source</string>
     <string name="multipov_max_reached">MultiPOV is full (max 8 streams)</string>
     <string name="multipov_close_confirm">Close MultiPOV and stop all streams?</string>
-    <string name="multipov_search_hint">No matching channels. Try another name.</string>
-    <string name="multipov_picker_search_hint">Search channels…</string>
+    <string name="multipov_search_hint">No matching channels or categories.</string>
+    <string name="multipov_picker_search_hint">Search channels or categories…</string>
     <string name="multipov_picker_followed_live">Live followed</string>
     <string name="multipov_picker_top_live">Live streams</string>
     <string name="multipov_picker_search_results">Search results</string>

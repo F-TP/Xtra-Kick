@@ -26,6 +26,17 @@ import com.xtrakick.app.util.prefs
 import java.util.Locale
 import kotlin.math.abs
 
+/**
+ * Slash command suggestion for the chat input "/" autocomplete.
+ * Displays as "/command <hint>" and inserts "/command ".
+ */
+data class SlashCommand(
+    val command: String,
+    val hint: String? = null,
+) {
+    override fun toString(): String = if (hint.isNullOrBlank()) "/$command" else "/$command $hint"
+}
+
 class AutoCompleteAdapter(
     private val context: Context,
     private val onItemClick: (Any) -> Unit
@@ -139,6 +150,7 @@ class AutoCompleteAdapter(
                 val name = when {
                     prefix == ':' && item is Emote -> item.name ?: continue
                     prefix == '@' && item is Chatter -> item.name ?: continue
+                    prefix == '/' && item is SlashCommand -> item.command
                     else -> continue
                 }
                 val rank = getMatchRank(queryBody, name)

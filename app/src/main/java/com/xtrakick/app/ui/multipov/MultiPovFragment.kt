@@ -111,6 +111,8 @@ class MultiPovFragment : Fragment(), MultiPovStreamPickerDialog.Listener {
     /** Slot keys + layout/orientation signature used to decide when to rebuild the grid. */
     private var lastGridSignature: List<String> = emptyList()
     private var isPortrait = true
+    /** Current IME bottom inset (px) in portrait; 0 when the keyboard is hidden. */
+    private var keyboardInsetBottom = 0
     private var isChatOpen = true
     var isMaximized = true
         private set
@@ -349,10 +351,10 @@ class MultiPovFragment : Fragment(), MultiPovStreamPickerDialog.Listener {
         ViewCompat.setOnApplyWindowInsetsListener(root) { _, windowInsets ->
             val ignoreCutouts = root.context.prefs().getBoolean(AppConstants.UI_DRAW_BEHIND_CUTOUTS, false)
             val insets = if (!isPortrait && ignoreCutouts) {
-                windowInsets.getInsets(WindowInsetsCompat.Type.systemBars())
+                windowInsets.getInsets(WindowInsetsCompat.Type.systemBars() or WindowInsetsCompat.Type.ime())
             } else {
                 windowInsets.getInsets(
-                    WindowInsetsCompat.Type.systemBars() or WindowInsetsCompat.Type.displayCutout()
+                    WindowInsetsCompat.Type.systemBars() or WindowInsetsCompat.Type.ime() or WindowInsetsCompat.Type.displayCutout()
                 )
             }
             // Portrait keeps the status bar visible like the solo player — the
@@ -372,8 +374,15 @@ class MultiPovFragment : Fragment(), MultiPovStreamPickerDialog.Listener {
                 right = insets.right,
                 bottom = insets.bottom,
             )
-            // Keep chat clear of nav bar / gesture bar when open.
+            // The keyboard inset keeps the chat input above the keyboard — same as the solo player.
             _binding?.chatFragmentContainer?.updatePadding(bottom = insets.bottom)
+            // Re-solve portrait heights while the keyboard animates: the video gives
+            // back space so the chat keeps a usable area above it.
+            val imeBottom = windowInsets.getInsets(WindowInsetsCompat.Type.ime()).bottom
+            if (isPortrait && imeBottom != keyboardInsetBottom) {
+                keyboardInsetBottom = imeBottom
+                applyPortraitChatLayout()
+            }
             windowInsets
         }
         ViewCompat.requestApplyInsets(root)
@@ -1182,9 +1191,7 @@ class MultiPovFragment : Fragment(), MultiPovStreamPickerDialog.Listener {
                         interpolator = DecelerateInterpolator()
                     },
                 )
-                requireContext().prefs().edit {
-                    putString(AppConstants.MULTIPOV_LAYOUT, target.prefValue)
-                }
+                saveLayoutPreset(target)
                 applyPortraitChatLayout()
                 render(viewModel.uiState.value, forceGridRebuild = true)
                 Toast.makeText(
@@ -1310,9 +1317,7 @@ class MultiPovFragment : Fragment(), MultiPovStreamPickerDialog.Listener {
                                         interpolator = DecelerateInterpolator()
                                     },
                                 )
-                                requireContext().prefs().edit {
-                                    putString(AppConstants.MULTIPOV_LAYOUT, targetPreset.prefValue)
-                                }
+                                saveLayoutPreset(targetPreset)
                                 applyPortraitChatLayout()
                                 render(viewModel.uiState.value, forceGridRebuild = true)
                                 if (targetPreset != initialPreset) {
@@ -1918,14 +1923,18 @@ class MultiPovFragment : Fragment(), MultiPovStreamPickerDialog.Listener {
     }
 
     private fun currentLayoutPreset(): MultiPovLayoutPreset {
-        return MultiPovLayoutPreset.fromPrefs(requireContext().prefs())
+        return MultiPovLayoutPreset.fromPrefs(requireContext().prefs(), isPortrait)
+    }
+
+    private fun saveLayoutPreset(preset: MultiPovLayoutPreset) {
+        requireContext().prefs().edit {
+            putString(MultiPovLayoutPreset.prefKey(isPortrait), preset.prefValue)
+        }
     }
 
     private fun cycleLayoutPreset() {
         val next = currentLayoutPreset().next()
-        requireContext().prefs().edit {
-            putString(AppConstants.MULTIPOV_LAYOUT, next.prefValue)
-        }
+        saveLayoutPreset(next)
         Toast.makeText(
             requireContext(),
             getString(R.string.multipov_layout_toast, getString(next.labelRes(isPortrait))),
@@ -1942,9 +1951,7 @@ class MultiPovFragment : Fragment(), MultiPovStreamPickerDialog.Listener {
             .setTitle(R.string.multipov_layout)
             .setSingleChoiceItems(labels, selected) { dialog, which ->
                 val chosen = presets[which]
-                requireContext().prefs().edit {
-                    putString(AppConstants.MULTIPOV_LAYOUT, chosen.prefValue)
-                }
+                saveLayoutPreset(chosen)
                 dialog.dismiss()
                 render(viewModel.uiState.value, forceGridRebuild = true)
                 Toast.makeText(
@@ -2498,7 +2505,7 @@ class MultiPovFragment : Fragment(), MultiPovStreamPickerDialog.Listener {
             if (total <= 0) return
             val state = viewModel.uiState.value
             val resizableEnabled = requireContext().prefs().getBoolean(AppConstants.MULTIPOV_RESIZABLE_SPLIT, false)
-            val videoH = when {
+            var videoH = when {
                 !isChatOpen -> total
                 // Single, immersive, or pre-layout: 16:9 video only — chat gets the rest.
                 state.slots.size <= 1 || immersiveKey != null || root.width <= 0 ->
@@ -2513,6 +2520,14 @@ class MultiPovFragment : Fragment(), MultiPovStreamPickerDialog.Listener {
                         .sumOf { it.heightFactor.toDouble() }
                     (unit * factorSum).roundToInt()
                 }
+            }
+            // Keyboard open: cap the video so chat keeps a usable third of the screen;
+            // tiles letterbox while typing and spring back when the keyboard closes.
+            if (isChatOpen && keyboardInsetBottom > 0) {
+                val videoFloor = (total * 0.2f).roundToInt()
+                videoH = videoH.coerceAtMost(
+                    (total - keyboardInsetBottom - (total / 3f).roundToInt()).coerceAtLeast(videoFloor),
+                )
             }
             val chatH = (total - videoH).coerceAtLeast(0)
             val overlayH = videoH

@@ -128,6 +128,33 @@ class KickWebsiteSearchTest {
     }
 
     @Test
+    fun websiteSearchResponseParsesCamelCaseIsLive() {
+        val response = json.decodeFromString<KickWebsiteSearchResponse>(
+            """
+            {
+              "channels": [
+                {
+                  "id": 26869410,
+                  "slug": "absi",
+                  "followers_count": 994166,
+                  "isLive": true,
+                  "user": {
+                    "id": 27894320,
+                    "username": "Absi"
+                  }
+                }
+              ]
+            }
+            """.trimIndent()
+        )
+
+        val channel = response.channels.single()
+        assertTrue(channel.isLive == true)
+        val user = KickWebsiteSearchMapper.toUser(channel)
+        assertTrue(user.isLive == true)
+    }
+
+    @Test
     fun thumbnailFallsBackToStreamHostWhenItIsTheOnlyCandidate() {
         val thumbnail = KickThumbnail(
             src = "https://stream.kick.com/live-thumb.webp"

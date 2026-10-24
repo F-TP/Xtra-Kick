@@ -98,6 +98,7 @@ import com.xtrakick.app.ui.multipov.MultiPovFragment
 import com.xtrakick.app.ui.player.PlayerFragment
 import com.xtrakick.app.ui.view.GridAutofitLayoutManager
 import com.xtrakick.app.ui.view.AutoCompleteAdapter
+import com.xtrakick.app.ui.view.SlashCommand
 import com.xtrakick.app.util.AppConstants
 import com.xtrakick.app.util.KickApiHelper
 import com.xtrakick.app.util.KickOAuthConfig
@@ -3343,7 +3344,7 @@ class ChatFragment : BaseNetworkFragment(), MessageClickedDialog.OnButtonClickLi
         val cursor = binding.editText.selectionEnd.coerceAtLeast(0)
         val start = spaceTokenizer.findTokenStart(text, cursor)
         val token = if (cursor >= start) text.subSequence(start, cursor).toString() else ""
-        if (token.isEmpty() || (token[0] != ':' && token[0] != '@')) {
+        if (token.isEmpty() || (token[0] != ':' && token[0] != '@' && token[0] != '/')) {
             hideAutoComplete()
             return
         }
@@ -3355,8 +3356,12 @@ class ChatFragment : BaseNetworkFragment(), MessageClickedDialog.OnButtonClickLi
             token.substring(1)
         }
 
-        val list = synchronized(viewModel.autoCompleteList) {
-            viewModel.autoCompleteList.toList()
+        val list: List<Any?> = if (prefix == '/') {
+            slashCommands
+        } else {
+            synchronized(viewModel.autoCompleteList) {
+                viewModel.autoCompleteList.toList()
+            }
         }
         val recentNames = if (prefix == ':') {
             recentEmotes.mapTo(HashSet()) { it.name.lowercase(Locale.ROOT) }
@@ -3402,6 +3407,7 @@ class ChatFragment : BaseNetworkFragment(), MessageClickedDialog.OnButtonClickLi
         val replacement = when (item) {
             is Emote -> "${item.name.orEmpty()} "
             is Chatter -> "@${item.name.orEmpty()} "
+            is SlashCommand -> "/${item.command} "
             else -> "${item.toString().removePrefix(":")} "
         }
 

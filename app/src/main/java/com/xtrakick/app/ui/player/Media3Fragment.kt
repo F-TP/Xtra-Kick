@@ -529,7 +529,11 @@ class Media3Fragment : PlayerFragment() {
             playerListener = listener
             if (viewModel.restoreQuality) {
                 viewModel.restoreQuality = false
-                changeQuality(viewModel.previousQuality)
+                val targetQuality = viewModel.previousQuality ?: viewModel.qualities.keys.firstOrNull { it != AUDIO_ONLY_QUALITY }
+                changeQuality(targetQuality)
+            }
+            if (viewModel.quality != AUDIO_ONLY_QUALITY && viewModel.quality != CHAT_ONLY_QUALITY) {
+                showVideoSurface(controller ?: return@addListener)
             }
             player?.sendCustomCommand(
                 SessionCommand(
@@ -1070,101 +1074,94 @@ class Media3Fragment : PlayerFragment() {
     override fun changeQuality(selectedQuality: String?) {
         viewModel.previousQuality = viewModel.quality
         viewModel.quality = selectedQuality
-        viewModel.qualities.entries.find { it.key == selectedQuality }?.let { quality ->
-            player?.let { player ->
-                player.currentMediaItem?.let { mediaItem ->
-                    when (quality.key) {
-                        AUTO_QUALITY -> {
-                            viewModel.playlistUrl?.let { uri ->
-                                if (mediaItemUri(mediaItem) != uri) {
-                                    val position = player.currentPosition
-                                    player.setMediaItem(mediaItem.buildUpon().setUri(uri).setMediaId(uri.toString()).build())
-                                    player.prepare()
-                                    player.seekTo(position)
-                                }
-                                viewModel.playlistUrl = null
-                            } ?: player.prepare()
-                            player.trackSelectionParameters = player.trackSelectionParameters.buildUpon().apply {
-                                setTrackTypeDisabled(androidx.media3.common.C.TRACK_TYPE_VIDEO, false)
-                                clearOverridesOfType(androidx.media3.common.C.TRACK_TYPE_VIDEO)
-                            }.build()
-                            showVideoSurface(player)
+        val quality = viewModel.qualities.entries.find { it.key == selectedQuality }
+        player?.let { player ->
+            if (selectedQuality == AUDIO_ONLY_QUALITY) {
+                player.trackSelectionParameters = player.trackSelectionParameters.buildUpon().apply {
+                    setTrackTypeDisabled(androidx.media3.common.C.TRACK_TYPE_VIDEO, true)
+                }.build()
+                quality?.value?.second?.let { uri ->
+                    val position = player.currentPosition
+                    if (viewModel.qualities.containsKey(AUTO_QUALITY)) {
+                        player.currentMediaItem?.let { mediaItem ->
+                            viewModel.playlistUrl = mediaItemUri(mediaItem)
                         }
-                        AUDIO_ONLY_QUALITY -> {
-                            player.trackSelectionParameters = player.trackSelectionParameters.buildUpon().apply {
-                                setTrackTypeDisabled(androidx.media3.common.C.TRACK_TYPE_VIDEO, true)
-                            }.build()
-                            quality.value.second?.let {
-                                val position = player.currentPosition
-                                if (viewModel.qualities.containsKey(AUTO_QUALITY)) {
-                                    viewModel.playlistUrl = mediaItemUri(mediaItem)
-                                }
-                                player.setMediaItem(mediaItem.buildUpon().setUri(it).setMediaId(it).build())
-                                player.prepare()
-                                player.seekTo(position)
-                            }
-                            // release the video renderer before the SurfaceView's surface dies,
-                            // or the codec keeps rendering into an obsolete surface and errors out
-                            player.clearVideoSurface()
-                            binding.playerSurface.visibility = View.GONE
-                        }
-                        CHAT_ONLY_QUALITY -> {
-                            player.stop()
-                        }
-                        else -> {
-                            if (viewModel.qualities.containsKey(AUTO_QUALITY)) {
+                    }
+                    player.currentMediaItem?.let { mediaItem ->
+                        player.setMediaItem(mediaItem.buildUpon().setUri(uri).setMediaId(uri).build())
+                        player.prepare()
+                        player.seekTo(position)
+                    }
+                }
+                player.clearVideoSurface()
+                binding.playerSurface.visibility = View.GONE
+            } else if (selectedQuality == CHAT_ONLY_QUALITY) {
+                player.stop()
+            } else {
+                player.trackSelectionParameters = player.trackSelectionParameters.buildUpon().apply {
+                    setTrackTypeDisabled(androidx.media3.common.C.TRACK_TYPE_VIDEO, false)
+                    clearOverridesOfType(androidx.media3.common.C.TRACK_TYPE_VIDEO)
+                }.build()
+                if (quality != null) {
+                    player.currentMediaItem?.let { mediaItem ->
+                        when (quality.key) {
+                            AUTO_QUALITY -> {
                                 viewModel.playlistUrl?.let { uri ->
-                                    player.currentMediaItem?.let {
+                                    if (mediaItemUri(mediaItem) != uri) {
                                         val position = player.currentPosition
-                                        player.setMediaItem(it.buildUpon().setUri(uri).setMediaId(uri.toString()).build())
+                                        player.setMediaItem(mediaItem.buildUpon().setUri(uri).setMediaId(uri.toString()).build())
+                                        player.prepare()
+                                        player.seekTo(position)
+                                    }
+                                    viewModel.playlistUrl = null
+                                } ?: player.prepare()
+                            }
+                            else -> {
+                                if (viewModel.qualities.containsKey(AUTO_QUALITY)) {
+                                    viewModel.playlistUrl?.let { uri ->
+                                        val position = player.currentPosition
+                                        player.setMediaItem(mediaItem.buildUpon().setUri(uri).setMediaId(uri.toString()).build())
                                         player.prepare()
                                         player.seekTo(position)
                                         viewModel.playlistUrl = null
-                                    }
-                                } ?: player.prepare()
-                                player.trackSelectionParameters = player.trackSelectionParameters.buildUpon().apply {
-                                    setTrackTypeDisabled(androidx.media3.common.C.TRACK_TYPE_VIDEO, false)
-                                    if (!player.currentTracks.isEmpty) {
-                                        player.currentTracks.groups.find { it.type == androidx.media3.common.C.TRACK_TYPE_VIDEO }?.let {
-                                            val selectedQuality = quality.key.split("p")
-                                            val targetResolution = selectedQuality.getOrNull(0)?.takeWhile { it.isDigit() }?.toIntOrNull()
-                                            val targetFps = selectedQuality.getOrNull(1)?.takeWhile { it.isDigit() }?.toIntOrNull() ?: 30
-                                            if (it.mediaTrackGroup.length > 0) {
-                                                if (targetResolution != null) {
-                                                    val formats = mutableListOf<Triple<Int, Int, Float>>()
-                                                    for (i in 0 until it.mediaTrackGroup.length) {
-                                                        val format = it.mediaTrackGroup.getFormat(i)
-                                                        formats.add(Triple(i, format.height, format.frameRate))
+                                    } ?: player.prepare()
+                                    player.trackSelectionParameters = player.trackSelectionParameters.buildUpon().apply {
+                                        setTrackTypeDisabled(androidx.media3.common.C.TRACK_TYPE_VIDEO, false)
+                                        if (!player.currentTracks.isEmpty) {
+                                            player.currentTracks.groups.find { it.type == androidx.media3.common.C.TRACK_TYPE_VIDEO }?.let {
+                                                val selectedQuality = quality.key.split("p")
+                                                val targetResolution = selectedQuality.getOrNull(0)?.takeWhile { it.isDigit() }?.toIntOrNull()
+                                                val targetFps = selectedQuality.getOrNull(1)?.takeWhile { it.isDigit() }?.toIntOrNull() ?: 30
+                                                if (it.mediaTrackGroup.length > 0) {
+                                                    if (targetResolution != null) {
+                                                        val formats = mutableListOf<Triple<Int, Int, Float>>()
+                                                        for (i in 0 until it.mediaTrackGroup.length) {
+                                                            val format = it.mediaTrackGroup.getFormat(i)
+                                                            formats.add(Triple(i, format.height, format.frameRate))
+                                                        }
+                                                        val list = formats.sortedWith(
+                                                            compareByDescending<Triple<Int, Int, Float>> { it.third }.thenByDescending { it.second }
+                                                        )
+                                                        list.find {
+                                                            (targetResolution == it.second && targetFps >= floor(it.third)) || targetResolution > it.second || it == list.last()
+                                                        }?.first?.let { index ->
+                                                            setOverrideForType(TrackSelectionOverride(it.mediaTrackGroup, index))
+                                                        }
+                                                    } else {
+                                                        setOverrideForType(TrackSelectionOverride(it.mediaTrackGroup, 0))
                                                     }
-                                                    val list = formats.sortedWith(
-                                                        compareByDescending<Triple<Int, Int, Float>> { it.third }.thenByDescending { it.second }
-                                                    )
-                                                    list.find {
-                                                        (targetResolution == it.second && targetFps >= floor(it.third)) || targetResolution > it.second || it == list.last()
-                                                    }?.first?.let { index ->
-                                                        setOverrideForType(TrackSelectionOverride(it.mediaTrackGroup, index))
-                                                    }
-                                                } else {
-                                                    setOverrideForType(TrackSelectionOverride(it.mediaTrackGroup, 0))
                                                 }
                                             }
                                         }
-                                    }
-                                }.build()
-                                showVideoSurface(player)
-                            } else {
-                                player.currentMediaItem?.let {
-                                    if (mediaItemUri(it)?.toString() != quality.value.second) {
+                                    }.build()
+                                } else {
+                                    if (mediaItemUri(mediaItem)?.toString() != quality.value.second && !quality.value.second.isNullOrBlank()) {
                                         val position = player.currentPosition
-                                        player.setMediaItem(it.buildUpon().setUri(quality.value.second).setMediaId(quality.value.second ?: "").build())
+                                        player.setMediaItem(mediaItem.buildUpon().setUri(quality.value.second).setMediaId(quality.value.second ?: "").build())
                                         player.prepare()
                                         player.seekTo(position)
                                     }
                                 }
-                                player.trackSelectionParameters = player.trackSelectionParameters.buildUpon().apply {
-                                    setTrackTypeDisabled(androidx.media3.common.C.TRACK_TYPE_VIDEO, false)
-                                }.build()
-                                showVideoSurface(player)
                             }
                         }
                     }
@@ -1173,6 +1170,7 @@ class Media3Fragment : PlayerFragment() {
                         prefs.edit { putString(AppConstants.PLAYER_QUALITY, quality.key) }
                     }
                 }
+                showVideoSurface(player)
             }
         }
     }
@@ -1185,16 +1183,12 @@ class Media3Fragment : PlayerFragment() {
                     viewModel.restoreQuality = true
                     viewModel.previousQuality = viewModel.quality
                     viewModel.quality = AUDIO_ONLY_QUALITY
-                    viewModel.qualities.entries.find { it.key == viewModel.quality }?.let { quality ->
-                        player.currentMediaItem?.let { mediaItem ->
-                            if (prefs.getBoolean(AppConstants.PLAYER_DISABLE_BACKGROUND_VIDEO, true)) {
-                                player.trackSelectionParameters = player.trackSelectionParameters.buildUpon().apply {
-                                    setTrackTypeDisabled(androidx.media3.common.C.TRACK_TYPE_VIDEO, true)
-                                }.build()
-                                player.clearVideoSurface()
-                                binding.playerSurface.visibility = View.GONE
-                            }
-                        }
+                    if (prefs.getBoolean(AppConstants.PLAYER_DISABLE_BACKGROUND_VIDEO, true)) {
+                        player.trackSelectionParameters = player.trackSelectionParameters.buildUpon().apply {
+                            setTrackTypeDisabled(androidx.media3.common.C.TRACK_TYPE_VIDEO, true)
+                        }.build()
+                        player.clearVideoSurface()
+                        binding.playerSurface.visibility = View.GONE
                     }
                 }
                 player.sendCustomCommand(
@@ -1249,13 +1243,18 @@ class Media3Fragment : PlayerFragment() {
     override fun close() {
         clearFreezeFrame()
         savePosition()
-        player?.pause()
-        player?.stop()
-        player?.clearVideoSurface()
-        player?.removeMediaItem(0)
+        player?.let { p ->
+            p.pause()
+            p.stop()
+            p.clearVideoSurface()
+            p.clearMediaItems()
+            p.sendCustomCommand(SessionCommand(PlaybackService.STOP_PLAYBACK, Bundle.EMPTY), Bundle.EMPTY)
+        }
         playerListener?.let { player?.removeListener(it) }
         playerListener = null
         controllerFuture?.let { MediaController.releaseFuture(it) }
+        controllerFuture = null
+        context?.let { PlaybackService.stopService(it) }
     }
 
     override fun onStop() {
@@ -1273,14 +1272,10 @@ class Media3Fragment : PlayerFragment() {
                         viewModel.restoreQuality = true
                         viewModel.previousQuality = viewModel.quality
                         viewModel.quality = AUDIO_ONLY_QUALITY
-                        viewModel.qualities.entries.find { it.key == viewModel.quality }?.let { quality ->
-                            player.currentMediaItem?.let { mediaItem ->
-                                if (prefs.getBoolean(AppConstants.PLAYER_DISABLE_BACKGROUND_VIDEO, true)) {
-                                    player.trackSelectionParameters = player.trackSelectionParameters.buildUpon().apply {
-                                        setTrackTypeDisabled(androidx.media3.common.C.TRACK_TYPE_VIDEO, true)
-                                    }.build()
-                                }
-                            }
+                        if (prefs.getBoolean(AppConstants.PLAYER_DISABLE_BACKGROUND_VIDEO, true)) {
+                            player.trackSelectionParameters = player.trackSelectionParameters.buildUpon().apply {
+                                setTrackTypeDisabled(androidx.media3.common.C.TRACK_TYPE_VIDEO, true)
+                            }.build()
                         }
                     }
                 } else {

@@ -121,4 +121,28 @@ class AutoCompleteAdapterTest {
         val result = AutoCompleteAdapter.rankAndSort(chatters, '@', "john").map { it.name }
         assertEquals(listOf("john", "johnny", "johnny_bravo", "cool_john"), result)
     }
+
+    @Test
+    fun rankAndSort_slashPrefixFiltersAndOrdersCommands() {
+        val commands = listOf(
+            SlashCommand("ban"),
+            SlashCommand("timeout"),
+            SlashCommand("unban")
+        )
+
+        val result = AutoCompleteAdapter.rankAndSort(commands, '/', "ban").map { it.command }
+        assertEquals(listOf("ban", "unban"), result)
+    }
+
+    @Test
+    fun rankAndSort_emptySlashQueryReturnsAllCommandsSortedByName() {
+        val commands = listOf(
+            SlashCommand("timeout"),
+            SlashCommand("ban"),
+            SlashCommand("clear")
+        )
+
+        val result = AutoCompleteAdapter.rankAndSort(commands, '/', "").map { it.command }
+        assertEquals(listOf("ban", "clear", "timeout"), result)
+    }
 }

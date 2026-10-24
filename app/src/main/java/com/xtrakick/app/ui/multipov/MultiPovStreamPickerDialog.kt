@@ -17,6 +17,7 @@ import com.xtrakick.app.R
 import com.xtrakick.app.databinding.DialogMultipovPickerBinding
 import com.xtrakick.app.databinding.ItemMultipovPickerRowBinding
 import com.xtrakick.app.model.ui.Stream
+import com.xtrakick.app.util.KickApiHelper
 import com.google.android.material.bottomsheet.BottomSheetBehavior
 import com.google.android.material.bottomsheet.BottomSheetDialogFragment
 import dagger.hilt.android.AndroidEntryPoint
@@ -158,24 +159,25 @@ class MultiPovStreamPickerDialog : BottomSheetDialogFragment() {
             itemBinding.title.text = stream.channelName ?: stream.channelLogin.orEmpty()
             val viewers = stream.viewerCount
             val gameOrTitle = stream.gameName ?: stream.title.orEmpty()
+            val followers = stream.user?.followersCount
             itemBinding.subtitle.text = when {
                 viewers != null && gameOrTitle.isNotBlank() ->
-                    "${formatViewers(viewers)} · $gameOrTitle"
-                viewers != null -> formatViewers(viewers)
-                else -> gameOrTitle
+                    "${KickApiHelper.formatCount(viewers, true)} · $gameOrTitle"
+                viewers != null -> KickApiHelper.formatCount(viewers, true)
+                gameOrTitle.isNotBlank() -> gameOrTitle
+                followers != null -> {
+                    itemView.context.resources.getQuantityString(
+                        R.plurals.followers,
+                        followers,
+                        KickApiHelper.formatCount(followers, true)
+                    )
+                }
+                else -> itemView.context.getString(R.string.live)
             }
             itemBinding.root.setOnClickListener {
                 (parentFragment as? Listener)?.onStreamPicked(stream)
                     ?: (activity as? Listener)?.onStreamPicked(stream)
                 dismiss()
-            }
-        }
-
-        private fun formatViewers(count: Int): String {
-            return when {
-                count >= 1_000_000 -> String.format(java.util.Locale.US, "%.1fM", count / 1_000_000.0)
-                count >= 1_000 -> String.format(java.util.Locale.US, "%.1fK", count / 1_000.0)
-                else -> count.toString()
             }
         }
     }

@@ -19,6 +19,7 @@ import androidx.fragment.app.viewModels
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
+import androidx.fragment.app.setFragmentResultListener
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import coil3.imageLoader
@@ -33,9 +34,12 @@ import com.xtrakick.app.model.chat.Badge
 import com.xtrakick.app.model.chat.ChatMessage
 import com.xtrakick.app.model.ui.User
 import com.xtrakick.app.ui.common.IntegrityDialog
+import com.xtrakick.app.ui.channel.FollowChannelBottomSheet
 import com.xtrakick.app.util.AppConstants
+import com.xtrakick.app.util.AuthStateHelper
 import com.xtrakick.app.util.KickApiHelper
 import com.xtrakick.app.util.prefs
+import com.xtrakick.app.util.tokenPrefs
 import com.google.android.material.bottomsheet.BottomSheetBehavior
 import com.google.android.material.bottomsheet.BottomSheetDialogFragment
 import dagger.hilt.android.AndroidEntryPoint
@@ -257,13 +261,45 @@ class MessageClickedDialog : BottomSheetDialogFragment(), IntegrityDialog.Callba
         binding.muteButton.isEnabled = !state.isMuteActionInProgress
 
         val displayName = state.user?.channelName ?: adapter?.selectedMessage?.userName ?: adapter?.selectedMessage?.userLogin
-        binding.followButton.setOnClickListener { viewModel.toggleFollow(displayName) }
+        binding.followButton.setOnClickListener {
+            if (state.isFollowing) {
+                viewModel.unfollow(displayName)
+                return@setOnClickListener
+            }
+            if (!state.isKickTarget) return@setOnClickListener
+            val selectedMessage = adapter?.selectedMessage
+            val targetLogin = selectedMessage?.userLogin?.takeIf { it.isNotBlank() }
+            val targetName = selectedMessage?.userName?.takeIf { it.isNotBlank() } ?: targetLogin
+            val myUsername = requireContext().tokenPrefs().getString(AppConstants.USERNAME, null)?.trim()
+            val isOwnChannel = !myUsername.isNullOrBlank() && (
+                targetLogin?.trim()?.equals(myUsername, ignoreCase = true) == true ||
+                targetName?.trim()?.equals(myUsername, ignoreCase = true) == true
+            )
+            val defaultKick = (requireContext().prefs().getString(AppConstants.UI_FOLLOW_BUTTON, "0")?.toIntOrNull() ?: 0) == 0
+            val isRemembered = requireContext().prefs().getBoolean(AppConstants.FOLLOW_MODE_REMEMBERED, false)
+            when {
+                isOwnChannel -> {
+                    viewModel.follow(kickFollow = false, displayName)
+                    Toast.makeText(requireContext(), R.string.following_own_channel_locally, Toast.LENGTH_SHORT).show()
+                }
+                !AuthStateHelper.isKickLoggedIn(requireContext()) -> viewModel.follow(kickFollow = false, displayName)
+                isRemembered -> viewModel.follow(kickFollow = defaultKick, displayName)
+                else -> showFollowChoiceSheet(displayName)
+            }
+        }
         binding.muteButton.setOnClickListener {
             viewModel.toggleMute()
             adapter?.applyMutedState(!state.isMuted)
             updateHistoryVisibility()
         }
         updateHistoryVisibility()
+    }
+
+    private fun showFollowChoiceSheet(displayName: String?) {
+        childFragmentManager.setFragmentResultListener(FollowChannelBottomSheet.REQUEST_KEY, viewLifecycleOwner) { _, bundle ->
+            viewModel.follow(bundle.getBoolean(FollowChannelBottomSheet.RESULT_KICK_FOLLOW, true), displayName)
+        }
+        FollowChannelBottomSheet.newInstance(displayName).show(childFragmentManager, "follow_sheet")
     }
 
     private fun updateButtons(chatMessage: ChatMessage) {

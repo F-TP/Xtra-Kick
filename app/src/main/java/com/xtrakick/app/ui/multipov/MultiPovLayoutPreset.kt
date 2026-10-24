@@ -39,8 +39,14 @@ enum class MultiPovLayoutPreset(val prefValue: String) {
             }
         }
 
-        fun fromPrefs(prefs: android.content.SharedPreferences): MultiPovLayoutPreset {
-            return fromPref(prefs.getString(AppConstants.MULTIPOV_LAYOUT, AppConstants.MULTIPOV_LAYOUT_EQUAL))
+        fun prefKey(portrait: Boolean): String {
+            return if (portrait) AppConstants.MULTIPOV_LAYOUT_PORTRAIT else AppConstants.MULTIPOV_LAYOUT_LANDSCAPE
+        }
+
+        fun fromPrefs(prefs: android.content.SharedPreferences, portrait: Boolean): MultiPovLayoutPreset {
+            // Unset orientation key falls back to the legacy shared pref, so both
+            // orientations start from the pre-split choice on first run.
+            return fromPref(prefs.getString(prefKey(portrait), null) ?: prefs.getString(AppConstants.MULTIPOV_LAYOUT, AppConstants.MULTIPOV_LAYOUT_EQUAL))
         }
 
         fun solvePortraitRows(count: Int, preset: MultiPovLayoutPreset): List<PortraitRow> {

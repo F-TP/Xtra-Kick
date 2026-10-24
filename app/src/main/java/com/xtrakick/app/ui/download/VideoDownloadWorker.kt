@@ -65,7 +65,6 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.joinAll
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withLock
@@ -953,70 +952,65 @@ class VideoDownloadWorker @AssistedInject constructor(
                 })
                 fileUri
             }
-            val jobs = runBlocking {
-                launch {
-                    if (offlineVideo.progress < offlineVideo.maxProgress) {
-                        when {
-                            networkLibrary == "HttpEngine" && Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && SdkExtensions.getExtensionVersion(Build.VERSION_CODES.S) >= 7 && httpEngine != null -> {
-                                val response = suspendCoroutine { continuation ->
-                                    httpEngine!!.get().newUrlRequestBuilder(sourceUrl, cronetExecutor, HttpEngineUtils.byteArrayUrlCallback(continuation)).build().start()
-                                }
-                                if (isShared) {
-                                    context.contentResolver.openOutputStream(videoFileUri.toUri())!!.use {
-                                        it.write(response.second)
-                                    }
-                                } else {
-                                    FileOutputStream(videoFileUri).use {
-                                        it.write(response.second)
-                                    }
-                                }
+            if (offlineVideo.progress < offlineVideo.maxProgress) {
+                when {
+                    networkLibrary == "HttpEngine" && Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && SdkExtensions.getExtensionVersion(Build.VERSION_CODES.S) >= 7 && httpEngine != null -> {
+                        val response = suspendCoroutine { continuation ->
+                            httpEngine!!.get().newUrlRequestBuilder(sourceUrl, cronetExecutor, HttpEngineUtils.byteArrayUrlCallback(continuation)).build().start()
+                        }
+                        if (isShared) {
+                            context.contentResolver.openOutputStream(videoFileUri.toUri())!!.use {
+                                it.write(response.second)
                             }
-                            networkLibrary == "Cronet" && cronetEngine != null -> {
-                                val response = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
-                                    val request = UrlRequestCallbacks.forByteArrayBody(RedirectHandlers.alwaysFollow())
-                                    cronetEngine!!.get().newUrlRequestBuilder(sourceUrl, request.callback, cronetExecutor).build().start()
-                                    request.future.get().responseBody as ByteArray
-                                } else {
-                                    val response = suspendCoroutine { continuation ->
-                                        cronetEngine!!.get().newUrlRequestBuilder(sourceUrl, getByteArrayCronetCallback(continuation), cronetExecutor).build().start()
-                                    }
-                                    response.second
-                                }
-                                if (isShared) {
-                                    context.contentResolver.openOutputStream(videoFileUri.toUri())!!.use {
-                                        it.write(response)
-                                    }
-                                } else {
-                                    FileOutputStream(videoFileUri).use {
-                                        it.write(response)
-                                    }
-                                }
+                        } else {
+                            FileOutputStream(videoFileUri).use {
+                                it.write(response.second)
                             }
-                            else -> {
-                                okHttpClient.newCall(Request.Builder().url(sourceUrl).build()).execute().use { response ->
-                                    if (isShared) {
-                                        context.contentResolver.openOutputStream(videoFileUri.toUri())!!
-                                    } else {
-                                        FileOutputStream(videoFileUri)
-                                    }.use { outputStream ->
-                                        response.body.byteStream().use { inputStream ->
-                                            inputStream.copyTo(outputStream)
-                                        }
-                                    }
+                        }
+                    }
+                    networkLibrary == "Cronet" && cronetEngine != null -> {
+                        val response = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+                            val request = UrlRequestCallbacks.forByteArrayBody(RedirectHandlers.alwaysFollow())
+                            cronetEngine!!.get().newUrlRequestBuilder(sourceUrl, request.callback, cronetExecutor).build().start()
+                            request.future.get().responseBody as ByteArray
+                        } else {
+                            val response = suspendCoroutine { continuation ->
+                                cronetEngine!!.get().newUrlRequestBuilder(sourceUrl, getByteArrayCronetCallback(continuation), cronetExecutor).build().start()
+                            }
+                            response.second
+                        }
+                        if (isShared) {
+                            context.contentResolver.openOutputStream(videoFileUri.toUri())!!.use {
+                                it.write(response)
+                            }
+                        } else {
+                            FileOutputStream(videoFileUri).use {
+                                it.write(response)
+                            }
+                        }
+                    }
+                    else -> {
+                        okHttpClient.newCall(Request.Builder().url(sourceUrl).build()).execute().use { response ->
+                            if (isShared) {
+                                context.contentResolver.openOutputStream(videoFileUri.toUri())!!
+                            } else {
+                                FileOutputStream(videoFileUri)
+                            }.use { outputStream ->
+                                response.body.byteStream().use { inputStream ->
+                                    inputStream.copyTo(outputStream)
                                 }
                             }
                         }
-                        offlineRepository.updateVideo(offlineVideo.apply { progress = offlineVideo.maxProgress })
-                        setForeground(createForegroundInfo())
-                        // Video bytes are done: finalize the status right away so
-                        // the chat walk below can't hold the list at
-                        // "DOWNLOADING: 100%" (same fix as the HLS branch above).
-                        offlineRepository.updateVideo(offlineVideo.apply { status = OfflineVideo.STATUS_DOWNLOADED })
                     }
                 }
+                offlineRepository.updateVideo(offlineVideo.apply { progress = offlineVideo.maxProgress })
+                setForeground(createForegroundInfo())
+                // Video bytes are done: finalize the status right away so
+                // the chat walk below can't hold the list at
+                // "DOWNLOADING: 100%" (same fix as the HLS branch above).
+                offlineRepository.updateVideo(offlineVideo.apply { status = OfflineVideo.STATUS_DOWNLOADED })
             }
             try {
-                jobs.join()
                 val chatJob = earlyChatJob
                 if (chatJob != null) {
                     chatJob.join()

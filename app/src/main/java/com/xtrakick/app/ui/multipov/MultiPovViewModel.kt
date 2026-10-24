@@ -17,6 +17,8 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -536,37 +538,157 @@ class MultiPovViewModel @Inject constructor(
             if (!isActive) return@launch
             _pickerLoading.value = true
             try {
-                val response = kickRepository.searchWebsite(trimmed)
                 val occupied = occupiedPickerKeys()
                 val streamsByKey = linkedMapOf<String, Stream>()
-                response.livestreams.tags
-                    .map { KickWebsiteSearchMapper.toStream(it) }
-                    .forEach { stream ->
-                        val key = stream.multiPovKey()
-                        if (key.isNotBlank() && !stream.matchesOccupied(occupied)) {
-                            streamsByKey.putIfAbsent(key, stream)
+
+                val websiteDeferred = async { runCatching { kickRepository.searchWebsite(trimmed) }.getOrNull() }
+                val typesenseDeferred = async {
+                    runCatching { kickRepository.searchTypesenseChannels(trimmed, page = 1, perPage = 20) }.getOrNull()
+                }
+                val typesenseCategoryDeferred = async {
+                    runCatching { kickRepository.searchTypesenseCategories(trimmed, page = 1, perPage = 25) }.getOrNull()
+                }
+
+                val websiteResponse = websiteDeferred.await()
+                val typesenseResult = typesenseDeferred.await()
+                val typesenseCategories = typesenseCategoryDeferred.await()
+
+                // Resolve matching categories, prioritized by live viewer count
+                val websiteCatMap = websiteResponse?.categories.orEmpty().associateBy { it.slug?.lowercase() }
+                data class CategoryCandidate(val slug: String, val viewers: Int, val name: String?)
+                val categoryCandidates = buildList {
+                    websiteResponse?.categories.orEmpty().forEach { cat ->
+                        if (!cat.slug.isNullOrBlank()) {
+                            add(CategoryCandidate(cat.slug, cat.viewers ?: 0, cat.name))
                         }
                     }
-                // Only include channels that are strictly live; ignore offline channels and static playback URLs.
-                response.channels
-                    .asSequence()
-                    .filter { channel -> channel.isLive == true }
-                    .forEach { channel ->
-                        val stream = Stream(
-                            id = null,
-                            source = AppConstants.KICK,
-                            channelId = channel.id?.toString() ?: channel.userId?.toString(),
-                            channelLogin = channel.slug,
-                            channelName = channel.user?.username,
-                            playbackUrl = channel.playbackUrl,
-                            profileImageUrl = channel.user?.profileImage,
-                        )
-                        val key = stream.multiPovKey()
-                        if (key.isNotBlank() && !stream.matchesOccupied(occupied)) {
-                            streamsByKey.putIfAbsent(key, stream)
+                    typesenseCategories?.hits.orEmpty().forEach { hit ->
+                        val doc = hit.document
+                        val slug = doc.slug
+                        if (!slug.isNullOrBlank() && !websiteCatMap.containsKey(slug.lowercase())) {
+                            add(CategoryCandidate(slug, 0, doc.name ?: slug))
                         }
                     }
-                _pickerResults.value = streamsByKey.values.toList()
+                }
+                .distinctBy { it.slug.lowercase() }
+                .sortedByDescending { it.viewers }
+
+                // Fetch top livestreams for the best matching category(ies)
+                val topCategorySlugs = categoryCandidates.take(3)
+                val categoryStreams = if (topCategorySlugs.isNotEmpty()) {
+                    topCategorySlugs.flatMap { cat ->
+                        runCatching {
+                            kickRepository.getLivestreams(page = 1, limit = 20, sort = "desc", subcategory = cat.slug)
+                                .data
+                                .map { kickRepository.toStream(it, gameSlug = cat.slug, gameName = cat.name) }
+                        }.getOrDefault(emptyList())
+                    }
+                } else emptyList()
+
+                // 1. Kick website search livestreams (rich data with viewer counts & game)
+                websiteResponse?.livestreams?.tags?.forEach { tag ->
+                    val stream = KickWebsiteSearchMapper.toStream(tag)
+                    val key = stream.multiPovKey()
+                    if (key.isNotBlank() && !stream.matchesOccupied(occupied)) {
+                        streamsByKey.putIfAbsent(key, stream)
+                    }
+                }
+
+                // 2. Matching category livestreams (e.g. searching "GTA" or "Fortnite")
+                categoryStreams.forEach { stream ->
+                    val key = stream.multiPovKey()
+                    if (key.isNotBlank() && !stream.matchesOccupied(occupied)) {
+                        val existing = streamsByKey[key]
+                        if (existing == null || (existing.viewerCount ?: 0) < (stream.viewerCount ?: 0)) {
+                            streamsByKey[key] = stream
+                        }
+                    }
+                }
+
+                // 3. Typesense live channels (Kick's primary search index)
+                typesenseResult?.hits?.forEach { hit ->
+                    val doc = hit.document
+                    if (doc.isLive == true && !doc.slug.isNullOrBlank()) {
+                        val key = doc.slug.lowercase()
+                        if (!occupied.contains(key) && !streamsByKey.containsKey(key)) {
+                            streamsByKey[key] = Stream(
+                                id = null,
+                                source = AppConstants.KICK,
+                                channelId = doc.id,
+                                channelLogin = doc.slug,
+                                channelName = doc.username ?: doc.name,
+                                playbackUrl = null,
+                                profileImageUrl = doc.profileImage ?: doc.profilePic,
+                                user = KickWebsiteSearchMapper.toUser(doc),
+                            )
+                        }
+                    }
+                }
+
+                // 4. Kick website search channels that are live
+                websiteResponse?.channels?.forEach { channel ->
+                    if (channel.isLive == true && !channel.slug.isNullOrBlank()) {
+                        val key = channel.slug.lowercase()
+                        if (!occupied.contains(key) && !streamsByKey.containsKey(key)) {
+                            streamsByKey[key] = Stream(
+                                id = null,
+                                source = AppConstants.KICK,
+                                channelId = channel.id?.toString() ?: channel.userId?.toString(),
+                                channelLogin = channel.slug,
+                                channelName = channel.user?.username,
+                                playbackUrl = channel.playbackUrl,
+                                profileImageUrl = channel.user?.profileImage,
+                                user = KickWebsiteSearchMapper.toUser(channel),
+                            )
+                        }
+                    }
+                }
+
+                fun sortedList(): List<Stream> = streamsByKey.values.sortedWith(
+                    compareByDescending<Stream> { it.viewerCount ?: -1 }
+                        .thenByDescending { it.user?.followersCount ?: -1 }
+                )
+
+                _pickerResults.value = sortedList()
+
+                // Enrich live channels with real-time viewer count and category
+                val unresolvedKeys = streamsByKey.filter { it.value.viewerCount == null }.keys.toList()
+                if (unresolvedKeys.isNotEmpty()) {
+                    val enrichedList = unresolvedKeys.take(8).map { key ->
+                        val stream = streamsByKey[key]!!
+                        val slug = stream.channelLogin ?: stream.channelName.orEmpty()
+                        async {
+                            val ls = runCatching { kickRepository.getChannelLivestream(slug) }.getOrNull()
+                            if (ls != null) {
+                                key to Stream(
+                                    id = ls.id?.toString() ?: stream.id,
+                                    source = stream.source,
+                                    channelId = stream.channelId,
+                                    channelLogin = stream.channelLogin,
+                                    channelName = stream.channelName,
+                                    playbackUrl = ls.playbackUrl ?: stream.playbackUrl,
+                                    gameId = ls.category?.id?.toString() ?: stream.gameId,
+                                    gameSlug = ls.category?.slug ?: stream.gameSlug,
+                                    gameName = ls.category?.name ?: stream.gameName,
+                                    title = ls.title ?: stream.title,
+                                    viewerCount = ls.viewerCount ?: stream.viewerCount,
+                                    startedAt = stream.startedAt,
+                                    thumbnailUrl = ls.thumbnail?.imageUrl ?: stream.thumbnailUrl,
+                                    profileImageUrl = stream.profileImageUrl,
+                                    tags = stream.tags,
+                                    user = stream.user,
+                                )
+                            } else null
+                        }
+                    }.awaitAll().filterNotNull()
+
+                    if (isActive && enrichedList.isNotEmpty()) {
+                        enrichedList.forEach { (key, enrichedStream) ->
+                            streamsByKey[key] = enrichedStream
+                        }
+                        _pickerResults.value = sortedList()
+                    }
+                }
             } catch (e: Exception) {
                 if (e is CancellationException) throw e
                 _pickerResults.value = emptyList()
