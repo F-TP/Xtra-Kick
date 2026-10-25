@@ -2,6 +2,19 @@
     xmlns:app="http://schemas.android.com/apk/res-auto">
 
     <PreferenceCategory
+        android:title="@string/language"
+        app:iconSpaceReserved="false" />
+
+    <ListPreference
+        android:entries="@array/languageEntries"
+        android:entryValues="@array/languageValues"
+        android:key="app_language"
+        android:summary="%s"
+        android:title="@string/app_language"
+        app:iconSpaceReserved="false"
+        app:singleLineTitle="false" />
+
+    <PreferenceCategory
         android:title="@string/theme_and_colors"
         app:iconSpaceReserved="false" />
 

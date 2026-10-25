@@ -29,6 +29,7 @@ import com.xtrakick.app.util.AppConstants
 import com.xtrakick.app.util.DiagnosticLogger
 import com.xtrakick.app.util.HttpEngineUtils
 import com.xtrakick.app.util.KickApiHelper
+import com.xtrakick.app.util.KickClipApi
 import com.xtrakick.app.util.getByteArrayCronetCallback
 import dagger.Lazy
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -39,6 +40,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.chromium.net.CronetEngine
@@ -102,6 +104,35 @@ class PlayerViewModel @Inject constructor(
         lastKickStreamRefreshRetryAtMs = now
         return true
     }
+
+    fun hasKickClipCapability(): Boolean = kickRepository.hasKickClipCapability()
+
+    var currentVideoVodId: String? = null
+
+    suspend fun getLivestreamVodId(channelLogin: String): String? =
+        kickRepository.getLivestreamVodId(channelLogin)
+
+    suspend fun resolveVodId(channelLogin: String?, videoId: String?, videoUuid: String?): String? = withContext(Dispatchers.IO) {
+        currentVideoVodId?.takeIf { it.isNotBlank() }?.let { return@withContext it }
+        val resolved = kickRepository.getVodIngestionId(
+            videoUuid = videoUuid,
+            videoId = videoId,
+            channelLogin = channelLogin,
+        )
+        resolved?.takeIf { it.isNotBlank() }?.also { currentVideoVodId = it }
+    }
+
+    suspend fun initiateKickClip(videoId: String, positionSeconds: Long? = null): KickClipApi.TemporaryClip =
+        kickRepository.initiateKickClip(videoId, positionSeconds)
+
+    suspend fun finalizeKickClip(
+        clipId: String,
+        title: String?,
+        startSeconds: Int,
+        durationSeconds: Int,
+        channelLogin: String? = null,
+    ): KickClipApi.FinalizedClip =
+        kickRepository.finalizeKickClip(clipId, title, startSeconds, durationSeconds, channelLogin)
 
     var qualities: Map<String, Pair<String, String?>> = emptyMap()
     var quality: String? = null
@@ -321,6 +352,7 @@ class PlayerViewModel @Inject constructor(
                         }
                         if (!kickUrl.isNullOrBlank()) {
                             fallbackVideo?.uploadDate?.takeIf { it.isNotBlank() }?.let { videoUploadDate.value = it }
+                            fallbackVideo?.vodId?.takeIf { it.isNotBlank() }?.let { currentVideoVodId = it }
                             videoResult.value = kickUrl
                             backupQualities = null
                         } else {
@@ -338,6 +370,7 @@ class PlayerViewModel @Inject constructor(
                             }
                             if (!fallbackUrl.isNullOrBlank()) {
                                 fallbackVideo?.uploadDate?.takeIf { it.isNotBlank() }?.let { videoUploadDate.value = it }
+                                fallbackVideo?.vodId?.takeIf { it.isNotBlank() }?.let { currentVideoVodId = it }
                                 videoResult.value = fallbackUrl
                                 backupQualities = null
                             } else {

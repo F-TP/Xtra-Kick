@@ -141,43 +141,44 @@ class TopStreamsFragment : PagedListFragment(), Scrollable, StreamsSortDialog.On
                     tags = args.tags ?: sortValues?.streamTags?.split(',')?.toTypedArray(),
                     languages = args.languages ?: sortValues?.streamLanguages?.split(',')?.toTypedArray(),
                 )
-                viewModel.sortText.value = getString(
-                    R.string.sort_by,
-                    getString(
-                        when (viewModel.sort) {
-                            SORT_VIEWERS -> R.string.viewers_high
-                            SORT_VIEWERS_ASC -> R.string.viewers_low
-                            RECENT -> R.string.recent
-                            else -> R.string.viewers_high
-                        }
-                    )
-                )
-                viewModel.filtersText.value = if (viewModel.tags.isNotEmpty() || viewModel.languages.isNotEmpty()) {
-                    buildString {
-                        if (viewModel.tags.isNotEmpty()) {
-                            append(
-                                resources.getQuantityString(
-                                    R.plurals.tags,
-                                    viewModel.tags.size,
-                                    viewModel.tags.joinToString()
-                                )
-                            )
-                        }
-                        if (viewModel.languages.isNotEmpty()) {
-                            if (isNotEmpty()) {
-                                append(". ")
-                            }
-                            append(
-                                resources.getQuantityString(
-                                    R.plurals.languages,
-                                    viewModel.languages.size,
-                                    viewModel.languages.joinToString()
-                                )
-                            )
-                        }
-                    }
-                } else null
             }
+            // Recompute every time so the sort bar follows app-locale changes
+            viewModel.sortText.value = getString(
+                R.string.sort_by,
+                getString(
+                    when (viewModel.sort) {
+                        SORT_VIEWERS -> R.string.viewers_high
+                        SORT_VIEWERS_ASC -> R.string.viewers_low
+                        RECENT -> R.string.recent
+                        else -> R.string.viewers_high
+                    }
+                )
+            )
+            viewModel.filtersText.value = if (viewModel.tags.isNotEmpty() || viewModel.languages.isNotEmpty()) {
+                buildString {
+                    if (viewModel.tags.isNotEmpty()) {
+                        append(
+                            resources.getQuantityString(
+                                R.plurals.tags,
+                                viewModel.tags.size,
+                                viewModel.tags.joinToString()
+                            )
+                        )
+                    }
+                    if (viewModel.languages.isNotEmpty()) {
+                        if (isNotEmpty()) {
+                            append(". ")
+                        }
+                        append(
+                            resources.getQuantityString(
+                                R.plurals.languages,
+                                viewModel.languages.size,
+                                viewModel.languages.joinToString()
+                            )
+                        )
+                    }
+                }
+            } else null
             repeatOnLifecycle(Lifecycle.State.STARTED) {
                 viewModel.flow.collectLatest { pagingData ->
                     pagingAdapter.submitData(pagingData)

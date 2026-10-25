@@ -1,11 +1,13 @@
 package com.xtrakick.app
 
 import android.app.Application
+import android.content.Context
 import android.os.Bundle
 import android.net.http.HttpEngine
 import android.os.Build
 import android.os.ext.SdkExtensions
 import android.webkit.CookieManager
+import androidx.appcompat.app.AppCompatDelegate
 import androidx.hilt.work.HiltWorkerFactory
 import androidx.work.Configuration
 import coil3.ImageLoader
@@ -59,6 +61,33 @@ class KickApp : Application(), Configuration.Provider, SingletonImageLoader.Fact
     companion object {
         lateinit var INSTANCE: Application
         var showUnexpectedLogoutNoticeThisProcess = false
+    }
+
+    // Below Android 13, AppCompat applies stored app locales to activity contexts only,
+    // so string lookups going through the application context (chat notices, widgets,
+    // notifications) would ignore the user's language choice. Wrap the base context once
+    // here; on 13+ the framework already localizes the app context via localeConfig.
+    @android.annotation.SuppressLint("RestrictedApi")
+    override fun attachBaseContext(base: Context) {
+        val wrapped = if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) {
+            val appLocales = AppCompatDelegate.getApplicationLocales()
+            val primary = if (!appLocales.isEmpty) {
+                appLocales[0]
+            } else {
+                val tags = androidx.core.app.AppLocalesStorageHelper.readLocales(base)
+                val stored = androidx.core.os.LocaleListCompat.forLanguageTags(tags)
+                if (stored.isEmpty) null else stored[0]
+            }
+            if (primary != null) {
+                android.content.res.Configuration(base.resources.configuration).apply { setLocale(primary) }
+                    .let(base::createConfigurationContext)
+            } else {
+                base
+            }
+        } else {
+            base
+        }
+        super.attachBaseContext(wrapped)
     }
 
     @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)

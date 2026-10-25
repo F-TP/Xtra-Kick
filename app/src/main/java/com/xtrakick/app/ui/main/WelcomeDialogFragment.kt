@@ -10,6 +10,7 @@ import androidx.appcompat.app.AppCompatActivity
 import com.google.android.material.bottomsheet.BottomSheetDialogFragment
 import com.xtrakick.app.databinding.DialogWelcomeOnboardingBinding
 import com.xtrakick.app.util.AppConstants
+import com.xtrakick.app.util.AuthStateHelper
 import com.xtrakick.app.util.prefs
 
 class WelcomeDialogFragment : BottomSheetDialogFragment() {
@@ -64,12 +65,17 @@ class WelcomeDialogFragment : BottomSheetDialogFragment() {
         fun showIfNeeded(activity: AppCompatActivity, onSignIn: () -> Unit) {
             if (activity.isFinishing || activity.isDestroyed) return
             val prefs = activity.prefs()
-            if (!prefs.getBoolean(AppConstants.KEY_ONBOARDING_COMPLETED, false)) {
-                if (activity.supportFragmentManager.findFragmentByTag(TAG) == null) {
-                    val dialog = newInstance()
-                    dialog.onSignInAction = onSignIn
-                    dialog.show(activity.supportFragmentManager, TAG)
-                }
+            if (prefs.getBoolean(AppConstants.KEY_ONBOARDING_COMPLETED, false)) return
+            // Existing installs updating to the onboarding build are already signed in;
+            // the welcome sheet is only for fresh, signed-out installs.
+            if (AuthStateHelper.isKickLoggedIn(activity)) {
+                prefs.edit().putBoolean(AppConstants.KEY_ONBOARDING_COMPLETED, true).apply()
+                return
+            }
+            if (activity.supportFragmentManager.findFragmentByTag(TAG) == null) {
+                val dialog = newInstance()
+                dialog.onSignInAction = onSignIn
+                dialog.show(activity.supportFragmentManager, TAG)
             }
         }
     }

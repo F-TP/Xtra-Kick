@@ -84,9 +84,16 @@
 
     <SwitchPreferenceCompat
         android:defaultValue="false"
+        android:icon="@drawable/exo_icon_pause"
         android:key="player_pause"
         android:title="@string/player_pause"
-        app:iconSpaceReserved="false"
+        app:singleLineTitle="false" />
+
+    <SwitchPreferenceCompat
+        android:defaultValue="true"
+        android:icon="@drawable/ic_clip_24"
+        android:key="player_clip"
+        android:title="@string/clip"
         app:singleLineTitle="false" />
 
     <SwitchPreferenceCompat

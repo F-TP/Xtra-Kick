@@ -42,7 +42,10 @@ class LiveChannelsWidgetProvider : AppWidgetProvider() {
             putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, appWidgetId)
             data = Uri.parse(toUri(Intent.URI_INTENT_SCHEME))
         }
+        // The AdapterViewFactory replacement exists only from Android 12; with minSdk 26
+        // these deprecated calls are the supported path for collection widgets.
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
+            @Suppress("DEPRECATION")
             views.setRemoteAdapter(appWidgetId, R.id.widgetListView, serviceIntent)
         } else {
             @Suppress("DEPRECATION")
@@ -96,9 +99,10 @@ class LiveChannelsWidgetProvider : AppWidgetProvider() {
             val componentName = ComponentName(context, LiveChannelsWidgetProvider::class.java)
             val appWidgetIds = appWidgetManager.getAppWidgetIds(componentName)
             if (appWidgetIds != null && appWidgetIds.isNotEmpty()) {
-                for (id in appWidgetIds) {
-                    appWidgetManager.notifyAppWidgetViewDataChanged(id, R.id.widgetListView)
-                }
+                // Both overloads are deprecated with no replacement; this is the
+                // supported way to refresh a collection widget's data.
+                @Suppress("DEPRECATION")
+                appWidgetManager.notifyAppWidgetViewDataChanged(appWidgetIds, R.id.widgetListView)
             }
         }
     }

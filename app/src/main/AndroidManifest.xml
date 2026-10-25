@@ -17,6 +17,9 @@
          enables importing/listing videos created by other apps and showing
          thumbnails in system pickers on Android 13+. -->
     <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" />
+    <!-- Android 14+ partial media access: lets users grant "Selected photos & videos"
+         instead of the system silently downgrading or denying READ_MEDIA_VIDEO. -->
+    <uses-permission android:name="android.permission.READ_MEDIA_VISUAL_USER_SELECTED" />
     <uses-permission
         android:name="android.permission.READ_EXTERNAL_STORAGE"
         android:maxSdkVersion="32" />

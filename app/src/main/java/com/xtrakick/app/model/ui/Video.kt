@@ -27,6 +27,7 @@ class Video(
     val animatedPreviewURL: String? = null,
     val uuid: String? = null,
     val slug: String? = null,
+    val vodId: String? = null,
 ) : Parcelable {
 
     val thumbnail: String?

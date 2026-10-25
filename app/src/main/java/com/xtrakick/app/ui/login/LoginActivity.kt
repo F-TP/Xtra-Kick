@@ -30,6 +30,7 @@ import androidx.credentials.CustomCredential
 import androidx.credentials.GetCredentialRequest
 import androidx.credentials.exceptions.GetCredentialCancellationException
 import androidx.credentials.exceptions.GetCredentialException
+import androidx.credentials.exceptions.NoCredentialException
 import androidx.lifecycle.lifecycleScope
 import com.google.android.libraries.identity.googleid.GetGoogleIdOption
 import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
@@ -613,6 +614,11 @@ class LoginActivity : AppCompatActivity() {
                     throw IllegalStateException("unexpected credential type: ${credential.type}")
                 }
                 GoogleIdTokenCredential.createFrom(credential.data).idToken
+            } catch (e: NoCredentialException) {
+                Log.w(TAG, "No Google account available on this device", e)
+                Toast.makeText(this@LoginActivity, R.string.google_sign_in_failed, Toast.LENGTH_LONG).show()
+                showLoginOptions()
+                return@launch
             } catch (e: GetCredentialException) {
                 Log.w(TAG, "Google credential picker failed", e)
                 if (e !is GetCredentialCancellationException) {

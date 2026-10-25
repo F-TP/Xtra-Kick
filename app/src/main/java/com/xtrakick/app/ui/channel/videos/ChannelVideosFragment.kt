@@ -98,25 +98,26 @@ class ChannelVideosFragment : PagedListFragment(), Scrollable, Sortable, VideosS
                     period = VideosSortDialog.PERIOD_ALL,
                     type = sortValues?.videoType,
                 )
-                viewModel.sortText.value = getString(
-                    R.string.sort_and_type,
-                    getString(
-                        when (viewModel.sort) {
-                            VideosSortDialog.SORT_TIME -> R.string.upload_date
-                            VideosSortDialog.SORT_VIEWS -> R.string.view_count
-                            else -> R.string.upload_date
-                        }
-                    ),
-                    getString(
-                        when (viewModel.type) {
-                            VideosSortDialog.VIDEO_TYPE_ARCHIVE -> R.string.video_type_archive
-                            VideosSortDialog.VIDEO_TYPE_HIGHLIGHT -> R.string.video_type_highlight
-                            VideosSortDialog.VIDEO_TYPE_UPLOAD -> R.string.video_type_upload
-                            else -> R.string.all
-                        }
-                    )
-                )
             }
+            // Recompute every time so the sort bar follows app-locale changes
+            viewModel.sortText.value = getString(
+                R.string.sort_and_type,
+                getString(
+                    when (viewModel.sort) {
+                        VideosSortDialog.SORT_TIME -> R.string.upload_date
+                        VideosSortDialog.SORT_VIEWS -> R.string.view_count
+                        else -> R.string.upload_date
+                    }
+                ),
+                getString(
+                    when (viewModel.type) {
+                        VideosSortDialog.VIDEO_TYPE_ARCHIVE -> R.string.video_type_archive
+                        VideosSortDialog.VIDEO_TYPE_HIGHLIGHT -> R.string.video_type_highlight
+                        VideosSortDialog.VIDEO_TYPE_UPLOAD -> R.string.video_type_upload
+                        else -> R.string.all
+                    }
+                )
+            )
             repeatOnLifecycle(Lifecycle.State.STARTED) {
                 viewModel.flow.collectLatest { pagingData ->
                     pagingAdapter.submitData(pagingData)

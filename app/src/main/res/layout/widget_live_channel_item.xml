@@ -73,7 +73,7 @@
             android:paddingTop="1dp"
             android:paddingEnd="4dp"
             android:paddingBottom="1dp"
-            android:text="LIVE"
+            android:text="@string/widget_live_badge"
             android:textColor="#FFFFFF"
             android:textSize="9sp"
             android:textStyle="bold" />

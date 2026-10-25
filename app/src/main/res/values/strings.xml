@@ -42,7 +42,6 @@
     <string name="duration">Duration: %s</string>
     <string name="invalid_time">Invalid time</string>
     <string name="from_is_greater">\"From\" must be less than \"To\".</string>
-    <string name="to_is_lesser">\"To\" must be greater than \"From\".</string>
     <string name="to_is_longer">\"To\" can\'t be greater than video length.</string>
     <string name="delete">Delete</string>
     <string name="are_you_sure">Are you sure you want to delete this video?</string>
@@ -57,12 +56,9 @@
     <string name="amoled">Black</string>
     <string name="light">Light</string>
     <string name="settings">Settings</string>
-    <string name="general">General</string>
     <string name="appearance">Appearance</string>
     <string name="navigation">Navigation</string>
     <string name="advanced">Advanced</string>
-    <string name="player">Player</string>
-    <string name="player_behavior">Playback behavior</string>
     <string name="updates">Updates</string>
     <string name="backup_and_restore">Backup and restore</string>
     <string name="network">Network</string>
@@ -84,7 +80,7 @@
     <string name="no">No</string>
     <string name="search">Search</string>
     <string name="chat_replay_unavailable">Chat replay is unavailable</string>
-    <string name="chat_clip_replay_starts" translatable="false">--- Clip chat starts here ---</string>
+    <string name="chat_clip_replay_starts">--- Clip chat starts here ---</string>
     <string name="video_subscribers_only">This video is only available to subscribers.</string>
     <string name="video_source_unavailable">This video source is no longer available.</string>
     <string name="download_unavailable">This download is not available.</string>
@@ -97,6 +93,7 @@
     <string name="download_pending">Pending</string>
     <string name="downloading_progress">Downloading: %d%%</string>
     <string name="pause">Pause</string>
+    <string name="play">Play</string>
     <string name="resume">Resume</string>
     <string name="reply">Reply</string>
     <string name="copy_message">Copy message</string>
@@ -131,7 +128,6 @@
     <string name="logout_msg">Logged in as %s</string>
     <string name="logout_success_toast">Logged out</string>
     <string name="logout_revoke_failed_toast">Logged out on this device, but revoking the token with Kick failed</string>
-    <string name="not_logged_in">Not logged in</string>
     <string name="never">Never</string>
     <string name="blue">Blue</string>
     <string name="rounduserimage">Circle profile pictures</string>
@@ -418,7 +414,6 @@
     <string name="use_followpager">Use tabs for \"Following\" page</string>
     <string name="sleep_timer_lock">Lock screen after</string>
     <string name="sleep_timer_lock_permissions">Lock screen after (requires device admin permissions)</string>
-    <string name="admin_settings">Enable/disable as device admin app</string>
     <string name="disable_chat">Disable chat</string>
     <string name="disconnected">Disconnected</string>
     <string name="other">Other</string>
@@ -430,55 +425,54 @@
     <string name="timestamp_format_5">hh:mm am/pm</string>
     <string name="timestamp_format_6">h:mm:ss am/pm</string>
     <string name="timestamp_format_7">hh:mm:ss am/pm</string>
-    <string name="api_login">Get token for selected APIs</string>
-    <string name="api_kick_scopes" translatable="false">Kick scopes</string>
-    <string name="kick_developer_tools" translatable="false">Kick developer tools</string>
-    <string name="kick_manage_rewards" translatable="false">Manage Kick rewards</string>
-    <string name="kick_manage_redemptions" translatable="false">Manage Kick redemptions</string>
-    <string name="kick_manage_event_subscriptions" translatable="false">Manage Kick event subscriptions</string>
-    <string name="kick_manage_event_subscriptions_summary" translatable="false">List, create, and delete official webhook event subscriptions.</string>
-    <string name="save" translatable="false">Save</string>
-    <string name="kick_scope_required" translatable="false">Kick scope required: %1$s</string>
-    <string name="kick_scope_required_multiple" translatable="false">Kick scopes required: %1$s</string>
-    <string name="kick_command_needs_oauth" translatable="false">Kick commands need OAuth login - Google login tokens are rejected by api.kick.com. Log in with Kick instead.</string>
-    <string name="kick_reward_empty" translatable="false">No Kick rewards found.</string>
-    <string name="kick_redemptions_empty" translatable="false">No Kick redemptions matched the current filter.</string>
-    <string name="kick_subscriptions_empty" translatable="false">No Kick event subscriptions found.</string>
-    <string name="kick_reward_create" translatable="false">Create reward</string>
-    <string name="kick_reward_edit" translatable="false">Edit reward</string>
-    <string name="kick_reward_delete" translatable="false">Delete reward</string>
-    <string name="kick_redemption_accept" translatable="false">Accept selected</string>
-    <string name="kick_redemption_reject" translatable="false">Reject selected</string>
-    <string name="kick_redemption_filters" translatable="false">Filters</string>
-    <string name="kick_event_subscription_create" translatable="false">Create subscriptions</string>
-    <string name="kick_event_subscription_delete" translatable="false">Delete subscriptions</string>
-    <string name="kick_event_subscription_webhook_notice" translatable="false">Webhook delivery is configured outside the app in Kick developer settings.</string>
-    <string name="kick_reward_title" translatable="false">Title</string>
-    <string name="kick_reward_description" translatable="false">Description</string>
-    <string name="kick_reward_cost" translatable="false">Cost</string>
-    <string name="kick_reward_background_color" translatable="false">Background color</string>
-    <string name="kick_reward_enabled" translatable="false">Enabled</string>
-    <string name="kick_reward_paused" translatable="false">Paused</string>
-    <string name="kick_reward_requires_input" translatable="false">Require user input</string>
-    <string name="kick_reward_redeem" translatable="false">Redeem</string>
-    <string name="kick_reward_redeem_confirm" translatable="false">Redeem %1$s?</string>
-    <string name="kick_reward_redeem_input_hint" translatable="false">Enter reward text</string>
-    <string name="kick_reward_redeemed" translatable="false">Redeemed %1$s.</string>
-    <string name="kick_reward_skip_queue" translatable="false">Skip request queue</string>
-    <string name="kick_redemption_status_all" translatable="false">All statuses</string>
-    <string name="kick_redemption_status_pending" translatable="false">Pending</string>
-    <string name="kick_redemption_status_accepted" translatable="false">Accepted</string>
-    <string name="kick_redemption_status_rejected" translatable="false">Rejected</string>
-    <string name="kick_select_reward" translatable="false">Select reward</string>
-    <string name="kick_select_events" translatable="false">Select events</string>
-    <string name="kick_select_subscriptions" translatable="false">Select subscriptions</string>
-    <string name="kick_no_selection" translatable="false">Nothing selected.</string>
-    <string name="kick_load_more" translatable="false">Load more</string>
-    <string name="kick_all_rewards" translatable="false">All rewards</string>
-    <string name="kick_rewards_saved" translatable="false">Kick reward saved.</string>
-    <string name="kick_reward_deleted" translatable="false">Kick reward deleted.</string>
-    <string name="kick_redemptions_updated" translatable="false">Kick redemptions updated.</string>
-    <string name="kick_subscriptions_updated" translatable="false">Kick event subscriptions updated.</string>
+    <string name="api_kick_scopes">Kick scopes</string>
+    <string name="kick_developer_tools">Kick developer tools</string>
+    <string name="kick_manage_rewards">Manage Kick rewards</string>
+    <string name="kick_manage_redemptions">Manage Kick redemptions</string>
+    <string name="kick_manage_event_subscriptions">Manage Kick event subscriptions</string>
+    <string name="kick_manage_event_subscriptions_summary">List, create, and delete official webhook event subscriptions.</string>
+    <string name="save">Save</string>
+    <string name="kick_scope_required">Kick scope required: %1$s</string>
+    <string name="kick_scope_required_multiple">Kick scopes required: %1$s</string>
+    <string name="kick_command_needs_oauth">Kick commands need OAuth login - Google login tokens are rejected by api.kick.com. Log in with Kick instead.</string>
+    <string name="kick_reward_empty">No Kick rewards found.</string>
+    <string name="kick_redemptions_empty">No Kick redemptions matched the current filter.</string>
+    <string name="kick_subscriptions_empty">No Kick event subscriptions found.</string>
+    <string name="kick_reward_create">Create reward</string>
+    <string name="kick_reward_edit">Edit reward</string>
+    <string name="kick_reward_delete">Delete reward</string>
+    <string name="kick_redemption_accept">Accept selected</string>
+    <string name="kick_redemption_reject">Reject selected</string>
+    <string name="kick_redemption_filters">Filters</string>
+    <string name="kick_event_subscription_create">Create subscriptions</string>
+    <string name="kick_event_subscription_delete">Delete subscriptions</string>
+    <string name="kick_event_subscription_webhook_notice">Webhook delivery is configured outside the app in Kick developer settings.</string>
+    <string name="kick_reward_title">Title</string>
+    <string name="kick_reward_description">Description</string>
+    <string name="kick_reward_cost">Cost</string>
+    <string name="kick_reward_background_color">Background color</string>
+    <string name="kick_reward_enabled">Enabled</string>
+    <string name="kick_reward_paused">Paused</string>
+    <string name="kick_reward_requires_input">Require user input</string>
+    <string name="kick_reward_redeem">Redeem</string>
+    <string name="kick_reward_redeem_confirm">Redeem %1$s?</string>
+    <string name="kick_reward_redeem_input_hint">Enter reward text</string>
+    <string name="kick_reward_redeemed">Redeemed %1$s.</string>
+    <string name="kick_reward_skip_queue">Skip request queue</string>
+    <string name="kick_redemption_status_all">All statuses</string>
+    <string name="kick_redemption_status_pending">Pending</string>
+    <string name="kick_redemption_status_accepted">Accepted</string>
+    <string name="kick_redemption_status_rejected">Rejected</string>
+    <string name="kick_select_reward">Select reward</string>
+    <string name="kick_select_events">Select events</string>
+    <string name="kick_select_subscriptions">Select subscriptions</string>
+    <string name="kick_no_selection">Nothing selected.</string>
+    <string name="kick_load_more">Load more</string>
+    <string name="kick_all_rewards">All rewards</string>
+    <string name="kick_rewards_saved">Kick reward saved.</string>
+    <string name="kick_reward_deleted">Kick reward deleted.</string>
+    <string name="kick_redemptions_updated">Kick redemptions updated.</string>
+    <string name="kick_subscriptions_updated">Kick event subscriptions updated.</string>
     <string name="api_settings">API settings</string>
     <string name="streams">Streams</string>
     <string name="game_streams">Game streams</string>
@@ -586,12 +580,10 @@
     <string name="raid_stay">Stay</string>
     <string name="search_streams">Search tags</string>
     <string name="reload_emotes">Reload emotes</string>
-    <string name="api_current_login">Current login</string>
     <string name="api_user_id">Account ID</string>
     <string name="api_user_login">Account login</string>
-    <string name="api_kick_access_token" translatable="false">Kick access token</string>
-    <string name="api_kick_refresh_token" translatable="false">Kick refresh token</string>
-    <string name="api_validate_tokens">Validate tokens on startup</string>
+    <string name="api_kick_access_token">Kick access token</string>
+    <string name="api_kick_refresh_token">Kick refresh token</string>
     <string name="followed_only">Followed only</string>
     <string name="debug_api_commands">Use API chat commands</string>
     <string name="debug_delete_all_followed_channels">Delete all followed channels</string>
@@ -648,7 +640,6 @@
     <string name="muted_users_load_failed">Failed to load muted users</string>
     <string name="muted_users_empty">No muted users</string>
     <string name="muted_users_unmute_failed">Couldn\'t unmute %s</string>
-    <string name="pip_controls">Picture-in-Picture controls</string>
     <string name="pip_show_audio_only">Audio-Only action</string>
     <string name="pip_show_audio_only_summary">Show Audio-Only quick action in PiP</string>
     <string name="pip_show_mute">Mute/Unmute action</string>
@@ -672,7 +663,7 @@
     <string name="notification_permission_title">Notification permission required</string>
     <string name="notification_permission_message">Notification permission is required to show download progress.</string>
     <string name="select_directory">Select directory</string>
-    <string name="storage_permission_required">Permission required</string>
+    <string name="storage_permission_required">%1$s (Permission required)</string>
     <string name="shared_storage">Shared storage</string>
     <string name="app_storage">App storage</string>
     <string name="import_folders">Import folders</string>
@@ -791,7 +782,7 @@ These are downloads you removed while keeping the files. Android hides this fold
     <string name="reward_auto_claim">Auto-claim Kick rewards</string>
     <string name="reward_auto_claim_summary">Automatically claims your daily reward and finished drops. Requires a kick.com login done inside the app.</string>
     <string name="reward_claim_notifications">Notify about claimed rewards</string>
-    <string name="reward_claim_channel_id">reward_claims</string>
+    <string name="reward_claim_channel_id" translatable="false">reward_claims</string>
     <string name="reward_claim_channel_title">Reward claims</string>
     <string name="reward_claim_daily_title">Daily reward claimed</string>
     <string name="reward_claim_drops_title">Drops claimed</string>
@@ -839,13 +830,13 @@ These are downloads you removed while keeping the files. Android hides this fold
     <string name="global_stv_emote">Global 7TV emote</string>
     <string name="show_name_paints">Show 7TV name paints</string>
     <string name="api_kick" translatable="false">Kick</string>
-    <string name="kick_oauth_not_configured" translatable="false">Kick login is not configured. Set KICK_CLIENT_ID and KICK_OAUTH_BACKEND_BASE_URL in build config.</string>
-    <string name="kick_oauth_scope_missing" translatable="false">Kick login requires scopes: user:read and chat:write.</string>
-    <string name="kick_oauth_backend_unreachable" translatable="false">Kick login is temporarily unavailable because the OAuth backend server is offline or not reachable. Try again in a moment.</string>
-    <string name="kick_browser_fallback_webview" translatable="false">Could not open browser, continuing in-app.</string>
+    <string name="kick_oauth_not_configured">Kick login is not configured. Set KICK_CLIENT_ID and KICK_OAUTH_BACKEND_BASE_URL in build config.</string>
+    <string name="kick_oauth_scope_missing">Kick login requires scopes: user:read and chat:write.</string>
+    <string name="kick_oauth_backend_unreachable">Kick login is temporarily unavailable because the OAuth backend server is offline or not reachable. Try again in a moment.</string>
+    <string name="kick_browser_fallback_webview">Could not open browser, continuing in-app.</string>
     <string name="retry">Retry</string>
     <string name="show_stv_badges">Show 7TV badges</string>
-    <string name="show_kick_badges" translatable="false">Show Kick badges</string>
+    <string name="show_kick_badges">Show Kick badges</string>
     <string name="show_stv_personal_emotes">Show 7TV personal emotes</string>
     <string name="chat_delay_mode">Live chat delay</string>
     <string name="chat_delay_mode_off">Off</string>
@@ -874,14 +865,12 @@ These are downloads you removed while keeping the files. Android hides this fold
     <string name="kick_prediction_vote_only_selected">You can only add to your selected outcome</string>
     <string name="prediction_outcome_compact">%1$d%%: %2$s</string>
     <string name="prediction_outcome_compact_winner">Winner: %1$d%%: %2$s</string>
-    <string name="api_token_settings">API token settings</string>
     <string name="download_settings">Downloads</string>
     <string name="update_settings">Update settings</string>
     <string name="downloading_update_progress">Downloading update. %1$s / %2$s</string>
     <string name="downloading_update">Downloading update.</string>
     <string name="playback_settings">Playback</string>
     <string name="chat_settings">Chat</string>
-    <string name="ui_settings">UI</string>
     <string name="debug_settings">Debug</string>
     <string name="download_threads">Download threads</string>
     <string name="download_threads_summary">Number of chunks that are downloaded concurrently</string>
@@ -952,8 +941,8 @@ These are downloads you removed while keeping the files. Android hides this fold
     <string name="translate_message">Translate message</string>
     <string name="translate_from_selected">Translate from selected language</string>
     <string name="show_more_websocket_info">Show more info about WebSockets</string>
-    <string name="debug_kick_realtime_chat" translatable="false">Kick realtime chat debug logs</string>
-    <string name="debug_kick_legacy_search" translatable="false">Use legacy Kick search scan</string>
+    <string name="debug_kick_realtime_chat">Kick realtime chat debug logs</string>
+    <string name="debug_kick_legacy_search">Use legacy Kick search scan</string>
     <string name="websocket_connected">%s: Connected</string>
     <string name="websocket_disconnected">%1$s: Disconnected - %2$s</string>
     <string name="sort_and_type">Sort by: %1$s. Type: %2$s</string>
@@ -992,14 +981,14 @@ These are downloads you removed while keeping the files. Android hides this fold
     <string name="diagnostic_log_share_title">Share diagnostic log</string>
     <string name="diagnostic_log_test">Write test diagnostic entry</string>
     <string name="diagnostic_log_test_done">Test diagnostic entry written</string>
-    <string name="debug_kick_clip_chat" translatable="false">Kick replay and clip chat debug logs</string>
-    <string name="debug_kick_badge_logs" translatable="false">Kick badge parser debug logs</string>
-    <string name="debug_kick_feature_logs" translatable="false">Kick points and pinned feature debug logs</string>
-    <string name="debug_kick_chat_ui_logs" translatable="false">Kick chat UI debug logs</string>
+    <string name="debug_kick_clip_chat">Kick replay and clip chat debug logs</string>
+    <string name="debug_kick_badge_logs">Kick badge parser debug logs</string>
+    <string name="debug_kick_feature_logs">Kick points and pinned feature debug logs</string>
+    <string name="debug_kick_chat_ui_logs">Kick chat UI debug logs</string>
     <string name="debug_network_logs">Network and image loader debug logs</string>
     <string name="debug_player_buffer_logs">Player buffering and latency debug logs</string>
     <string name="debug_player_shell_logs">Player handoff and activity debug logs</string>
-    <string name="debug_kick_follow_import_logs" translatable="false">Kick follow import debug logs</string>
+    <string name="debug_kick_follow_import_logs">Kick follow import debug logs</string>
     <string name="saved_tabs">Saved tabs</string>
     <string name="channel_tabs">Channel tabs</string>
     <string name="game_tabs">Game tabs</string>
@@ -1027,32 +1016,32 @@ These are downloads you removed while keeping the files. Android hides this fold
     <string name="compact_text">Compact text</string>
     <string name="next">Next</string>
     <string name="open_url">Open URL</string>
-    <string name="open_browser_login_recommended" translatable="false">Open in browser (Not recommended)</string>
-    <string name="loading_kick_login" translatable="false">Loading Kick login…</string>
-    <string name="continue_with_kick" translatable="false">Continue with Kick</string>
-    <string name="continue_with_google" translatable="false">Continue with Google</string>
-    <string name="sign_in_title" translatable="false">Sign in to Xtra-Kick</string>
-    <string name="google_sign_in_failed" translatable="false">Google sign-in failed. Try again or use Kick login.</string>
-    <string name="logout_clear_follows_title" translatable="false">Clear local follows?</string>
-    <string name="logout_clear_follows_message" translatable="false">Channels you follow locally in the app can be removed when you log out.</string>
-    <string name="logout_follows_clear" translatable="false">Clear</string>
-    <string name="logout_follows_keep" translatable="false">Keep</string>
-    <string name="follow_channel_title" translatable="false">Follow %1$s</string>
-    <string name="follow_channel_subtitle" translatable="false">Choose how you want to follow this channel</string>
-    <string name="follow_on_kick" translatable="false">Follow on Kick</string>
-    <string name="follow_on_kick_desc" translatable="false">Syncs to your Kick account and unlocks follower-only chat</string>
-    <string name="follow_local_only" translatable="false">Follow locally only</string>
-    <string name="follow_local_only_desc" translatable="false">Saved in Xtra without affecting your Kick account</string>
-    <string name="remember_choice" translatable="false">Remember my choice</string>
-    <string name="default_tag" translatable="false">(Default)</string>
-    <string name="follow_on_kick_own_account_unsupported" translatable="false">Not supported on Kick for your own account</string>
-    <string name="following_own_channel_locally" translatable="false">Followed locally (own account cannot be followed on Kick)</string>
-    <string name="sort_by_source" translatable="false">Source</string>
-    <string name="source_kick_first" translatable="false">Kick first</string>
-    <string name="source_local_first" translatable="false">Local first</string>
-    <string name="logging_in" translatable="false">Logging in…</string>
-    <string name="importing_kick_follows" translatable="false">Importing followed channels…</string>
-    <string name="importing_kick_follows_progress" translatable="false">Importing followed channels (%1$d found)…</string>
+    <string name="open_browser_login_recommended">Open in browser (Not recommended)</string>
+    <string name="loading_kick_login">Loading Kick login…</string>
+    <string name="continue_with_kick">Continue with Kick</string>
+    <string name="continue_with_google">Continue with Google</string>
+    <string name="sign_in_title">Sign in to Xtra-Kick</string>
+    <string name="google_sign_in_failed">Google sign-in failed. Try again or use Kick login.</string>
+    <string name="logout_clear_follows_title">Clear local follows?</string>
+    <string name="logout_clear_follows_message">Channels you follow locally in the app can be removed when you log out.</string>
+    <string name="logout_follows_clear">Clear</string>
+    <string name="logout_follows_keep">Keep</string>
+    <string name="follow_channel_title">Follow %1$s</string>
+    <string name="follow_channel_subtitle">Choose how you want to follow this channel</string>
+    <string name="follow_on_kick">Follow on Kick</string>
+    <string name="follow_on_kick_desc">Syncs to your Kick account and unlocks follower-only chat</string>
+    <string name="follow_local_only">Follow locally only</string>
+    <string name="follow_local_only_desc">Saved in Xtra without affecting your Kick account</string>
+    <string name="remember_choice">Remember my choice</string>
+    <string name="follow_default_option">%1$s (Default)</string>
+    <string name="follow_on_kick_own_account_unsupported">Not supported on Kick for your own account</string>
+    <string name="following_own_channel_locally">Followed locally (own account cannot be followed on Kick)</string>
+    <string name="sort_by_source">Source</string>
+    <string name="source_kick_first">Kick first</string>
+    <string name="source_local_first">Local first</string>
+    <string name="logging_in">Logging in…</string>
+    <string name="importing_kick_follows">Importing followed channels…</string>
+    <string name="importing_kick_follows_progress">Importing followed channels (%1$d found)…</string>
     <string name="loading">Loading...</string>
     <string name="copy_code">Copy code</string>
     <string name="multipov">MultiPOV</string>
@@ -1147,7 +1136,6 @@ These are downloads you removed while keeping the files. Android hides this fold
     <string name="nav_notifications_summary">Streamer go-live alerts and daily reward auto-claim</string>
     <string name="nav_system_summary">Navigation tabs, updates, backup, proxy, and developer tools</string>
     <string name="kick_account">Kick Account</string>
-    <string name="log_in_to_kick">Log in to Kick</string>
     <string name="log_in_to_kick_summary">Sign in to chat, follow channels, and track daily rewards</string>
     <string name="logged_in_as_summary">Logged in as %s</string>
     <string name="tap_to_log_out">Tap to log out</string>
@@ -1185,7 +1173,6 @@ These are downloads you removed while keeping the files. Android hides this fold
     <string name="gestures_and_seeking">Gestures &amp; Seeking</string>
     <string name="on_screen_buttons">On-Screen Buttons</string>
     <string name="on_screen_info">On-Screen Information</string>
-    <string name="sleep_timer_and_admin">Sleep Timer &amp; Device Screen Lock</string>
     <string name="text_and_sizing">Text &amp; Sizing</string>
     <string name="usernames_and_cosmetics">Usernames &amp; Cosmetics</string>
     <string name="emotes_and_graphics">Emotes &amp; Graphics</string>
@@ -1193,7 +1180,6 @@ These are downloads you removed while keeping the files. Android hides this fold
     <string name="sync_and_performance">Sync &amp; Performance</string>
     <string name="livestream_alerts">Livestream Alerts</string>
     <string name="feed_refresh_and_startup">Feed &amp; Startup</string>
-    <string name="storage_and_library_cleanup">Storage &amp; Library Cleanup</string>
     <string name="live_latency">Live Stream Latency</string>
     <string name="buffer_cache_limits">Buffer Cache Limits</string>
     <string name="live_edge_sync">Live Edge Synchronization</string>
@@ -1206,7 +1192,6 @@ These are downloads you removed while keeping the files. Android hides this fold
     <string name="action_enable">Enable</string>
     <string name="action_not_now">Not now</string>
     <string name="notification_action_audio_only">Audio-Only</string>
-    <string name="notification_action_chat">Chat</string>
     <string name="chat_guest_login_prompt">Log in to chat &amp; claim rewards</string>
     <string name="live_widget_title">Live Channels</string>
     <string name="live_widget_empty">No followed streamers are live right now</string>
@@ -1226,4 +1211,33 @@ These are downloads you removed while keeping the files. Android hides this fold
     <string name="welcome_security_bullet3">• Direct Traffic: Connects straight to Kick servers</string>
     <string name="welcome_action_login">Sign in with Kick / Google</string>
     <string name="welcome_action_guest">Continue as Guest</string>
+
+    <string name="language">Language</string>
+    <string name="app_language">App language</string>
+    <string name="language_system_default">System default</string>
+    <string name="language_english" translatable="false">English</string>
+    <string name="language_spanish" translatable="false">Español</string>
+    <string name="emote_section_recent">Recent</string>
+    <string name="emote_section_global">Global</string>
+    <string name="widget_live_badge">LIVE</string>
+    <string name="clip">Clip</string>
+    <string name="create_clip">Create clip</string>
+    <string name="clip_title_hint">Clip title</string>
+    <string name="clip_title_required">Title is required</string>
+    <string name="clip_created">Clip created!</string>
+    <string name="clip_creation_failed">Couldn\'t create the clip. Try again.</string>
+    <string name="clip_creation_vod_unavailable">Broadcaster has disabled VODs; clips cannot be created for this stream.</string>
+    <string name="clip_range_label">%1$s – %2$s · %3$ds</string>
+    <string name="clip_preparing">Preparing clip…</string>
+    <string name="clip_set_start">Set Start</string>
+    <string name="clip_set_end">Set End</string>
+    <string name="cancel">Cancel</string>
+    <string name="clip_published_title">Clip published successfully</string>
+    <string name="clip_published_subtitle">Your clip is live on Kick. Share it or watch it now.</string>
+    <string name="clip_created_subtitle">Clipped from %1$s · %2$ds</string>
+    <string name="copy_link">Copy link</string>
+    <string name="link_copied_to_clipboard">Link copied to clipboard</string>
+    <string name="share_clip">Share clip</string>
+    <string name="watch_clip">Watch clip</string>
+    <string name="done">Done</string>
 </resources>

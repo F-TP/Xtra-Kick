@@ -798,6 +798,14 @@ class Media3Fragment : PlayerFragment() {
 
     override fun getCurrentPosition() = player?.currentPosition
 
+    override fun pausePlaybackForOverlay() {
+        player?.pause()
+    }
+
+    override fun resumePlaybackAfterOverlay() {
+        player?.play()
+    }
+
     override fun getCurrentSpeed() = player?.playbackParameters?.speed
 
     override fun getCurrentVolume() = player?.volume ?: (prefs.getInt(AppConstants.PLAYER_VOLUME, 100) / 100f)

@@ -1099,6 +1099,16 @@ class MainActivity : AppCompatActivity() {
         startPlayer(fragment)
     }
 
+    fun loadClip(clipId: String) {
+        viewModel.loadClip(
+            clipId = clipId,
+            networkLibrary = prefs.getString(AppConstants.NETWORK_LIBRARY, "OkHttp"),
+            kickWebHeaders = KickApiHelper.getKickWebHeaders(this),
+            kickPublicApiHeaders = KickApiHelper.getKickPublicApiHeaders(this),
+            enableIntegrity = prefs.getBoolean(AppConstants.ENABLE_INTEGRITY, false),
+        )
+    }
+
     fun startOfflineVideo(video: OfflineVideo) {
         val stillThere = runCatching { com.xtrakick.app.util.DownloadStorage.exists(this, video.url) }.getOrDefault(false)
         if (!stillThere) {

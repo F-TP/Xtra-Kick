@@ -64,8 +64,9 @@ class FollowedChannelsFragment : PagedListFragment(), Scrollable, Sortable, Foll
                     sort = sortValues?.videoSort,
                     order = sortValues?.videoType,
                 )
-                viewModel.sortText.value = buildSortText()
             }
+            // Recompute every time so the sort bar follows app-locale changes
+            viewModel.sortText.value = buildSortText()
             repeatOnLifecycle(Lifecycle.State.STARTED) {
                 viewModel.flow.collectLatest { pagingData ->
                     pagingAdapter.submitData(pagingData)

@@ -284,7 +284,7 @@ class PlayerViewerListDialog : BottomSheetDialogFragment() {
         ) : RecyclerView.ViewHolder(binding.root) {
             fun bind(item: ViewerListItem.Header) {
                 binding.headerTitle.text = item.title.uppercase(Locale.ROOT)
-                binding.headerCount.text = item.count.toString()
+                binding.headerCount.text = "%,d".format(item.count)
             }
         }
 

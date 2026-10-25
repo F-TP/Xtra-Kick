@@ -96,6 +96,7 @@ import com.xtrakick.app.util.AppConstants
 import com.xtrakick.app.util.AuthStateHelper
 import com.xtrakick.app.util.DiagnosticLogger
 import com.xtrakick.app.util.KickApiHelper
+import com.xtrakick.app.util.KickClipApi
 import com.xtrakick.app.util.NotificationPermissionHelper
 import com.xtrakick.app.util.getAlertDialogBuilder
 import com.xtrakick.app.util.isKeyboardShown
@@ -108,6 +109,7 @@ import com.google.android.material.timepicker.TimeFormat
 import com.xtrakick.app.util.NetworkMonitor
 import dagger.hilt.android.AndroidEntryPoint
 import javax.inject.Inject
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
@@ -358,8 +360,8 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
         val b = _binding ?: return
         val defaultRewind = prefs.getString(AppConstants.PLAYER_REWIND, "10")?.toLongOrNull() ?: 10L
         val defaultForward = prefs.getString(AppConstants.PLAYER_FORWARD, "10")?.toLongOrNull() ?: 10L
-        b.playerControls.rewind.text = defaultRewind.toString()
-        b.playerControls.fastForward.text = defaultForward.toString()
+        b.playerControls.rewind.text = "%d".format(defaultRewind)
+        b.playerControls.fastForward.text = "%d".format(defaultForward)
         b.playerControls.rewindBadge.visibility = View.GONE
         b.playerControls.fastForwardBadge.visibility = View.GONE
     }
@@ -1549,6 +1551,12 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                             },
                             vodGames = !viewModel.gamesList.value.isNullOrEmpty()
                         ).show(childFragmentManager, "closeOnPip")
+                    }
+                }
+                if ((videoType == STREAM || videoType == VIDEO) && viewModel.hasKickClipCapability() && prefs.getBoolean(AppConstants.PLAYER_CLIP, true)) {
+                    clip.visibility = View.VISIBLE
+                    clip.setOnClickListener {
+                        showClipCreator()
                     }
                 }
                 if (videoType == STREAM) {
@@ -4288,6 +4296,72 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
         }
     }
 
+    fun getPlayerViewModel(): PlayerViewModel = viewModel
+
+    fun hasClipCreationCapability(): Boolean = viewModel.hasKickClipCapability()
+
+    /**
+     * Official-app flow: opens the clip editor sheet immediately in loading state,
+     * which initiates the server-side temporary clip while displaying responsive feedback.
+     * Pauses the live player while the sheet is open; the sheet resumes it on dismiss.
+     */
+    fun showClipCreator() {
+        if (videoType != STREAM && videoType != VIDEO) return
+        val channelLogin = requireArguments().getString(KEY_CHANNEL_LOGIN)?.takeIf { it.isNotBlank() }.orEmpty()
+        val directVodId = if (videoType == VIDEO) {
+            viewModel.currentVideoVodId?.takeIf { it.isNotBlank() }
+                ?: requireArguments().getString(KEY_VOD_ID)?.takeIf { it.isNotBlank() }
+                ?: requireArguments().getString(KEY_VIDEO_UUID)?.takeIf { it.isNotBlank() }
+                ?: requireArguments().getString(KEY_VIDEO_ID)?.takeIf { it.isNotBlank() }
+        } else {
+            null
+        }
+        if (videoType == STREAM && channelLogin.isBlank()) return
+        if (videoType == VIDEO && directVodId.isNullOrBlank()) return
+
+        val positionSeconds = if (videoType == VIDEO) {
+            val posMs = getCurrentPosition() ?: 0L
+            (posMs / 1000L).coerceAtLeast(0L)
+        } else {
+            null
+        }
+        pausePlaybackForOverlay()
+        ClipCreatorSheet.newInstance(
+            channelLogin = channelLogin,
+            vodId = directVodId,
+            positionSeconds = positionSeconds,
+        ).show(childFragmentManager, ClipCreatorSheet.TAG)
+    }
+
+    fun saveClip(
+        clipId: String,
+        title: String?,
+        startSeconds: Int,
+        durationSeconds: Int,
+        channelLogin: String?,
+        onResult: (KickClipApi.FinalizedClip?) -> Unit,
+    ) {
+        viewLifecycleOwner.lifecycleScope.launch {
+            try {
+                val finalized = viewModel.finalizeKickClip(clipId, title, startSeconds, durationSeconds, channelLogin)
+                onResult(finalized)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                DiagnosticLogger.w("PlayerFragment", "Clip save failed: ${e.message}")
+                onResult(null)
+            }
+        }
+    }
+
+    fun openCreatedClip(clipId: String) {
+        (activity as? MainActivity)?.loadClip(clipId)
+    }
+
+    open fun pausePlaybackForOverlay() {}
+
+    open fun resumePlaybackAfterOverlay() {}
+
     fun onSleepTimerChanged(durationMs: Long, hours: Int, minutes: Int, lockScreen: Boolean) {
         if (durationMs > 0L) {
             Toast.makeText(
@@ -4514,6 +4588,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
             KEY_TYPE to VIDEO,
             KEY_VIDEO_ID to item.id,
             KEY_VIDEO_UUID to (item.uuid ?: item.slug),
+            KEY_VOD_ID to item.vodId,
             KEY_VIDEO_SOURCE to (item.source ?: AppConstants.KICK),
             KEY_TITLE to item.title,
             KEY_UPLOAD_DATE to item.uploadDate,
@@ -4635,6 +4710,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
         protected const val KEY_FORCE_STANDARD_LIVE_ENGINE = "forceStandardLiveEngine"
         protected const val KEY_VIDEO_ID = "videoId"
         protected const val KEY_VIDEO_UUID = "videoUuid"
+        protected const val KEY_VOD_ID = "vodId"
         protected const val KEY_VIDEO_SOURCE = "videoSource"
         protected const val KEY_CLIP_REPLAY_START_TIME = "clipReplayStartTime"
         protected const val KEY_CLIP_ID = "clipId"

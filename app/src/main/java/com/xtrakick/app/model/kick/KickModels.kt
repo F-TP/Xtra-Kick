@@ -104,6 +104,8 @@ class KickChannelLivestream(
     val viewerCount: Int? = null,
     @SerialName("playback_url")
     val playbackUrl: String? = null,
+    @SerialName("vod_id")
+    val vodId: String? = null,
     val thumbnail: KickThumbnail? = null,
     val category: KickCategory? = null,
 )

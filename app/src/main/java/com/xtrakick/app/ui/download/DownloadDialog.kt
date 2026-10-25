@@ -415,7 +415,7 @@ class DownloadDialog : DialogFragment(), IntegrityDialog.CallbackListener {
                         !savedSharedPath.isNullOrBlank() -> {
                             directory.visibility = View.VISIBLE
                             val label = com.xtrakick.app.util.SafStorageUtils.getDisplayPath(requireContext(), savedSharedPath.toUri())
-                            directory.text = "$label (${getString(R.string.storage_permission_required)})"
+                            directory.text = getString(R.string.storage_permission_required, label)
                         }
                         else -> {
                             directory.visibility = View.GONE

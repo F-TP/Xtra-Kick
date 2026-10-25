@@ -121,13 +121,12 @@ class FollowChannelBottomSheet : BottomSheetDialogFragment() {
             getString(R.string.follow)
         }
 
-        val defaultTag = " " + getString(R.string.default_tag)
         if (defaultSetting == 0) {
-            binding.kickFollowTitle.text = getString(R.string.follow_on_kick) + defaultTag
+            binding.kickFollowTitle.text = getString(R.string.follow_default_option, getString(R.string.follow_on_kick))
             binding.localFollowTitle.text = getString(R.string.follow_local_only)
         } else {
             binding.kickFollowTitle.text = getString(R.string.follow_on_kick)
-            binding.localFollowTitle.text = getString(R.string.follow_local_only) + defaultTag
+            binding.localFollowTitle.text = getString(R.string.follow_default_option, getString(R.string.follow_local_only))
         }
 
         selectedKickFollow = if (isOwnChannel) {

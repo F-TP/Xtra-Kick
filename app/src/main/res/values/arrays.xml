@@ -257,14 +257,6 @@
         <item>@string/chatFirstMsgEntries3</item>
     </string-array>
 
-    <string-array name="loginApiEntries">
-        <item>@string/api_kick</item>
-    </string-array>
-
-    <string-array name="loginApiValues">
-        <item>3</item>
-    </string-array>
-
     <string-array name="timestampEntries">
         <item>@string/timestamp_format_0</item>
         <item>@string/timestamp_format_1</item>
@@ -441,5 +433,17 @@
         <item>60</item>
         <item>120</item>
         <item>300</item>
+    </string-array>
+
+    <string-array name="languageEntries">
+        <item>@string/language_system_default</item>
+        <item>@string/language_english</item>
+        <item>@string/language_spanish</item>
+    </string-array>
+
+    <string-array name="languageValues">
+        <item>system</item>
+        <item>en</item>
+        <item>es</item>
     </string-array>
 </resources>

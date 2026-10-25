@@ -138,25 +138,26 @@ class BookmarksFragment : BaseNetworkFragment(), Scrollable, Sortable, Bookmarks
                     sort = sortValues?.videoSort,
                     order = sortValues?.videoType,
                 )
-                viewModel.sortText.value = getString(
-                    R.string.sort_and_order,
-                    getString(
-                        when (viewModel.sort) {
-                            BookmarksSortDialog.SORT_EXPIRES_AT -> R.string.deletion_date
-                            BookmarksSortDialog.SORT_CREATED_AT -> R.string.creation_date
-                            BookmarksSortDialog.SORT_SAVED_AT -> R.string.saved_date
-                            else -> R.string.saved_date
-                        }
-                    ),
-                    getString(
-                        when (viewModel.order) {
-                            BookmarksSortDialog.ORDER_DESC -> R.string.descending
-                            BookmarksSortDialog.ORDER_ASC -> R.string.ascending
-                            else -> R.string.descending
-                        }
-                    )
-                )
             }
+            // Recompute every time so the sort bar follows app-locale changes
+            viewModel.sortText.value = getString(
+                R.string.sort_and_order,
+                getString(
+                    when (viewModel.sort) {
+                        BookmarksSortDialog.SORT_EXPIRES_AT -> R.string.deletion_date
+                        BookmarksSortDialog.SORT_CREATED_AT -> R.string.creation_date
+                        BookmarksSortDialog.SORT_SAVED_AT -> R.string.saved_date
+                        else -> R.string.saved_date
+                    }
+                ),
+                getString(
+                    when (viewModel.order) {
+                        BookmarksSortDialog.ORDER_DESC -> R.string.descending
+                        BookmarksSortDialog.ORDER_ASC -> R.string.ascending
+                        else -> R.string.descending
+                    }
+                )
+            )
             repeatOnLifecycle(Lifecycle.State.STARTED) {
                 viewModel.flow.collectLatest { list ->
                     val sorted = if (viewModel.order == BookmarksSortDialog.ORDER_ASC) {

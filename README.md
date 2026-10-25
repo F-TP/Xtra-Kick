@@ -43,13 +43,14 @@ This is a small personal project maintained by one developer in occasional spare
 - Bookmarks for VODs.
 - Multi-view: watch several streams at once in a grid.
 - Themes including dark, AMOLED black, Material You dynamic color, and layout customization.
+- Multi-language UI support (English and Spanish) with in-app language selection (Settings → Appearance → App language) and system per-app language integration on Android 13+.
 
 ## Limitations
 
 - Unofficial. Everything relies on Kick's public API, website endpoints, and undocumented interfaces. Any of these can change or break without notice.
 - Logging in with your Kick account via official OAuth 2.0 PKCE web authorization works out of the box in the signed release APK. When building from source yourself, you need to configure your own OAuth client ID and backend URL. Without login you cannot send chat or use authenticated features.
 - Some features depend on unofficial endpoints that are less reliable than official ones.
-- English UI only. Streams, videos, and clips can be filtered by language using the browse filters.
+- Limited UI translations (English and Spanish supported). Streams, videos, and clips can also be filtered by broadcast language using the browse filters.
 - No Chromecast support.
 
 ## Security notes

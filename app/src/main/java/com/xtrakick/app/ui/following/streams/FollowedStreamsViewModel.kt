@@ -84,12 +84,13 @@ class FollowedStreamsViewModel @Inject constructor(
 
     fun initialize() {
         if (sortText.value == null) {
-            sortText.value = buildSortText(sort.value)
             viewModelScope.launch {
                 val savedSort = sortChannelRepository.getById("followed_streams")?.videoSort
                 setSort(savedSort, persist = false)
             }
         }
+        // Recompute every time so the sort bar follows app-locale changes
+        sortText.value = buildSortText(sort.value)
         if (!_uiState.value.hasLoadedOnce && refreshJob == null) {
             refresh()
         }

@@ -84,6 +84,7 @@ import com.xtrakick.app.util.AppConstants
 import com.xtrakick.app.util.DiagnosticLogger
 import com.xtrakick.app.util.KickOAuthConfig
 import com.xtrakick.app.util.KickApiHelper
+import com.xtrakick.app.util.KickClipApi
 import com.xtrakick.app.util.getByteArrayCronetCallback
 import com.xtrakick.app.util.prefs
 import com.xtrakick.app.util.tokenPrefs
@@ -2095,6 +2096,152 @@ class KickRepository @Inject constructor(
     }
 
     /**
+     * True when the session can call Kick's clip-creation endpoints. Same capability
+     * class as [hasKickAccountFollowCapability]: clip initiate/finalize are private
+     * kick.com endpoints (`authenticated: true` in the official app), which OAuth-only
+     * sessions cannot authenticate against.
+     */
+    fun hasKickClipCapability(): Boolean {
+        return hasKickWebsiteSessionCookieOnly() || AuthStateHelper.isKickGoogleSession(context)
+    }
+
+    /**
+     * Clip endpoints live on mobile.kick.com (the official app's `subdomain: 'mobile'`
+     * APIRequest routes) and are rejected by kick.com web with 404, so clip calls use
+     * the mobile request shape: KickMobile UA + x-app-platform headers + Bearer. The
+     * bearer is the Google mobile token when present, otherwise the website session
+     * token, which mobile.kick.com accepts as a credential like kick.com does.
+     */
+    private suspend fun executeKickClipRequest(url: String, body: String): String = withContext(Dispatchers.IO) {
+        val mobileToken = if (AuthStateHelper.isKickGoogleSession(context)) {
+            context.tokenPrefs().getString(AppConstants.KICK_ACCESS_TOKEN, null)
+                ?.removePrefix("Bearer ")?.trim()?.takeIf { it.isNotBlank() }
+        } else {
+            null
+        }
+        val sessionToken = getKickCookieHeader()?.let { AuthStateHelper.extractKickSessionToken(it) }
+        val token = mobileToken ?: sessionToken
+            ?: throw IOException("Kick login is required.")
+        val request = createKickMobileRequestBuilder(url, token)
+            .header("Content-Type", "application/json")
+            .post(body.toRequestBody("application/json".toMediaTypeOrNull()))
+            .build()
+        okHttpClient.newCall(request).execute().use { response ->
+            val responseBody = response.body.string()
+            if (!response.isSuccessful) {
+                DiagnosticLogger.w("KickRepository", "Clip request to $url failed (${response.code}): $responseBody")
+                throw KickWebResponseException(response.code, responseBody, "Kick request failed (${response.code}) for $url")
+            }
+            responseBody
+        }
+    }
+
+    /**
+     * Resolves the active livestream's `vod_id` (UUID string) from Kick's channel info endpoint
+     * (`GET /api/v2/channels/{slug}/info`). The official app passes this exact `vod_id` as the
+     * `video_id` when initiating a clip on a live stream. Returns null if the channel is offline,
+     * or if the broadcaster has disabled VODs.
+     */
+    suspend fun getLivestreamVodId(channelSlug: String): String? = withContext(Dispatchers.IO) {
+        val normalized = channelSlug.trim().lowercase(Locale.ROOT)
+        if (normalized.isBlank()) return@withContext null
+        val url = "https://kick.com/api/v2/channels/${urlEncode(normalized)}/info"
+        val raw = runCatching {
+            if (hasUsableKickWebsiteSession()) {
+                executeKickWebSessionRequest(url)
+            } else {
+                getRaw(url, isKickWeb = true)
+            }
+        }.getOrNull() ?: return@withContext null
+        val root = runCatching { JSONObject(raw) }.getOrNull() ?: return@withContext null
+        val livestream = root.optJSONObject("livestream") ?: return@withContext null
+        livestream.optString("vod_id").takeIf { it.isNotBlank() && it != "null" }
+    }
+
+    /**
+     * Resolves Kick's backend media ingestion `vod_id` (UUID starting with `01a...`)
+     * required by `POST /api/v1/clips`.
+     * Kick's clipping worker indexes this ingest `vod_id`, NOT the database UUID.
+     */
+    suspend fun getVodIngestionId(
+        videoUuid: String?,
+        videoId: String?,
+        channelLogin: String?,
+    ): String? = withContext(Dispatchers.IO) {
+        // Direct stream ingestion ID check
+        if (videoUuid != null && videoUuid.startsWith("01a", ignoreCase = true) && videoUuid.length >= 32) {
+            return@withContext videoUuid
+        }
+        var uuid = videoUuid?.takeIf { it.contains("-") || it.length >= 32 }
+        if (uuid == null && !channelLogin.isNullOrBlank() && !videoId.isNullOrBlank()) {
+            uuid = runCatching {
+                getChannelVideos(channelLogin, limit = 50)
+                    .firstOrNull { it.id == videoId || it.uuid == videoId || it.slug == videoId }
+                    ?.uuid
+            }.getOrNull()
+        }
+
+        val targetIdentifier = uuid ?: videoId ?: return@withContext null
+        val candidates = buildList {
+            add("https://kick.com/api/v1/video/${urlEncode(targetIdentifier)}")
+            add("https://web.kick.com/api/v1/video/${urlEncode(targetIdentifier)}")
+        }
+        for (url in candidates) {
+            val raw = runCatching {
+                if (hasUsableKickWebsiteSession()) {
+                    executeKickWebSessionRequest(url)
+                } else {
+                    getRaw(url, isKickWeb = true)
+                }
+            }.getOrNull() ?: continue
+            val root = runCatching { JSONObject(raw) }.getOrNull() ?: continue
+            val livestream = root.optJSONObject("livestream")
+            val ingestVodId = livestream?.optString("vod_id")?.takeIf { it.isNotBlank() && it != "null" }
+            if (!ingestVodId.isNullOrBlank()) {
+                DiagnosticLogger.i("KickRepository", "Resolved VOD ingestion id: $ingestVodId for $targetIdentifier")
+                return@withContext ingestVodId
+            }
+        }
+        null
+    }
+
+    /**
+     * Starts a temporary server-side clip around the live position via
+     * `POST /api/v1/clips` (official app flow). The returned temporary clip exposes a
+     * `preview_url` of the recently recorded stream plus its `source_duration`; nothing
+     * is persisted until [finalizeKickClip] is called.
+     */
+    suspend fun initiateKickClip(videoId: String, positionSeconds: Long? = null): KickClipApi.TemporaryClip = withContext(Dispatchers.IO) {
+        if (!hasKickClipCapability()) {
+            throw IOException("Kick login is required.")
+        }
+        val body = KickClipApi.buildInitiateClipBody(videoId, positionSeconds)
+        DiagnosticLogger.i("KickRepository", "POST /api/v1/clips body: $body")
+        val raw = executeKickClipRequest("https://mobile.kick.com/api/v1/clips", body)
+        KickClipApi.parseTemporaryClip(raw)
+            ?: throw IOException("Kick clip initiate response was missing the temporary clip")
+    }
+
+    /** Persists a temporary clip via `POST /api/v1/clips/{clipId}/finalize`. */
+    suspend fun finalizeKickClip(
+        clipId: String,
+        title: String?,
+        startSeconds: Int,
+        durationSeconds: Int,
+        channelLogin: String? = null,
+    ): KickClipApi.FinalizedClip = withContext(Dispatchers.IO) {
+        val normalizedClipId = clipId.trim().takeIf { it.isNotBlank() }
+            ?: throw IllegalArgumentException("clipId is required")
+        val effectiveTitle = title?.trim()?.takeIf { it.isNotBlank() } ?: "Clip"
+        val body = KickClipApi.buildFinalizeClipBody(effectiveTitle, startSeconds, durationSeconds)
+        val raw = executeKickClipRequest(
+            "https://mobile.kick.com/api/v1/clips/${urlEncode(normalizedClipId)}/finalize",
+            body,
+        )
+        KickClipApi.parseFinalizedClip(raw, normalizedClipId, effectiveTitle, channelLogin)
+    }
+
+    /**
      * Exchanges a Google idToken (Credential Manager) for Kick's own mobile bearer via
      * the official app's `POST /api/v1/google-mobile-login`. The returned token is the
      * official-app token type — not an OAuth token: it authenticates against
@@ -2982,6 +3129,8 @@ class KickRepository @Inject constructor(
                     ?: itemChannel?.primitiveOrNull("profile_picture")
                     ?: itemChannel?.primitiveOrNull("profile_pic")
                     ?: channelLogo
+                val ingestVodId = item.objOrNull("livestream")?.primitiveOrNull("vod_id")
+                    ?: item.primitiveOrNull("vod_id")
                 Video(
                     id = id,
                     source = AppConstants.KICK,
@@ -3001,6 +3150,7 @@ class KickRepository @Inject constructor(
                     profileImageUrl = videoChannelLogo,
                     uuid = uuid,
                     slug = slug,
+                    vodId = ingestVodId,
                 )
             }
             .distinctBy { it.id }

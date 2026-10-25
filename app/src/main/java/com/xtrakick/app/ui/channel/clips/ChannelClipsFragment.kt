@@ -86,20 +86,21 @@ class ChannelClipsFragment : PagedListFragment(), Scrollable, Sortable, VideosSo
                 viewModel.setFilter(
                     period = sortValues?.clipPeriod,
                 )
-                viewModel.sortText.value = getString(
-                    R.string.sort_and_period,
-                    getString(R.string.view_count),
-                    getString(
-                        when (viewModel.period) {
-                            VideosSortDialog.PERIOD_DAY -> R.string.today
-                            VideosSortDialog.PERIOD_WEEK -> R.string.this_week
-                            VideosSortDialog.PERIOD_MONTH -> R.string.this_month
-                            VideosSortDialog.PERIOD_ALL -> R.string.all_time
-                            else -> R.string.this_week
-                        }
-                    )
-                )
             }
+            // Recompute every time so the sort bar follows app-locale changes
+            viewModel.sortText.value = getString(
+                R.string.sort_and_period,
+                getString(R.string.view_count),
+                getString(
+                    when (viewModel.period) {
+                        VideosSortDialog.PERIOD_DAY -> R.string.today
+                        VideosSortDialog.PERIOD_WEEK -> R.string.this_week
+                        VideosSortDialog.PERIOD_MONTH -> R.string.this_month
+                        VideosSortDialog.PERIOD_ALL -> R.string.all_time
+                        else -> R.string.this_week
+                    }
+                )
+            )
             repeatOnLifecycle(Lifecycle.State.STARTED) {
                 viewModel.flow.collectLatest { pagingData ->
                     pagingAdapter.submitData(pagingData)

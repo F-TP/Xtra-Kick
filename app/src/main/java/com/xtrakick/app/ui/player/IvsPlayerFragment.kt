@@ -521,6 +521,14 @@ class IvsPlayerFragment : PlayerFragment() {
 
     override fun getCurrentPosition(): Long? = player?.position
 
+    override fun pausePlaybackForOverlay() {
+        player?.pause()
+    }
+
+    override fun resumePlaybackAfterOverlay() {
+        player?.play()
+    }
+
     override fun getCurrentSpeed(): Float? = player?.playbackRate
 
     override fun getCurrentVolume(): Float? = player?.volume

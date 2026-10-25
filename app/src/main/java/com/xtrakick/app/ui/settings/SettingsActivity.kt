@@ -30,6 +30,7 @@ import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.result.ActivityResultLauncher
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.appcompat.app.AppCompatDelegate
 import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.widget.SearchView
 import com.xtrakick.app.model.AppUpdateInfo
@@ -38,6 +39,7 @@ import androidx.core.content.edit
 import androidx.core.content.FileProvider
 import androidx.core.content.res.use
 import androidx.core.net.toUri
+import androidx.core.os.LocaleListCompat
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
@@ -424,6 +426,31 @@ class SettingsActivity : AppCompatActivity() {
     class AppearanceSettingsFragment : MaterialPreferenceFragment() {
         override fun onCreatePreferences(savedInstanceState: Bundle?, rootKey: String?) {
             setPreferencesFromResource(R.xml.appearance_preferences, rootKey)
+            findPreference<ListPreference>(AppConstants.APP_LANGUAGE)?.apply {
+                isPersistent = false
+                val appLocales = AppCompatDelegate.getApplicationLocales()
+                val current = if (appLocales.isEmpty) "system" else appLocales.toLanguageTags()
+                val primaryLang = if (!appLocales.isEmpty) appLocales[0]?.language else null
+                value = when {
+                    findIndexOfValue(current) >= 0 -> current
+                    primaryLang != null && findIndexOfValue(primaryLang) >= 0 -> primaryLang
+                    else -> "system"
+                }
+                onPreferenceChangeListener = Preference.OnPreferenceChangeListener { _, newValue ->
+                    // No setResult() here: setApplicationLocales already relaunches every
+                    // activity (config change on 13+, AppCompat ActivityRecreator below).
+                    // Marking the settings result too would make MainActivity recreate a
+                    // second time right after the locale relaunch — a visible multi-second
+                    // freeze of the whole UI while the player rebuilds.
+                    val locales = if (newValue == "system") {
+                        LocaleListCompat.getEmptyLocaleList()
+                    } else {
+                        LocaleListCompat.forLanguageTags(newValue.toString())
+                    }
+                    AppCompatDelegate.setApplicationLocales(locales)
+                    true
+                }
+            }
             if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) {
                 findPreference<ListPreference>(AppConstants.THEME)?.apply {
                     setEntries(R.array.themeNoDynamicEntries)

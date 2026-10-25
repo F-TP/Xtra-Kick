@@ -87,23 +87,24 @@ class GameClipsFragment : PagedListFragment(), Scrollable, Sortable, VideosSortD
                     period = sortValues?.clipPeriod,
                     languages = sortValues?.clipLanguages?.split(',')?.toTypedArray(),
                 )
-                viewModel.sortText.value = getString(
-                    R.string.sort_and_period,
-                    getString(R.string.view_count),
-                    getString(
-                        when (viewModel.period) {
-                            VideosSortDialog.PERIOD_DAY -> R.string.today
-                            VideosSortDialog.PERIOD_WEEK -> R.string.this_week
-                            VideosSortDialog.PERIOD_MONTH -> R.string.this_month
-                            VideosSortDialog.PERIOD_ALL -> R.string.all_time
-                            else -> R.string.this_week
-                        }
-                    )
-                )
-                viewModel.filtersText.value = if (viewModel.languages.isNotEmpty()) {
-                    resources.getQuantityString(R.plurals.languages, viewModel.languages.size, viewModel.languages.joinToString())
-                } else null
             }
+            // Recompute every time so the sort bar follows app-locale changes
+            viewModel.sortText.value = getString(
+                R.string.sort_and_period,
+                getString(R.string.view_count),
+                getString(
+                    when (viewModel.period) {
+                        VideosSortDialog.PERIOD_DAY -> R.string.today
+                        VideosSortDialog.PERIOD_WEEK -> R.string.this_week
+                        VideosSortDialog.PERIOD_MONTH -> R.string.this_month
+                        VideosSortDialog.PERIOD_ALL -> R.string.all_time
+                        else -> R.string.this_week
+                    }
+                )
+            )
+            viewModel.filtersText.value = if (viewModel.languages.isNotEmpty()) {
+                resources.getQuantityString(R.plurals.languages, viewModel.languages.size, viewModel.languages.joinToString())
+            } else null
             repeatOnLifecycle(Lifecycle.State.STARTED) {
                 viewModel.flow.collectLatest { pagingData ->
                     pagingAdapter.submitData(pagingData)

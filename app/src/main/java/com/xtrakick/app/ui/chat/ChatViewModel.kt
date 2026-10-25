@@ -1136,7 +1136,7 @@ class ChatViewModel @Inject constructor(
                         add(
                             EmotePickerSection(
                                 key = "recent",
-                                title = "Recent",
+                                title = applicationContext.getString(R.string.emote_section_recent),
                                 emotes = emotes,
                                 expandedByDefault = true,
                             )
@@ -1195,7 +1195,7 @@ class ChatViewModel @Inject constructor(
                     add(
                         EmotePickerSection(
                             key = "kick-global",
-                            title = "Global",
+                            title = applicationContext.getString(R.string.emote_section_global),
                             emotes = emotes,
                             expandedByDefault = hasQuery,
                         )
