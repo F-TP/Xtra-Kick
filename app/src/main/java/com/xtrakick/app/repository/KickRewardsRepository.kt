@@ -73,6 +73,8 @@ class KickRewardsRepository @Inject constructor(
     suspend fun claimDailyChallenge(challengeId: String): KickDailyClaimResult =
         postAndParse("$BASE_URL/gamification/challenges/${urlEncode(challengeId)}/claim", body = null) {
             KickRewardsParsing.parseDailyClaim(it)
+        }.also {
+            kickRepository.clearKickEmoteGroupsCache()
         }
 
     suspend fun getDailyStreak(userId: String): Long? =
@@ -89,6 +91,7 @@ class KickRewardsRepository @Inject constructor(
             put("campaign_id", JsonPrimitive(campaignId))
         }.toString()
         post("$BASE_URL/drops/claim", body = body)
+        kickRepository.clearKickEmoteGroupsCache()
     }
 
     private suspend fun <T> getAndParse(url: String, transform: (JsonElement) -> T): T =

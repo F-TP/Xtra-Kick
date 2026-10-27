@@ -1218,6 +1218,7 @@ These are downloads you removed while keeping the files. Android hides this fold
     <string name="language_english" translatable="false">English</string>
     <string name="language_spanish" translatable="false">Español</string>
     <string name="emote_section_recent">Recent</string>
+    <string name="emote_section_collectibles">Collectibles</string>
     <string name="emote_section_global">Global</string>
     <string name="widget_live_badge">LIVE</string>
     <string name="clip">Clip</string>

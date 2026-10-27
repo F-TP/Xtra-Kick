@@ -1031,11 +1031,21 @@ class KickRepository @Inject constructor(
                 return@withContext cachedGroups
             }
         }
-        val root = runCatching {
+        val rootElement = runCatching {
+            json.parseToJsonElement(
+                executeKickWebSessionRequest(
+                    "https://kick.com/emotes/${urlEncode(normalizedSlug)}",
+                    requireAuth = false,
+                )
+            )
+        }.recoverCatching {
             json.parseToJsonElement(
                 getRaw("https://kick.com/emotes/${urlEncode(normalizedSlug)}", isKickWeb = true)
             )
-        }.getOrNull() as? JsonArray ?: return@withContext emptyList()
+        }.getOrNull()
+        val root = (rootElement as? JsonArray)
+            ?: (rootElement as? JsonObject)?.arrayOrNull("data")
+            ?: return@withContext emptyList()
         val groups = mutableListOf<KickEmoteGroup>()
         root.forEachIndexed { index, groupElement ->
             val group = groupElement as? JsonObject ?: return@forEachIndexed
@@ -1081,14 +1091,19 @@ class KickRepository @Inject constructor(
             compareBy<KickEmoteGroup> { group ->
                 when {
                     group.id.equals(normalizedCurrentSlug, ignoreCase = true) -> 0
-                    group.title.equals("Global", ignoreCase = true) -> 2
-                    group.title.equals("Emojis", ignoreCase = true) || group.id.equals("Emoji", ignoreCase = true) -> 3
-                    else -> 1
+                    group.id.equals("Collectibles", ignoreCase = true) || group.title.equals("Collectibles", ignoreCase = true) -> 1
+                    group.title.equals("Global", ignoreCase = true) -> 3
+                    group.title.equals("Emojis", ignoreCase = true) || group.id.equals("Emoji", ignoreCase = true) -> 4
+                    else -> 2
                 }
             }.thenBy { it.title.lowercase(Locale.ROOT) }
         ).also { sortedGroups ->
             kickEmoteGroupsCache[cacheKey] = System.currentTimeMillis() to sortedGroups
         }
+    }
+
+    fun clearKickEmoteGroupsCache() {
+        kickEmoteGroupsCache.clear()
     }
 
     suspend fun getChannelPointRewards(

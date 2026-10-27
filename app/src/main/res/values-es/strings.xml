@@ -1208,6 +1208,7 @@ Son descargas que eliminaste conservando los archivos. Android oculta esta carpe
     <string name="app_language">Idioma de la app</string>
     <string name="language_system_default">Predeterminado del sistema</string>
     <string name="emote_section_recent">Recientes</string>
+    <string name="emote_section_collectibles">Coleccionables</string>
     <string name="emote_section_global">Globales</string>
     <string name="widget_live_badge">EN VIVO</string>
     <string name="clip">Clip</string>

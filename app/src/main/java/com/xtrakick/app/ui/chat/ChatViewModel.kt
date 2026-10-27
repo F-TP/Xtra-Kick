@@ -1144,6 +1144,33 @@ class ChatViewModel @Inject constructor(
                     }
             }
 
+            var collectiblesKickGroup: KickRepository.KickEmoteGroup? = null
+            val otherKickGroups = ArrayList<KickRepository.KickEmoteGroup>()
+            val currentId = currentKickGroup?.id
+            kickEmoteGroups.value.forEach { group ->
+                when {
+                    currentId != null && group.id.equals(currentId, ignoreCase = true) -> Unit
+                    group.id.equals("Collectibles", ignoreCase = true) || group.title.equals("Collectibles", ignoreCase = true) -> {
+                        collectiblesKickGroup = group
+                    }
+                    else -> otherKickGroups.add(group)
+                }
+            }
+
+            collectiblesKickGroup?.emotes
+                ?.filterForQuery()
+                ?.takeIf { it.isNotEmpty() }
+                ?.let { emotes ->
+                    add(
+                        EmotePickerSection(
+                            key = "kick-collectibles",
+                            title = applicationContext.getString(R.string.emote_section_collectibles),
+                            emotes = emotes,
+                            expandedByDefault = true,
+                        )
+                    )
+                }
+
             currentKickGroup?.emotes
                 ?.filterForQuery()
                 ?.takeIf { it.isNotEmpty() }
@@ -1157,11 +1184,6 @@ class ChatViewModel @Inject constructor(
                         )
                     )
                 }
-
-            val otherKickGroups = kickEmoteGroups.value.filterNot { group ->
-                val currentId = currentKickGroup?.id
-                currentId != null && group.id.equals(currentId, ignoreCase = true)
-            }
             val globalKickEmotes = LinkedHashMap<String, Emote>()
             otherKickGroups.forEach { group ->
                 val isGlobalLike = group.title.equals("Global", ignoreCase = true) ||
