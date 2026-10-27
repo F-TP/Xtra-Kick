@@ -7,6 +7,7 @@ import android.net.http.HttpEngine
 import android.os.Build
 import android.os.ext.SdkExtensions
 import android.webkit.CookieManager
+import android.webkit.WebSettings
 import androidx.appcompat.app.AppCompatDelegate
 import androidx.hilt.work.HiltWorkerFactory
 import androidx.work.Configuration
@@ -95,6 +96,8 @@ class KickApp : Application(), Configuration.Provider, SingletonImageLoader.Fact
         super.onCreate()
         INSTANCE = this
         DiagnosticLogger.init(this)
+        // Warmup WebSettings user agent on main thread to prevent background thread latch deadlock
+        runCatching { WebSettings.getDefaultUserAgent(this) }
         val previousUncaughtExceptionHandler = Thread.getDefaultUncaughtExceptionHandler()
         Thread.setDefaultUncaughtExceptionHandler { thread, throwable ->
             DiagnosticLogger.updateAppState(WebSocketRuntime.isAppInForeground)

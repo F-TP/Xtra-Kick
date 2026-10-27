@@ -51,6 +51,7 @@ import com.xtrakick.app.player.lowlatency.OkHttpDataSource
 import com.xtrakick.app.repository.OfflineRepository
 import com.xtrakick.app.repository.PlayerRepository
 import com.xtrakick.app.repository.KickRepository
+import com.xtrakick.app.repository.KickRewardsRepository
 import com.xtrakick.app.repository.ShownNotificationsRepository
 import com.xtrakick.app.ui.main.MainActivity
 import com.xtrakick.app.util.AppConstants
@@ -124,6 +125,9 @@ class PlaybackService : MediaSessionService() {
     lateinit var shownNotificationsRepository: ShownNotificationsRepository
 
     @Inject
+    lateinit var rewardsRepository: KickRewardsRepository
+
+    @Inject
     @JvmField
     var trustManager: javax.net.ssl.X509TrustManager? = null
 
@@ -147,6 +151,7 @@ class PlaybackService : MediaSessionService() {
             debugLogging = BuildConfig.DEBUG,
             isRewardsEnabled = { prefs().getBoolean(AppConstants.KICK_DAILY_REWARDS_ENABLED, true) },
             isPlaying = { mediaSession?.player?.isPlaying == true },
+            rewardsRepository = rewardsRepository,
         )
     }
     private val rewardsPreferenceChangeListener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->

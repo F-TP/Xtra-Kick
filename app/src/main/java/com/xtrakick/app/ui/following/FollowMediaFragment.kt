@@ -35,11 +35,25 @@ import com.xtrakick.app.ui.notifications.NotificationChannelsFragmentDirections
 import android.graphics.Color
 import androidx.appcompat.content.res.AppCompatResources
 import com.google.android.material.color.MaterialColors
+import com.xtrakick.app.repository.KickRewardsPolicy
+import com.xtrakick.app.repository.KickRewardsRepository
+import com.xtrakick.app.util.AuthStateHelper
+import dagger.hilt.android.AndroidEntryPoint
+import javax.inject.Inject
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.repeatOnLifecycle
+import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 
+@AndroidEntryPoint
 class FollowMediaFragment : Fragment(), Scrollable, FragmentHost, KickFollowImportDialog.CallbackListener {
     private companion object {
         const val TAB_TAG_PREFIX = "follow_tab:"
     }
+
+    @Inject
+    lateinit var rewardsRepository: KickRewardsRepository
 
 
     private var _binding: FragmentMediaBinding? = null
@@ -79,7 +93,14 @@ class FollowMediaFragment : Fragment(), Scrollable, FragmentHost, KickFollowImpo
             val isRewardsEnabled = requireContext().prefs().getBoolean(AppConstants.KICK_DAILY_REWARDS_ENABLED, true)
             toolbar.menu.findItem(R.id.login).title = if (isLoggedIn) getString(R.string.log_out) else getString(R.string.log_in)
             toolbar.menu.findItem(R.id.importKickFollowed)?.isVisible = isLoggedIn
-            toolbar.menu.findItem(R.id.dailyReward)?.isVisible = isLoggedIn && isRewardsEnabled
+            updateDailyRewardMenuButton()
+            viewLifecycleOwner.lifecycleScope.launch {
+                viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
+                    rewardsRepository.dailyChallengesFlow.collect {
+                        updateDailyRewardMenuButton()
+                    }
+                }
+            }
             toolbar.setOnMenuItemClickListener { menuItem ->
                 when (menuItem.itemId) {
                     R.id.search -> {
@@ -247,9 +268,31 @@ class FollowMediaFragment : Fragment(), Scrollable, FragmentHost, KickFollowImpo
     override fun onResume() {
         super.onResume()
         _binding?.let { b ->
-            val isLoggedIn = com.xtrakick.app.util.AuthStateHelper.isKickLoggedIn(requireContext())
-            val isRewardsEnabled = requireContext().prefs().getBoolean(AppConstants.KICK_DAILY_REWARDS_ENABLED, true)
-            b.toolbar.menu.findItem(R.id.dailyReward)?.isVisible = isLoggedIn && isRewardsEnabled
+            updateDailyRewardMenuButton()
+            if (AuthStateHelper.isKickLoggedIn(requireContext()) && requireContext().prefs().getBoolean(AppConstants.KICK_DAILY_REWARDS_ENABLED, true)) {
+                viewLifecycleOwner.lifecycleScope.launch(Dispatchers.IO) {
+                    rewardsRepository.refreshDailyChallenges()
+                }
+            }
+        }
+    }
+
+    private fun updateDailyRewardMenuButton() {
+        val b = _binding ?: return
+        val context = context ?: return
+        val isLoggedIn = AuthStateHelper.isKickLoggedIn(context)
+        val isRewardsEnabled = context.prefs().getBoolean(AppConstants.KICK_DAILY_REWARDS_ENABLED, true)
+        val menuItem = b.toolbar.menu.findItem(R.id.dailyReward) ?: return
+        menuItem.isVisible = isLoggedIn && isRewardsEnabled
+        if (!menuItem.isVisible) return
+
+        val isClaimable = KickRewardsPolicy.hasClaimableChallenge(rewardsRepository.dailyChallengesFlow.value)
+        if (isClaimable) {
+            menuItem.setIcon(R.drawable.baseline_card_giftcard_claimable_24)
+            menuItem.iconTintList = null
+        } else {
+            menuItem.setIcon(R.drawable.baseline_card_giftcard_black_24)
+            menuItem.iconTintList = MaterialColors.getColorStateListOrNull(context, androidx.appcompat.R.attr.colorControlNormal)
         }
     }
 

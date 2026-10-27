@@ -1,6 +1,7 @@
 package com.xtrakick.app.ui.player
 
 import com.xtrakick.app.repository.KickRepository
+import com.xtrakick.app.repository.KickRewardsRepository
 import com.xtrakick.app.util.chat.KickViewerWatchWebSocket
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -20,6 +21,7 @@ class KickViewerWatchOwner(
     private val debugLogging: Boolean = false,
     private val isRewardsEnabled: () -> Boolean,
     private val isPlaying: () -> Boolean,
+    private val rewardsRepository: KickRewardsRepository? = null,
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private var watch: KickViewerWatchWebSocket? = null
@@ -59,6 +61,7 @@ class KickViewerWatchOwner(
             channelLogin = login,
             trustManager = trustManager,
             debugLogging = debugLogging,
+            rewardsRepository = rewardsRepository,
         ).also { job = it.start(scope) }
     }
 

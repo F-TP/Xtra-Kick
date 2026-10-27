@@ -63,6 +63,11 @@ class RewardClaimWorker @AssistedInject constructor(
             enterBackoff(prefs, AppConstants.REWARD_DAILY_BACKOFF_UNTIL)
             return
         }
+        val claimable = challenges.firstOrNull { KickRewardsPolicy.decide(it) == KickRewardsPolicy.DailyAction.CLAIM_NOW }
+        if (claimable != null) {
+            claimDailyNow(prefs, claimable)
+            return
+        }
         val challenge = KickRewardsPolicy.selectDaily(challenges) ?: run {
             Log.i(TAG, "no daily challenge present")
             return
@@ -100,23 +105,26 @@ class RewardClaimWorker @AssistedInject constructor(
         // Refresh for the reset window and human-readable winner name. The POST carries the
         // authoritative roulette winner and rarity.
         val refreshed = runCatching { rewardsRepository.getDailyChallenges() }.getOrNull()
-            ?.let { KickRewardsPolicy.selectDaily(it) }
+            ?.let { challenges -> challenges.firstOrNull { it.id == challenge.id } ?: KickRewardsPolicy.selectDaily(challenges) }
         val outcome = refreshed ?: challenge
         val name = outcome.winnerName?.takeIf { it.isNotBlank() }
         val rarity = claimResult.winner?.rarity?.takeIf { it.isNotBlank() }
             ?: outcome.winnerRarity?.takeIf { it.isNotBlank() }
-        val reset = KickRewardsPolicy.resetTimeMs(outcome, System.currentTimeMillis())
+        val isDaily = outcome.recurrence.equals("daily", ignoreCase = true)
+        val reset = if (isDaily) KickRewardsPolicy.resetTimeMs(outcome, System.currentTimeMillis()) else null
         prefs.edit {
-            putLong(AppConstants.REWARD_DAILY_CLAIMED_UNTIL, reset)
+            reset?.let { putLong(AppConstants.REWARD_DAILY_CLAIMED_UNTIL, it) }
             putLong(AppConstants.REWARD_LAST_CLAIM_AT, System.currentTimeMillis())
             remove(AppConstants.REWARD_DAILY_BACKOFF_UNTIL)
             putString(AppConstants.REWARD_LAST_DAILY_NAME, name)
             rarity?.let { putString(AppConstants.REWARD_LAST_DAILY_RARITY, it) }
             claimResult.winner?.cardUrl?.let { putString(AppConstants.REWARD_LAST_DAILY_CARD_URL, it) }
         }
-        Log.i(TAG, "daily reward claimed name=$name rarity=$rarity reset=$reset")
+        Log.i(TAG, "reward claimed name=$name rarity=$rarity isDaily=$isDaily reset=$reset")
         RewardClaimNotifier.dailyClaimed(applicationContext, name, rarity)
-        RewardClaimScheduler.followUp(applicationContext, reset - System.currentTimeMillis())
+        if (isDaily && reset != null) {
+            RewardClaimScheduler.followUp(applicationContext, reset - System.currentTimeMillis())
+        }
     }
 
     private fun onWatchInProgress(challenge: KickDailyChallenge) {

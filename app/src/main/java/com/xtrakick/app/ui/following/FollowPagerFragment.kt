@@ -36,6 +36,7 @@ import com.xtrakick.app.util.reduceDragSensitivity
 import com.xtrakick.app.util.observeLift
 import com.xtrakick.app.util.tokenPrefs
 import dagger.hilt.android.AndroidEntryPoint
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -43,6 +44,8 @@ import com.xtrakick.app.ui.notifications.NotificationChannelsFragmentDirections
 import android.graphics.Color
 import androidx.appcompat.content.res.AppCompatResources
 import com.google.android.material.color.MaterialColors
+import com.xtrakick.app.repository.KickRewardsPolicy
+import com.xtrakick.app.repository.KickRewardsRepository
 import com.xtrakick.app.repository.LocalFollowChannelRepository
 import com.xtrakick.app.util.AuthStateHelper
 import com.xtrakick.app.util.NotificationPermissionHelper
@@ -56,6 +59,9 @@ class FollowPagerFragment : Fragment(), Scrollable, FragmentHost, KickFollowImpo
 
     @Inject
     lateinit var localFollowChannelRepository: LocalFollowChannelRepository
+
+    @Inject
+    lateinit var rewardsRepository: KickRewardsRepository
 
     private var _binding: FragmentMediaPagerBinding? = null
     private val binding get() = _binding!!
@@ -154,7 +160,14 @@ class FollowPagerFragment : Fragment(), Scrollable, FragmentHost, KickFollowImpo
             val isRewardsEnabled = requireContext().prefs().getBoolean(AppConstants.KICK_DAILY_REWARDS_ENABLED, true)
             toolbar.menu.findItem(R.id.login).title = if (isLoggedIn) getString(R.string.log_out) else getString(R.string.log_in)
             toolbar.menu.findItem(R.id.importKickFollowed)?.isVisible = isLoggedIn
-            toolbar.menu.findItem(R.id.dailyReward)?.isVisible = isLoggedIn && isRewardsEnabled
+            updateDailyRewardMenuButton()
+            viewLifecycleOwner.lifecycleScope.launch {
+                viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
+                    rewardsRepository.dailyChallengesFlow.collect {
+                        updateDailyRewardMenuButton()
+                    }
+                }
+            }
             toolbar.setOnMenuItemClickListener { menuItem ->
                 when (menuItem.itemId) {
                     R.id.search -> {
@@ -322,10 +335,32 @@ class FollowPagerFragment : Fragment(), Scrollable, FragmentHost, KickFollowImpo
     override fun onResume() {
         super.onResume()
         _binding?.let { b ->
-            val isLoggedIn = AuthStateHelper.isKickLoggedIn(requireContext())
-            val isRewardsEnabled = requireContext().prefs().getBoolean(AppConstants.KICK_DAILY_REWARDS_ENABLED, true)
-            b.toolbar.menu.findItem(R.id.dailyReward)?.isVisible = isLoggedIn && isRewardsEnabled
+            updateDailyRewardMenuButton()
             updateNotificationBanner()
+            if (AuthStateHelper.isKickLoggedIn(requireContext()) && requireContext().prefs().getBoolean(AppConstants.KICK_DAILY_REWARDS_ENABLED, true)) {
+                viewLifecycleOwner.lifecycleScope.launch(Dispatchers.IO) {
+                    rewardsRepository.refreshDailyChallenges()
+                }
+            }
+        }
+    }
+
+    private fun updateDailyRewardMenuButton() {
+        val b = _binding ?: return
+        val context = context ?: return
+        val isLoggedIn = AuthStateHelper.isKickLoggedIn(context)
+        val isRewardsEnabled = context.prefs().getBoolean(AppConstants.KICK_DAILY_REWARDS_ENABLED, true)
+        val menuItem = b.toolbar.menu.findItem(R.id.dailyReward) ?: return
+        menuItem.isVisible = isLoggedIn && isRewardsEnabled
+        if (!menuItem.isVisible) return
+
+        val isClaimable = KickRewardsPolicy.hasClaimableChallenge(rewardsRepository.dailyChallengesFlow.value)
+        if (isClaimable) {
+            menuItem.setIcon(R.drawable.baseline_card_giftcard_claimable_24)
+            menuItem.iconTintList = null
+        } else {
+            menuItem.setIcon(R.drawable.baseline_card_giftcard_black_24)
+            menuItem.iconTintList = MaterialColors.getColorStateListOrNull(context, androidx.appcompat.R.attr.colorControlNormal)
         }
     }
 

@@ -51,6 +51,7 @@ import com.amazonaws.ivs.player.Source
 import com.xtrakick.app.R
 import com.xtrakick.app.model.ui.Stream
 import com.xtrakick.app.repository.KickRepository
+import com.xtrakick.app.repository.KickRewardsRepository
 import com.xtrakick.app.repository.ShownNotificationsRepository
 import com.xtrakick.app.ui.main.MainActivity
 import com.xtrakick.app.util.AppConstants
@@ -75,6 +76,9 @@ class IvsPlayerService : Service() {
 
     @Inject
     lateinit var shownNotificationsRepository: ShownNotificationsRepository
+
+    @Inject
+    lateinit var rewardsRepository: KickRewardsRepository
 
     private val ioScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
@@ -120,6 +124,7 @@ class IvsPlayerService : Service() {
     private var lastNotifiedArtworkUrl: String? = null
     private var hasStablePlayback = false
     private var playbackRequested = false
+    private var isPaused = false
     private var retryCount = 0
     private var startedAtMs = 0L
     private var surfaceAttached = false
@@ -316,6 +321,7 @@ class IvsPlayerService : Service() {
             isPlaying = {
                 multiPovDelegate?.isPlaying() ?: (player?.state == Player.State.PLAYING)
             },
+            rewardsRepository = rewardsRepository,
         )
     }
     private val rewardsPreferenceChangeListener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
@@ -420,6 +426,8 @@ class IvsPlayerService : Service() {
             if (powerManager?.isInteractive == false) return true
             val keyguardManager = getSystemService(Context.KEYGUARD_SERVICE) as? KeyguardManager
             if (keyguardManager?.isKeyguardLocked == true) return true
+            @Suppress("DEPRECATION")
+            if (keyguardManager?.inKeyguardRestrictedInputMode() == true) return true
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP_MR1) {
                 if (keyguardManager?.isDeviceLocked == true) return true
             }
@@ -516,8 +524,10 @@ class IvsPlayerService : Service() {
                 override fun onCue(cue: com.amazonaws.ivs.player.Cue) = Unit
 
                 override fun onStateChanged(state: Player.State) {
-                    if (state == Player.State.PLAYING) {
+                    if (state == Player.State.PLAYING || state == Player.State.BUFFERING) {
                         hasStablePlayback = true
+                    }
+                    if (state == Player.State.PLAYING) {
                         retryCount = 0
                         suspendedByFocusLoss = false
                         startKickViewerWatchIfNeeded()
@@ -779,6 +789,7 @@ class IvsPlayerService : Service() {
         releaseDynamicsProcessing()
         playerDebugLog("playStream channel=$channelName title=$title")
         playbackRequested = true
+        isPaused = false
         suspendedByFocusLoss = false
         disarmDeadStreamWatchdog()
         disarmIdleStop()
@@ -978,7 +989,7 @@ class IvsPlayerService : Service() {
     }
 
     private fun isDeadStreamCandidate(): Boolean {
-        if (surfaceAttached || boundClients > 0 || suspendedByFocusLoss || !playbackRequested || multiPovDelegate != null) return false
+        if (surfaceAttached || boundClients > 0 || suspendedByFocusLoss || !playbackRequested || multiPovDelegate != null || isPaused) return false
         val state = player?.state ?: return false
         return state == Player.State.ENDED ||
             ((state == Player.State.READY || state == Player.State.IDLE) &&
@@ -1077,6 +1088,7 @@ class IvsPlayerService : Service() {
 
     fun play() {
         playbackRequested = true
+        isPaused = false
         suspendedByFocusLoss = false
         disarmDeadStreamWatchdog()
         disarmIdleStop()
@@ -1090,6 +1102,7 @@ class IvsPlayerService : Service() {
     }
 
     fun pause(clearPlaybackRequest: Boolean) {
+        isPaused = true
         if (clearPlaybackRequest) {
             playbackRequested = false
             abandonAudioFocus()
@@ -1107,6 +1120,7 @@ class IvsPlayerService : Service() {
         backgroundSaverQuality = null
         backgroundPlaybackEnabled = false
         playbackRequested = false
+        isPaused = false
         disarmDeadStreamWatchdog()
         abandonAudioFocus()
         runPlayerOp("reset-pause") {
@@ -1137,6 +1151,7 @@ class IvsPlayerService : Service() {
         currentUrl = null
         backgroundPlaybackEnabled = false
         playbackRequested = false
+        isPaused = false
         suspendedByFocusLoss = false
         disarmDeadStreamWatchdog()
         surfaceAttached = false
@@ -1174,6 +1189,7 @@ class IvsPlayerService : Service() {
                 if (multiPovDelegate?.isPlaying() == true) PlaybackState.STATE_PLAYING else PlaybackState.STATE_PAUSED
             }
             error -> PlaybackState.STATE_ERROR
+            isPaused -> PlaybackState.STATE_PAUSED
             ivsPlayer.state == Player.State.PLAYING -> PlaybackState.STATE_PLAYING
             ivsPlayer.state == Player.State.BUFFERING -> PlaybackState.STATE_BUFFERING
             ivsPlayer.state == Player.State.READY && playbackRequested -> PlaybackState.STATE_PLAYING
@@ -1290,7 +1306,7 @@ class IvsPlayerService : Service() {
         val isPlaying = if (multiPovDelegate != null) {
             multiPovDelegate?.isPlaying() == true
         } else {
-            ivsPlayer.state == Player.State.PLAYING || ivsPlayer.state == Player.State.BUFFERING
+            !isPaused && (ivsPlayer.state == Player.State.PLAYING || ivsPlayer.state == Player.State.BUFFERING)
         }
         val artworkUrl = loadedArtworkUrl
         // Every startForeground() counts in notification history.

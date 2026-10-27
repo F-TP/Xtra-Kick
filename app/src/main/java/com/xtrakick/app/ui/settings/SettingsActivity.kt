@@ -500,7 +500,6 @@ class SettingsActivity : AppCompatActivity() {
             findPreference<SwitchPreferenceCompat>(AppConstants.UI_ROUNDUSERIMAGE)?.onPreferenceChangeListener = resultListener
             findPreference<SwitchPreferenceCompat>(AppConstants.UI_TRUNCATEVIEWCOUNT)?.onPreferenceChangeListener = resultListener
             findPreference<SwitchPreferenceCompat>(AppConstants.UI_UPTIME)?.onPreferenceChangeListener = resultListener
-            findPreference<SwitchPreferenceCompat>(AppConstants.UI_TAGS)?.onPreferenceChangeListener = resultListener
             findPreference<SwitchPreferenceCompat>(AppConstants.UI_BROADCASTERSCOUNT)?.onPreferenceChangeListener = resultListener
             findPreference<SwitchPreferenceCompat>(AppConstants.UI_BOOKMARK_TIME_LEFT)?.onPreferenceChangeListener = resultListener
         }

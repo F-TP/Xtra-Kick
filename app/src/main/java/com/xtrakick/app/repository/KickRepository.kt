@@ -221,9 +221,10 @@ class KickRepository @Inject constructor(
     private val featureDebugTag = "KickFeatureDebug"
     private val pointsDebugTag = "KickPointsDebug"
     private val pinnedDebugTag = "KickPinnedDebug"
-    internal val kickWebUserAgent by lazy {
-        runCatching { WebSettings.getDefaultUserAgent(context) }
-            .getOrNull()
+    internal val kickWebUserAgent: String by lazy(LazyThreadSafetyMode.PUBLICATION) {
+        val rawUa = runCatching { WebSettings.getDefaultUserAgent(context) }.getOrNull()
+            ?: System.getProperty("http.agent")
+        rawUa
             ?.replace(Regex(";\\s*wv"), "")
             ?.replace(Regex("Version/[0-9.]+\\s*"), "")
             ?.replace(Regex(";\\s*\\)"), ")")

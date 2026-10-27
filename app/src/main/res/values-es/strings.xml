@@ -190,7 +190,6 @@
     <string name="user_affiliate">Afiliado</string>
     <string name="user_staff">Staff</string>
     <string name="uptime">%s en vivo</string>
-    <string name="show_tags">Mostrar etiquetas</string>
     <string name="recentMsg_enable">Cargar mensajes recientes</string>
     <string name="recentMsg_limit">Límite de mensajes recientes</string>
     <string name="last_broadcast_date">Última transmisión %s</string>
@@ -795,6 +794,7 @@ Son descargas que eliminaste conservando los archivos. Android oculta esta carpe
     <string name="daily_reward_load_failed">No se pudo cargar la recompensa diaria. Inténtalo de nuevo.</string>
     <string name="daily_reward_claim_failed">No se pudo reclamar la recompensa. Puede que ya haya sido reclamada.</string>
     <string name="daily_reward_reset">La recompensa diaria se reinicia a las %s</string>
+    <string name="event_reward_ends">El evento finaliza a las %s</string>
     <string name="daily_reward_winner">Ganador de la recompensa diaria</string>
     <string name="daily_reward_rarity">Recompensa %s</string>
     <plurals name="daily_reward_streak">
@@ -1222,12 +1222,9 @@ Son descargas que eliminaste conservando los archivos. Android oculta esta carpe
     <string name="clip_set_start">Fijar inicio</string>
     <string name="clip_set_end">Fijar fin</string>
     <string name="cancel">Cancelar</string>
-    <string name="clip_published_title">Clip publicado con éxito</string>
-    <string name="clip_published_subtitle">Tu clip ya está en Kick. Compártelo o míralo ahora.</string>
     <string name="clip_created_subtitle">Clip de %1$s · %2$ds</string>
     <string name="copy_link">Copiar enlace</string>
     <string name="link_copied_to_clipboard">Enlace copiado al portapapeles</string>
     <string name="share_clip">Compartir clip</string>
     <string name="watch_clip">Ver clip</string>
-    <string name="done">Listo</string>
 </resources>

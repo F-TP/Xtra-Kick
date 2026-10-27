@@ -52,6 +52,67 @@ class KickRewardsParsingTest {
     }
 
     @Test
+    fun parsesSeasonalAndFeaturedChallengeWithCustomName() {
+        val root = json.parseToJsonElement(
+            """
+            {"data":[{"id":"halloween-1","name":"Halloween Crate","featured":true,"recurrence":"seasonal","status":"in_progress",
+              "condition":{"threshold":60,"progress":25},
+              "window":{"ends_at":"2026-11-01T00:00:00.000Z"}}]}
+            """.trimIndent(),
+        )
+
+        val challenge = KickRewardsParsing.parseChallenges(root).single()
+        assertEquals("halloween-1", challenge.id)
+        assertEquals("Halloween Crate", challenge.name)
+        assertEquals(true, challenge.featured)
+        assertEquals("seasonal", challenge.recurrence)
+        assertEquals("in_progress", challenge.status)
+        assertEquals(35L, challenge.remainingMinutes)
+    }
+
+    @Test
+    fun parsesAnimationsDropTableAndActivePeriod() {
+        val root = json.parseToJsonElement(
+            """
+            {"data":[{
+              "id":"halloween-crate",
+              "name":"Trick or Treat",
+              "description":"Claim your Trick or Treat for a chance to win big!",
+              "animations":{
+                "idle_url":"https://static.kick.com/rewards/halloween-2610/idle",
+                "unbox_url":"https://static.kick.com/rewards/halloween-2610/unbox"
+              },
+              "drop_table":[
+                {"rarity":"common","weighting":500},
+                {"rarity":"uncommon","weighting":300},
+                {"rarity":"rare","weighting":197},
+                {"rarity":"mythic","weighting":3}
+              ],
+              "active_period":{"ends_at":"2026-11-01T00:00:00Z","starts_at":"2026-10-26T00:00:00Z"},
+              "condition":{"progress":2,"threshold":180}
+            }]}
+            """.trimIndent(),
+        )
+
+        val challenge = KickRewardsParsing.parseChallenges(root).single()
+        assertEquals("Trick or Treat", challenge.name)
+        assertEquals("Claim your Trick or Treat for a chance to win big!", challenge.description)
+        assertEquals("https://static.kick.com/rewards/halloween-2610/idle.gif", challenge.idleAnimationUrl)
+        assertEquals("https://static.kick.com/rewards/halloween-2610/unbox.gif", challenge.unboxAnimationUrl)
+        assertEquals(KickRewardsParsing.parseIsoTimestampMs("2026-11-01T00:00:00Z"), challenge.activePeriodEndsAtEpochMs)
+
+        assertEquals(4, challenge.dropTable.size)
+        assertEquals("common", challenge.dropTable[0].rarity)
+        assertEquals("50%", challenge.dropTable[0].percentageFormatted)
+        assertEquals("uncommon", challenge.dropTable[1].rarity)
+        assertEquals("30%", challenge.dropTable[1].percentageFormatted)
+        assertEquals("rare", challenge.dropTable[2].rarity)
+        assertEquals("19.7%", challenge.dropTable[2].percentageFormatted)
+        assertEquals("mythic", challenge.dropTable[3].rarity)
+        assertEquals("0.3%", challenge.dropTable[3].percentageFormatted)
+    }
+
+    @Test
     fun entriesWithoutIdsAreSkippedInsteadOfCrashing() {
         val root = json.parseToJsonElement("""{"data":[{"status":"claimable"},{"id":"42"}]}""")
 
@@ -103,12 +164,12 @@ class KickRewardsParsingTest {
             """
             {"data":[
               {"id":"camp1","name":"Lottery","status":"active","progress_units":"12.0",
-               "rewards":[
-                 {"id":"rw1","name":"Ticket","claimed":false,"required_units":10},
-                 {"id":"rw2","name":"Done","claimed":false,"progress":1},
-                 {"id":"rw3","name":"Taken","claimed":true,"required_units":10}]},
+                "rewards":[
+                  {"id":"rw1","name":"Ticket","claimed":false,"required_units":10},
+                  {"id":"rw2","name":"Done","claimed":false,"progress":1},
+                  {"id":"rw3","name":"Taken","claimed":true,"required_units":10}]},
               {"id":"camp2","campaign_name":"Old Drop","status":"expired",
-               "rewards":[{"id":"rw4","claimed":false,"required_units":1}]}
+                "rewards":[{"id":"rw4","claimed":false,"required_units":1}]}
             ]}
             """.trimIndent(),
         )

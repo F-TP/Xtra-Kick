@@ -1176,10 +1176,12 @@ class MainActivity : AppCompatActivity() {
         val containerFragment = supportFragmentManager.findFragmentById(R.id.playerContainer)
         if (containerFragment != null) {
             (containerFragment as? PlayerFragment)?.close()
-            supportFragmentManager.beginTransaction()
-                .setTransition(FragmentTransaction.TRANSIT_FRAGMENT_FADE)
-                .remove(containerFragment)
-                .commit()
+            if (!supportFragmentManager.isDestroyed) {
+                supportFragmentManager.beginTransaction()
+                    .setTransition(FragmentTransaction.TRANSIT_FRAGMENT_FADE)
+                    .remove(containerFragment)
+                    .commitAllowingStateLoss()
+            }
         }
         playerFragment?.close()
         playerFragment = null

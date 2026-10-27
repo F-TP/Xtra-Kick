@@ -22,6 +22,13 @@ data class KickDailyChallenge(
     val winnerName: String?,
     val winnerRarity: String?,
     val winnerCardUrl: String?,
+    val name: String? = null,
+    val featured: Boolean = false,
+    val description: String? = null,
+    val idleAnimationUrl: String? = null,
+    val unboxAnimationUrl: String? = null,
+    val activePeriodEndsAtEpochMs: Long? = null,
+    val dropTable: List<KickChallengeDropTableItem> = emptyList(),
 ) {
     /** Watch-time minutes still missing before the daily becomes claimable. */
     val remainingMinutes: Long?
@@ -31,6 +38,13 @@ data class KickDailyChallenge(
             null
         }
 }
+
+data class KickChallengeDropTableItem(
+    val rarity: String,
+    val weighting: Long,
+    val percentage: Double,
+    val percentageFormatted: String,
+)
 
 data class KickDailyClaimResult(
     val challengeId: String?,
@@ -146,7 +160,9 @@ object KickRewardsParsing {
     }
 
     private fun JsonObject.booleanValue(key: String): Boolean? = when (val value = this[key]) {
-        is JsonPrimitive -> value.booleanOrNull ?: value.contentOrNull?.trim()?.toBooleanStrictOrNull()
+        is JsonPrimitive -> value.booleanOrNull
+            ?: value.contentOrNull?.trim()?.toBooleanStrictOrNull()
+            ?: (value.longOrNull?.let { it != 0L })
         else -> null
     }
 
@@ -162,6 +178,30 @@ object KickRewardsParsing {
         val condition = objectAt("condition")
         val window = objectAt("window")
         val winner = objectAt("winner") ?: objectAt("reward")
+        val animations = objectAt("animations")
+        val activePeriod = objectAt("active_period")
+
+        val rawDropTable = (this["drop_table"] as? JsonArray)?.filterIsInstance<JsonObject>().orEmpty()
+        val totalWeight = rawDropTable.sumOf { it.longValue("weighting") ?: 0L }
+        val parsedDropTable = rawDropTable.mapNotNull { item ->
+            val rarity = item.scalar("rarity") ?: return@mapNotNull null
+            val weighting = item.longValue("weighting") ?: 0L
+            val percentage = if (totalWeight > 0) (weighting.toDouble() / totalWeight) * 100.0 else 0.0
+            val diffFromInt = kotlin.math.abs(percentage - kotlin.math.round(percentage))
+            val formatted = when {
+                percentage > 0.0 && percentage < 0.01 -> "<0.01%"
+                percentage >= 0.01 && percentage < 0.1 -> String.format(Locale.US, "%.2f%%", percentage)
+                diffFromInt < 0.001 -> "${kotlin.math.round(percentage).toInt()}%"
+                else -> String.format(Locale.US, "%.1f%%", percentage)
+            }
+            KickChallengeDropTableItem(
+                rarity = rarity,
+                weighting = weighting,
+                percentage = percentage,
+                percentageFormatted = formatted,
+            )
+        }
+
         return KickDailyChallenge(
             id = id,
             status = scalar("status"),
@@ -177,6 +217,17 @@ object KickRewardsParsing {
             },
             winnerRarity = winner?.scalar("rarity"),
             winnerCardUrl = winner?.scalar("card_url"),
+            name = scalar("name") ?: scalar("title"),
+            featured = booleanValue("featured") ?: false,
+            description = scalar("description"),
+            idleAnimationUrl = animations?.scalar("idle_url")?.let {
+                if (it.endsWith(".gif", ignoreCase = true)) it else "$it.gif"
+            },
+            unboxAnimationUrl = animations?.scalar("unbox_url")?.let {
+                if (it.endsWith(".gif", ignoreCase = true)) it else "$it.gif"
+            },
+            activePeriodEndsAtEpochMs = activePeriod?.scalar("ends_at")?.let(::parseIsoTimestampMs),
+            dropTable = parsedDropTable,
         )
     }
 

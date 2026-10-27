@@ -3,6 +3,7 @@ package com.xtrakick.app.util.chat
 import android.net.Uri
 import android.util.Log
 import com.xtrakick.app.repository.KickRepository
+import com.xtrakick.app.repository.KickRewardsRepository
 import com.xtrakick.app.util.WebSocket
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -26,6 +27,7 @@ class KickViewerWatchWebSocket(
     private val channelLogin: String?,
     private val trustManager: X509TrustManager?,
     private val debugLogging: Boolean = false,
+    private val rewardsRepository: KickRewardsRepository? = null,
 ) {
     private val tag = "KickViewerWatch"
     private val writeMutex = Mutex()
@@ -176,6 +178,7 @@ class KickViewerWatchWebSocket(
                 if (!kickRepository.hasUsableKickWebsiteSession()) break
                 runCatching {
                     val raw = kickRepository.executeKickWebSessionRequest("https://web.kick.com/api/v1/gamification/challenges")
+                    rewardsRepository?.updateChallengesFromRaw(raw)
                     if (debugLogging) {
                         Log.d(tag, "rewards cadence poll completed: ${raw.take(80)}")
                     }

@@ -1269,6 +1269,7 @@ class Media3Fragment : PlayerFragment() {
         super.onStop()
         if (shouldClosePlaybackAfterPipDismiss()) {
             close()
+            (activity as? MainActivity)?.closePlayer()
             clearPipDismissState()
             return
         }
@@ -1323,7 +1324,6 @@ class Media3Fragment : PlayerFragment() {
         // Late SCREEN_OFF after an "unlocked" pause decision: resume background
         // audio now that lock is confirmed. Mirror the keep-path transition so
         // onStart restores the previous quality correctly.
-        viewModel.resume = false
         if (viewModel.quality != AUDIO_ONLY_QUALITY) {
             viewModel.restoreQuality = true
             viewModel.previousQuality = viewModel.quality
@@ -1356,6 +1356,7 @@ class Media3Fragment : PlayerFragment() {
                         }
                         controller.playWhenReady = true
                         runCatching { controller.prepare() }
+                        viewModel.resume = false
                     }
                 } catch (_: Exception) {
                 }

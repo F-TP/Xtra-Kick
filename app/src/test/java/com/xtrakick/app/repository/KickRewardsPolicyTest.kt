@@ -52,6 +52,17 @@ class KickRewardsPolicyTest {
     }
 
     @Test
+    fun sortChallengesPrioritizesFeaturedThenClaimableThenDaily() {
+        val claimedDaily = KickDailyChallenge(id = "1", status = "claimed", recurrence = "daily", thresholdMinutes = null, progressMinutes = null, endsAtEpochMs = null, winnerName = null, winnerRarity = null, winnerCardUrl = null)
+        val inProgressDaily = KickDailyChallenge(id = "2", status = "in_progress", recurrence = "daily", thresholdMinutes = null, progressMinutes = null, endsAtEpochMs = null, winnerName = null, winnerRarity = null, winnerCardUrl = null)
+        val claimableSeasonal = KickDailyChallenge(id = "3", status = "claimable", recurrence = "seasonal", thresholdMinutes = null, progressMinutes = null, endsAtEpochMs = null, winnerName = null, winnerRarity = null, winnerCardUrl = null, name = "Halloween Crate", featured = false)
+        val featuredInProgress = KickDailyChallenge(id = "4", status = "in_progress", recurrence = "seasonal", thresholdMinutes = null, progressMinutes = null, endsAtEpochMs = null, winnerName = null, winnerRarity = null, winnerCardUrl = null, name = "Special Halloween", featured = true)
+
+        val sorted = KickRewardsPolicy.sortChallenges(listOf(claimedDaily, inProgressDaily, claimableSeasonal, featuredInProgress))
+        assertEquals(listOf("4", "3", "2", "1"), sorted.map { it.id })
+    }
+
+    @Test
     fun decideMapsKnownStatusesAndIgnoresUnknownOnes() {
         assertEquals(KickRewardsPolicy.DailyAction.ALREADY_CLAIMED, KickRewardsPolicy.decide(challenge(status = "claimed")))
         assertEquals(KickRewardsPolicy.DailyAction.CLAIM_NOW, KickRewardsPolicy.decide(challenge(status = "claimable")))
@@ -61,6 +72,14 @@ class KickRewardsPolicyTest {
         )
         assertEquals(KickRewardsPolicy.DailyAction.IGNORE, KickRewardsPolicy.decide(challenge(status = "paused")))
         assertEquals(KickRewardsPolicy.DailyAction.IGNORE, KickRewardsPolicy.decide(challenge(status = null)))
+    }
+
+    @Test
+    fun hasClaimableChallengeReturnsTrueOnlyWhenClaimablePresent() {
+        assertFalse(KickRewardsPolicy.hasClaimableChallenge(null))
+        assertFalse(KickRewardsPolicy.hasClaimableChallenge(emptyList()))
+        assertFalse(KickRewardsPolicy.hasClaimableChallenge(listOf(challenge(status = "in_progress"), challenge(status = "claimed"))))
+        assertTrue(KickRewardsPolicy.hasClaimableChallenge(listOf(challenge(status = "in_progress"), challenge(status = "claimable"))))
     }
 
     @Test

@@ -36,12 +36,29 @@ object KickRewardsPolicy {
     fun selectDaily(challenges: List<KickDailyChallenge>): KickDailyChallenge? =
         challenges.firstOrNull { it.recurrence.equals("daily", ignoreCase = true) }
 
+    private fun statusPriority(status: String?): Int = when {
+        status.equals(STATUS_CLAIMABLE, ignoreCase = true) -> 0
+        status.equals(STATUS_IN_PROGRESS, ignoreCase = true) -> 1
+        status.equals(STATUS_CLAIMED, ignoreCase = true) -> 2
+        else -> 3
+    }
+
+    fun sortChallenges(challenges: List<KickDailyChallenge>): List<KickDailyChallenge> =
+        challenges.sortedWith(
+            compareByDescending<KickDailyChallenge> { it.featured }
+                .thenBy { statusPriority(it.status) }
+                .thenByDescending { it.recurrence.equals("daily", ignoreCase = true) }
+        )
+
     fun decide(challenge: KickDailyChallenge): DailyAction = when {
         challenge.status.equals(STATUS_CLAIMED, ignoreCase = true) -> DailyAction.ALREADY_CLAIMED
         challenge.status.equals(STATUS_CLAIMABLE, ignoreCase = true) -> DailyAction.CLAIM_NOW
         challenge.status.equals(STATUS_IN_PROGRESS, ignoreCase = true) -> DailyAction.WATCH_IN_PROGRESS
         else -> DailyAction.IGNORE
     }
+
+    fun hasClaimableChallenge(challenges: List<KickDailyChallenge>?): Boolean =
+        challenges?.any { decide(it) == DailyAction.CLAIM_NOW } == true
 
     /**
      * When the daily reward comes back after being claimed: server-provided `ends_at` (+ grace)

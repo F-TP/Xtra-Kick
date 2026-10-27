@@ -123,12 +123,8 @@ class IvsPlayerFragment : PlayerFragment() {
         if (surfaceCreated && viewModel.quality != AUDIO_ONLY_QUALITY) {
             attachSurfaceIfAvailable()
         }
-        val boundService = playbackService
-        if (resumeOnStart && boundService?.isPlaybackRequested() == true && player?.state != Player.State.PLAYING) {
-            boundService.play()
-            resumeOnStart = false
-            clearFreezeFrame()
-            updatePlayingState()
+        if (resumeOnStart && player?.state != Player.State.PLAYING) {
+            playbackService?.let { resumePlaybackOrReload(it, "onResume") }
         }
     }
 
@@ -141,9 +137,8 @@ class IvsPlayerFragment : PlayerFragment() {
                 if (viewModel.quality != AUDIO_ONLY_QUALITY) {
                     service?.attachSurface(holder.surface)
                 }
-                if (resumeOnStart && service?.isPlaybackRequested() == true && player?.state != Player.State.PLAYING) {
-                    service.play()
-                    resumeOnStart = false
+                if (resumeOnStart && player?.state != Player.State.PLAYING) {
+                    service?.let { resumePlaybackOrReload(it, "surfaceCreated") }
                 }
                 clearFreezeFrame()
                 updatePlayingState()
@@ -301,11 +296,8 @@ class IvsPlayerFragment : PlayerFragment() {
                 }
                 player?.addListener(listener)
                 playerListener = listener
-                if (resumeOnStart && boundService.isPlaybackRequested() && player?.state != Player.State.PLAYING) {
-                    boundService.play()
-                    resumeOnStart = false
-                    clearFreezeFrame()
-                    updatePlayingState()
+                if (resumeOnStart && player?.state != Player.State.PLAYING) {
+                    resumePlaybackOrReload(boundService, "onServiceConnected")
                 } else if (player?.state == Player.State.PLAYING) {
                     clearFreezeFrame()
                 }
@@ -1032,6 +1024,7 @@ class IvsPlayerFragment : PlayerFragment() {
         playerListener = null
         surfaceHolderCallback?.let { binding.playerSurface.holder.removeCallback(it) }
         surfaceHolderCallback = null
+        service?.attachSurface(null)
         service?.stopPlayback()
         serviceConnection?.let {
             try {
@@ -1048,6 +1041,7 @@ class IvsPlayerFragment : PlayerFragment() {
         super.onStop()
         if (shouldClosePlaybackAfterPipDismiss()) {
             close()
+            (activity as? MainActivity)?.closePlayer()
             clearPipDismissState()
             return
         }
@@ -1062,6 +1056,10 @@ class IvsPlayerFragment : PlayerFragment() {
             "onStop state=${ivsPlayer?.state} shouldKeepPlaying=$shouldKeepPlaying urlPresent=${!currentUrl.isNullOrBlank()} recoveryInProgress=$recoveryInProgress"
         )
         if (ivsPlayer != null) {
+            // Detach explicitly: the system may destroy the surface only after
+            // onStop, when playbackService is already null and the surface callback
+            // can no longer reach the service (leaving surfaceAttached stale-true).
+            playbackService?.attachSurface(null)
             if (shouldKeepPlaying) {
                 lastBackgroundPauseAtMs = 0L
                 playbackService?.setBackgroundPlaybackEnabled(true)
@@ -1077,14 +1075,9 @@ class IvsPlayerFragment : PlayerFragment() {
                 resumeOnStart = false
             } else {
                 playbackService?.setBackgroundPlaybackEnabled(false)
-                // Detach explicitly: the system may destroy the surface only after
-                // onStop, when playbackService is already null and the surface callback
-                // can no longer reach the service (leaving surfaceAttached stale-true).
-                playbackService?.attachSurface(null)
                 resumeOnStart = playbackService?.isPlaybackRequested() == true
                 if (ivsPlayer.state == Player.State.PLAYING) {
-                    // resumeOnStart drives resume; a lingering request pins session to PLAYING.
-                    playbackService?.pause(clearPlaybackRequest = true)
+                    playbackService?.pause(clearPlaybackRequest = false)
                     updatePlayingState()
                 }
                 if (resumeOnStart) {
@@ -1233,25 +1226,49 @@ class IvsPlayerFragment : PlayerFragment() {
         )
     }
 
+    private fun resolveStreamUrl(): String? =
+        currentPlaybackUrl() ?: currentUrl ?: requireArguments().getString(KEY_RESOLVED_STREAM_URL)
+
+    private fun resumePlaybackOrReload(service: IvsPlayerService, reason: String) {
+        val ivsPlayer = player
+        if (ivsPlayer?.state == Player.State.IDLE) {
+            if (!reloadIvsLiveStreamWithFreshUrl(reason)) {
+                val url = resolveStreamUrl()
+                if (!url.isNullOrBlank()) {
+                    startStream(url)
+                } else {
+                    service.play()
+                }
+            }
+        } else {
+            service.play()
+        }
+        resumeOnStart = false
+        clearFreezeFrame()
+        updatePlayingState()
+    }
+
     private fun recoverEmptyIvsServiceIfNeeded() {
-        if (!viewModel.started || viewModel.loaded.value || player?.state != Player.State.IDLE) {
+        if (!viewModel.started || player?.state != Player.State.IDLE) {
             return
         }
-        val url = currentUrl ?: requireArguments().getString(KEY_RESOLVED_STREAM_URL)
+        val url = resolveStreamUrl()
         DiagnosticLogger.w(
             TAG,
             "IVS resumed with empty service stream=${requireArguments().getString(KEY_CHANNEL_LOGIN)} " +
                 "urlPresent=${!url.isNullOrBlank()}"
         )
         if (!url.isNullOrBlank()) {
-            startStream(url)
+            if (!reloadIvsLiveStreamWithFreshUrl("empty service recovery")) {
+                startStream(url)
+            }
         } else {
             updatePlayingState()
         }
     }
 
     private fun reloadIvsLiveStreamWithFreshUrl(reason: String): Boolean {
-        val resolvedUrl = currentUrl ?: requireArguments().getString(KEY_RESOLVED_STREAM_URL)
+        val resolvedUrl = resolveStreamUrl()
         if (resolvedUrl.isNullOrBlank()) {
             return false
         }

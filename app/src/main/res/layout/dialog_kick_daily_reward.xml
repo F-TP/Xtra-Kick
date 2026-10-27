@@ -9,12 +9,24 @@
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:background="?attr/colorSurface"
+        android:background="@drawable/bg_bottom_sheet_surface"
+        android:clipChildren="false"
+        android:clipToPadding="false"
         android:orientation="vertical"
         android:paddingHorizontal="20dp"
-        android:paddingTop="20dp"
-        android:paddingBottom="16dp">
+        android:paddingTop="12dp"
+        android:paddingBottom="20dp">
 
+        <!-- Top Drag Handle for BottomSheet -->
+        <View
+            android:id="@+id/dragHandle"
+            android:layout_width="36dp"
+            android:layout_height="4dp"
+            android:layout_gravity="center_horizontal"
+            android:layout_marginBottom="12dp"
+            android:background="@drawable/bg_bottom_sheet_handle" />
+
+        <!-- Header: Icon + Title + Close Button -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
@@ -29,6 +41,7 @@
                 app:tint="?attr/colorControlNormal" />
 
             <TextView
+                android:id="@+id/titleText"
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_marginStart="12dp"
@@ -48,41 +61,146 @@
                 app:tint="?attr/colorControlNormal" />
         </LinearLayout>
 
-        <TextView
+        <!-- Active Period Container (e.g. "Event ends 01 Nov, 01:00 UTC") -->
+        <LinearLayout
+            android:id="@+id/activePeriodContainer"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="6dp"
+            android:background="@drawable/bg_reward_event_badge"
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            android:paddingHorizontal="10dp"
+            android:paddingVertical="5dp"
+            android:visibility="gone"
+            tools:visibility="visible">
+
+            <ImageView
+                android:layout_width="14dp"
+                android:layout_height="14dp"
+                android:contentDescription="@null"
+                android:src="@drawable/baseline_access_time_24"
+                app:tint="?android:attr/textColorSecondary" />
+
+            <TextView
+                android:id="@+id/activePeriodText"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="6dp"
+                android:textAppearance="?attr/textAppearanceLabelMedium"
+                android:textColor="?android:attr/textColorSecondary"
+                tools:text="Event ends 01 Nov, 01:00 UTC" />
+        </LinearLayout>
+
+        <!-- Challenge Tabs (Chips) -->
+        <HorizontalScrollView
+            android:id="@+id/challengeTabsScroll"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="10dp"
-            android:text="@string/daily_reward_description"
-            android:textAppearance="?attr/textAppearanceBodyMedium"
-            android:textColor="?android:attr/textColorSecondary" />
+            android:layout_marginTop="12dp"
+            android:overScrollMode="never"
+            android:scrollbars="none"
+            android:visibility="gone"
+            tools:visibility="visible">
 
+            <com.google.android.material.chip.ChipGroup
+                android:id="@+id/challengeChips"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                app:selectionRequired="true"
+                app:singleLine="true"
+                app:singleSelection="true" />
+        </HorizontalScrollView>
+
+        <!-- Loading Spinner -->
         <com.google.android.material.progressindicator.CircularProgressIndicator
             android:id="@+id/loadingIndicator"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_gravity="center_horizontal"
-            android:layout_marginTop="20dp"
+            android:layout_marginTop="24dp"
             android:indeterminate="true" />
 
+        <!-- Main Content Group -->
         <LinearLayout
             android:id="@+id/contentGroup"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="14dp"
+            android:layout_marginTop="12dp"
+            android:clipChildren="false"
+            android:clipToPadding="false"
             android:orientation="vertical"
             android:visibility="gone"
             tools:visibility="visible">
 
+            <!-- Centerpiece Carousel: Side-by-side animated crate cards in ViewPager2 -->
+            <androidx.viewpager2.widget.ViewPager2
+                android:id="@+id/cardViewPager"
+                android:layout_width="match_parent"
+                android:layout_height="210dp"
+                android:clipChildren="false"
+                android:clipToPadding="false"
+                android:overScrollMode="never" />
+
+            <!-- Drop Table Rarity Odds Row -->
+            <HorizontalScrollView
+                android:id="@+id/oddsScroll"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:overScrollMode="never"
+                android:scrollbars="none"
+                android:visibility="gone"
+                tools:visibility="visible">
+
+                <LinearLayout
+                    android:id="@+id/oddsContainer"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal" />
+            </HorizontalScrollView>
+
+            <!-- Server Description -->
             <TextView
-                android:id="@+id/streakText"
+                android:id="@+id/descriptionText"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="10dp"
+                android:text="@string/daily_reward_description"
+                android:textAppearance="?attr/textAppearanceBodyMedium"
+                android:textColor="?android:attr/textColorSecondary" />
+
+            <!-- Daily Streak Row -->
+            <LinearLayout
+                android:id="@+id/streakContainer"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:textAppearance="?attr/textAppearanceTitleSmall"
-                android:textStyle="bold"
+                android:layout_marginTop="12dp"
+                android:gravity="center_vertical"
+                android:orientation="horizontal"
                 android:visibility="gone"
-                tools:text="2 day streak"
-                tools:visibility="visible" />
+                tools:visibility="visible">
 
+                <ImageView
+                    android:id="@+id/streakIcon"
+                    android:layout_width="20dp"
+                    android:layout_height="20dp"
+                    android:contentDescription="@null"
+                    android:src="@drawable/baseline_bolt_24"
+                    app:tint="#F59E0B" />
+
+                <TextView
+                    android:id="@+id/streakText"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="6dp"
+                    android:textAppearance="?attr/textAppearanceTitleSmall"
+                    android:textStyle="bold"
+                    tools:text="2 day streak" />
+            </LinearLayout>
+
+            <!-- Watch Time Progress -->
             <com.google.android.material.progressindicator.LinearProgressIndicator
                 android:id="@+id/watchProgress"
                 android:layout_width="match_parent"
@@ -90,7 +208,9 @@
                 android:layout_marginTop="10dp"
                 android:indeterminate="false"
                 android:max="60"
-                android:progress="30" />
+                android:progress="30"
+                app:indicatorColor="#53FC18"
+                app:trackCornerRadius="4dp" />
 
             <TextView
                 android:id="@+id/progressText"
@@ -101,28 +221,7 @@
                 android:textColor="?android:attr/textColorSecondary"
                 tools:text="30 of 60 watch minutes" />
 
-            <com.google.android.material.card.MaterialCardView
-                android:id="@+id/rewardCard"
-                android:layout_width="match_parent"
-                android:layout_height="210dp"
-                android:layout_marginTop="12dp"
-                android:visibility="gone"
-                app:cardBackgroundColor="@android:color/black"
-                app:cardCornerRadius="8dp"
-                app:strokeColor="?attr/colorOutline"
-                app:strokeWidth="1dp"
-                tools:visibility="visible">
-
-                <ImageView
-                    android:id="@+id/rewardImage"
-                    android:layout_width="match_parent"
-                    android:layout_height="match_parent"
-                    android:contentDescription="@string/daily_reward_winner"
-                    android:padding="12dp"
-                    android:scaleType="centerInside"
-                    tools:src="@tools:sample/avatars" />
-            </com.google.android.material.card.MaterialCardView>
-
+            <!-- Winner Rarity / Item Name -->
             <TextView
                 android:id="@+id/winnerRarityText"
                 android:layout_width="match_parent"
@@ -135,33 +234,39 @@
                 tools:text="Rare reward"
                 tools:visibility="visible" />
 
+            <!-- Status Text -->
             <TextView
                 android:id="@+id/statusText"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="14dp"
+                android:layout_marginTop="12dp"
                 android:gravity="center"
                 android:textAppearance="?attr/textAppearanceBodyMedium"
                 tools:text="Your daily reward is ready." />
 
+            <!-- Primary Action: Claim Reward -->
             <com.google.android.material.button.MaterialButton
                 android:id="@+id/claimButton"
+                style="?attr/primaryButtonStyle"
                 android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="16dp"
+                android:layout_height="48dp"
+                android:layout_marginTop="14dp"
                 android:text="@string/daily_reward_claim"
-                app:icon="@drawable/baseline_card_giftcard_black_24" />
+                app:icon="@drawable/baseline_card_giftcard_black_24"
+                app:iconGravity="textStart" />
 
+            <!-- Secondary Action: Share Reward -->
             <com.google.android.material.button.MaterialButton
                 android:id="@+id/shareButton"
                 style="?attr/materialButtonOutlinedStyle"
                 android:layout_width="match_parent"
-                android:layout_height="wrap_content"
+                android:layout_height="48dp"
                 android:layout_marginTop="8dp"
                 android:text="@string/share"
                 android:visibility="gone"
                 tools:visibility="visible" />
 
+            <!-- Reset Time Footer -->
             <TextView
                 android:id="@+id/resetText"
                 android:layout_width="match_parent"

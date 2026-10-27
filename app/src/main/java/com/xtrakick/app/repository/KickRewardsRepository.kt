@@ -4,6 +4,7 @@ import com.xtrakick.app.model.kick.KickDailyChallenge
 import com.xtrakick.app.model.kick.KickDailyClaimResult
 import com.xtrakick.app.model.kick.KickDropCampaign
 import com.xtrakick.app.model.kick.KickRewardsParsing
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
@@ -11,6 +12,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.isActive
+import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonPrimitive
@@ -46,6 +48,14 @@ class KickRewardsRepository @Inject constructor(
         return runCatching {
             getDailyChallenges()
         }.getOrNull()
+    }
+
+    fun updateChallengesFromRaw(rawJson: String) {
+        runCatching {
+            val root = json.parseToJsonElement(rawJson)
+            val challenges = KickRewardsParsing.parseChallenges(root)
+            _dailyChallengesFlow.value = challenges
+        }
     }
 
     fun pollDailyChallenges(intervalMs: Long = REWARDS_POLL_INTERVAL_MS): Flow<List<KickDailyChallenge>> = flow {
@@ -84,8 +94,9 @@ class KickRewardsRepository @Inject constructor(
     private suspend fun <T> getAndParse(url: String, transform: (JsonElement) -> T): T =
         requestAndParse(url, body = null, post = false, transform = transform)
 
-    private suspend fun post(url: String, body: String?): String =
+    private suspend fun post(url: String, body: String?): String = withContext(Dispatchers.IO) {
         kickRepository.executeKickWebSessionRequest(url, body, post = true)
+    }
 
     private suspend fun <T> postAndParse(url: String, body: String?, transform: (JsonElement) -> T): T =
         requestAndParse(url, body, post = true, transform = transform)
@@ -95,12 +106,12 @@ class KickRewardsRepository @Inject constructor(
         body: String?,
         post: Boolean,
         transform: (JsonElement) -> T,
-    ): T {
+    ): T = withContext(Dispatchers.IO) {
         val raw = kickRepository.executeKickWebSessionRequest(url, body, post)
         if (raw.isBlank()) {
             throw IOException("Kick rewards request returned an empty response for $url")
         }
-        return transform(json.parseToJsonElement(raw))
+        transform(json.parseToJsonElement(raw))
     }
 
     private fun urlEncode(value: String): String =

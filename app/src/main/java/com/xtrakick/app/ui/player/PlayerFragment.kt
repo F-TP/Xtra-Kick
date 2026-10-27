@@ -191,6 +191,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
     private var backgroundColor: Int? = null
     private var backgroundVisible = false
     private var wasInPictureInPictureMode = false
+    private var pipEnteredAtMs: Long = 0L
     private var isScreenOff = false
     private var screenReceiverRegistered = false
     protected var lastBackgroundPauseAtMs: Long = 0L
@@ -253,11 +254,11 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
 
     protected var activePlaybackUrl: String? = null
 
-    open fun startStream(url: String?) {}
-    open fun startVideo(url: String?, playbackPosition: Long?, multivariantPlaylist: Boolean) {}
-    open fun startClip(url: String?) {}
+    open fun startStream(url: String?) { clearPipDismissState() }
+    open fun startVideo(url: String?, playbackPosition: Long?, multivariantPlaylist: Boolean) { clearPipDismissState() }
+    open fun startClip(url: String?) { clearPipDismissState() }
     open fun currentPlaybackUrl(): String? = activePlaybackUrl
-    open fun startOfflineVideo(url: String?, position: Long) {}
+    open fun startOfflineVideo(url: String?, position: Long) { clearPipDismissState() }
     open fun getCurrentPosition(): Long? = null
     open fun getCurrentSpeed(): Float? = null
     open fun getCurrentVolume(): Float? = null
@@ -3246,6 +3247,8 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
         if (powerManager?.isInteractive == false) return true
         val keyguardManager = context.getSystemService(Context.KEYGUARD_SERVICE) as? KeyguardManager
         if (keyguardManager?.isKeyguardLocked == true) return true
+        @Suppress("DEPRECATION")
+        if (keyguardManager?.inKeyguardRestrictedInputMode() == true) return true
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP_MR1) {
             try {
                 if (keyguardManager?.isDeviceLocked == true) return true
@@ -3272,24 +3275,23 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
     protected open fun onScreenOffWhileStopped() {
     }
 
+    private fun isGenuinePip(): Boolean =
+        wasInPictureInPictureMode && pipEnteredAtMs > 0L && (SystemClock.uptimeMillis() - pipEnteredAtMs >= MIN_PIP_DURATION_MS)
+
     protected fun shouldContinuePlaybackInBackground(): Boolean {
         if ((activity as? MainActivity)?.isLaunchingSettings() == true) {
             return true
         }
-        val isInPipMode = activity?.isInPictureInPictureMode == true
+        val act = activity
         val isLockedOrOff = isScreenLockedOrOff()
-        if (wasInPictureInPictureMode && !isInPipMode) {
+        val wasOrInPip = wasInPictureInPictureMode || isGenuinePip() ||
+            (act != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && act.isInPictureInPictureMode)
+
+        if (wasOrInPip) {
             return if (isLockedOrOff) {
                 prefs.getBoolean(AppConstants.PLAYER_BACKGROUND_AUDIO_PIP_LOCKED, true)
             } else {
                 prefs.getBoolean(AppConstants.PLAYER_BACKGROUND_AUDIO_PIP_CLOSED, false)
-            }
-        }
-        if (isInPipMode) {
-            return if (isLockedOrOff) {
-                prefs.getBoolean(AppConstants.PLAYER_BACKGROUND_AUDIO_PIP_LOCKED, true)
-            } else {
-                true
             }
         }
         if (prefs.getBoolean(AppConstants.PLAYER_BACKGROUND_AUDIO, true)) {
@@ -3299,19 +3301,17 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
     }
 
     protected fun shouldClosePlaybackAfterPipDismiss(): Boolean {
-        if (shouldContinuePlaybackInBackground()) {
-            return false
-        }
-        val activity = activity ?: return false
-        val isInPipMode = activity.isInPictureInPictureMode
-        return wasInPictureInPictureMode &&
-            !isInPipMode &&
-            !activity.isChangingConfigurations &&
-            !activity.isFinishing
+        if (isScreenLockedOrOff()) return false
+        val act = activity ?: return false
+        if (act.isChangingConfigurations) return false
+        val wasOrInPip = wasInPictureInPictureMode || isGenuinePip() ||
+            (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && act.isInPictureInPictureMode)
+        return wasOrInPip && !prefs.getBoolean(AppConstants.PLAYER_BACKGROUND_AUDIO_PIP_CLOSED, false)
     }
 
     protected fun clearPipDismissState() {
         wasInPictureInPictureMode = false
+        pipEnteredAtMs = 0L
     }
 
     protected fun setPipActions(playing: Boolean, volumeOverride: Float? = null) {
@@ -3681,7 +3681,14 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
     }
 
     override fun onPictureInPictureModeChanged(isInPictureInPictureMode: Boolean) {
-        wasInPictureInPictureMode = wasInPictureInPictureMode || isInPictureInPictureMode
+        if (isInPictureInPictureMode) {
+            wasInPictureInPictureMode = true
+            pipEnteredAtMs = SystemClock.uptimeMillis()
+        } else {
+            if (isResumed || isVisible) {
+                clearPipDismissState()
+            }
+        }
         // Enter is disarmed by setPipActions below; re-arm on exit so the
         // next Home press still PiPs.
         if (!isInPictureInPictureMode && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S &&
@@ -4654,6 +4661,9 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
 
     override fun onStart() {
         super.onStart()
+        if (activity?.isInPictureInPictureMode != true) {
+            clearPipDismissState()
+        }
         if (videoStatsActiveInSession && isMaximized && !requireActivity().isInPictureInPictureMode) {
             _binding?.videoStatsOverlay?.visibility = View.VISIBLE
             _binding?.videoStatsOverlay?.removeCallbacks(updateVideoStatsAction)
@@ -4684,6 +4694,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
         protected const val CHAT_ONLY_QUALITY = "chat_only"
 
         private const val SKIP_STACK_DEBOUNCE_MS = 600L
+        private const val MIN_PIP_DURATION_MS = 500L
         private const val REQUEST_CODE_QUALITY = 0
         private const val REQUEST_CODE_SPEED = 1
         private const val REQUEST_CODE_AUDIO_ONLY = 2

@@ -1,0 +1,81 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:clipChildren="false">
+
+    <com.google.android.material.card.MaterialCardView
+        android:id="@+id/rewardCard"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:layout_marginHorizontal="6dp"
+        android:clipChildren="false"
+        app:cardBackgroundColor="@color/surfaceContainerAmoled"
+        app:cardCornerRadius="16dp"
+        app:strokeColor="?attr/colorOutline"
+        app:strokeWidth="1dp">
+
+        <FrameLayout
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:clipChildren="false">
+
+            <ImageView
+                android:id="@+id/rewardImage"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:contentDescription="@string/daily_reward_winner"
+                android:padding="16dp"
+                android:scaleType="fitCenter"
+                tools:src="@tools:sample/avatars" />
+
+            <!-- Horizontal Roulette Reel Container -->
+            <FrameLayout
+                android:id="@+id/rouletteContainer"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:clipChildren="false"
+                android:visibility="gone">
+
+                <!-- Center vertical indicator line -->
+                <View
+                    android:id="@+id/rouletteCenterLine"
+                    android:layout_width="1.5dp"
+                    android:layout_height="match_parent"
+                    android:layout_gravity="center_horizontal"
+                    android:background="#4053FC18" />
+
+                <!-- The horizontal scrolling strip of cards -->
+                <LinearLayout
+                    android:id="@+id/rouletteStrip"
+                    android:layout_width="wrap_content"
+                    android:layout_height="match_parent"
+                    android:clipChildren="false"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal" />
+
+                <!-- Top indicator arrow pointing down -->
+                <ImageView
+                    android:id="@+id/rouletteTopIndicator"
+                    android:layout_width="16dp"
+                    android:layout_height="12dp"
+                    android:layout_gravity="top|center_horizontal"
+                    android:layout_marginTop="8dp"
+                    android:contentDescription="@null"
+                    android:src="@drawable/ic_roulette_indicator_down" />
+
+                <!-- Bottom indicator arrow pointing up -->
+                <ImageView
+                    android:id="@+id/rouletteBottomIndicator"
+                    android:layout_width="16dp"
+                    android:layout_height="12dp"
+                    android:layout_gravity="bottom|center_horizontal"
+                    android:layout_marginBottom="8dp"
+                    android:contentDescription="@null"
+                    android:src="@drawable/ic_roulette_indicator_up" />
+            </FrameLayout>
+        </FrameLayout>
+    </com.google.android.material.card.MaterialCardView>
+</FrameLayout>
