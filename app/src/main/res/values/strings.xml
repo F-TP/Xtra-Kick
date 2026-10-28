@@ -1217,6 +1217,7 @@ These are downloads you removed while keeping the files. Android hides this fold
     <string name="language_system_default">System default</string>
     <string name="language_english" translatable="false">English</string>
     <string name="language_spanish" translatable="false">Español</string>
+    <string name="language_portuguese_brazil" translatable="false">Português (Brasil)</string>
     <string name="emote_section_recent">Recent</string>
     <string name="emote_section_collectibles">Collectibles</string>
     <string name="emote_section_global">Global</string>
