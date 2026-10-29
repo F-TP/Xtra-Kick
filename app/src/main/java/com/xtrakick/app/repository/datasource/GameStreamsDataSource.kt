@@ -7,6 +7,7 @@ import com.xtrakick.app.model.ui.Stream
 import com.xtrakick.app.repository.KickRepository
 import com.xtrakick.app.util.AppConstants
 import com.xtrakick.app.util.KickApiHelper
+import java.util.Collections
 import java.util.Locale
 
 class GameStreamsDataSource(
@@ -22,6 +23,7 @@ class GameStreamsDataSource(
 ) : PagingSource<Int, Stream>() {
     private var api: String? = null
     private var offset: String? = null
+    private val seenStreamKeys = Collections.synchronizedSet(mutableSetOf<String>())
 
     override suspend fun load(params: LoadParams<Int>): LoadResult<Int, Stream> {
         return if (!offset.isNullOrBlank()) {
@@ -47,56 +49,79 @@ class GameStreamsDataSource(
     private suspend fun loadFromApi(apiPref: String?, params: LoadParams<Int>): LoadResult<Int, Stream> {
         api = apiPref
         return when (apiPref) {
-            AppConstants.KICK -> if (tags.isNullOrEmpty() && gqlQueryLanguages.isNullOrEmpty() && gqlLanguages.isNullOrEmpty()) kickLoad(params) else throw Exception()
+            AppConstants.KICK -> kickLoad(params)
             else -> throw Exception()
         }
     }
 
     private suspend fun kickLoad(params: LoadParams<Int>): LoadResult<Int, Stream> {
-        val page = params.key ?: 1
+        val targetSize = params.loadSize
+        val hasFilters = !gqlLanguages.isNullOrEmpty() || !tags.isNullOrEmpty()
+        val minTargetSize = if (hasFilters) minOf(targetSize, 8) else targetSize
+        val maxPagesToScan = if (hasFilters) 8 else 1
+        var currentPage = params.key ?: 1
+        var nextPageKey: Int? = currentPage
+        val collectedStreams = mutableListOf<Stream>()
+        var scannedPages = 0
+
         val slug = gameSlug?.takeIf { it.isNotBlank() }
             ?: kickRepository.resolveCategorySlug(gameId, gameName)
             ?: KickApiHelper.toCategorySlug(gameName)
-        val response = kickRepository.getLivestreams(
-            page = page,
-            limit = params.loadSize,
-            sort = if (gqlSort == "VIEWER_COUNT_ASC") "asc" else "desc",
-            subcategory = slug
-        )
         val normalizedSlug = slug?.trim()?.lowercase(Locale.ROOT)
         val normalizedName = gameName?.trim()?.lowercase(Locale.ROOT)
-        val list = response.data
-            .filter { item ->
-                // Guard against Kick falling back to global popular livestreams when subcategory is unmatched
-                if (normalizedSlug.isNullOrBlank() && normalizedName.isNullOrBlank() && gameId.isNullOrBlank()) {
-                    return@filter true
+
+        while (scannedPages < maxPagesToScan && nextPageKey != null) {
+            val response = kickRepository.getLivestreams(
+                page = currentPage,
+                limit = targetSize,
+                sort = if (gqlSort == "VIEWER_COUNT_ASC") "asc" else "desc",
+                subcategory = slug
+            )
+            val matched = response.data
+                .filter { item ->
+                    // Guard against Kick falling back to global popular livestreams when subcategory is unmatched
+                    val itemCats = item.categories
+                    val matchesCategory = (normalizedSlug.isNullOrBlank() && normalizedName.isNullOrBlank() && gameId.isNullOrBlank()) ||
+                        itemCats.isNullOrEmpty() ||
+                        itemCats.any { cat ->
+                            (gameId != null && cat.id?.toString() == gameId) ||
+                            (normalizedSlug != null && cat.slug?.lowercase(Locale.ROOT) == normalizedSlug) ||
+                            (normalizedName != null && cat.name?.lowercase(Locale.ROOT) == normalizedName)
+                        }
+                    matchesCategory && StreamsDataSource.matchesFilters(item, gqlLanguages, tags)
                 }
-                val itemCats = item.categories
-                if (itemCats.isNullOrEmpty()) {
-                    true
-                } else {
-                    itemCats.any { cat ->
-                        (gameId != null && cat.id?.toString() == gameId) ||
-                        (normalizedSlug != null && cat.slug?.lowercase(Locale.ROOT) == normalizedSlug) ||
-                        (normalizedName != null && cat.name?.lowercase(Locale.ROOT) == normalizedName)
-                    }
+                .map {
+                    val itemCat = it.categories?.firstOrNull()
+                    kickRepository.toStream(
+                        item = it,
+                        gameId = itemCat?.id?.toString() ?: gameId,
+                        gameSlug = itemCat?.slug ?: slug,
+                        gameName = itemCat?.name ?: gameName
+                    )
                 }
+                .filter { stream ->
+                    val key = stream.channelId ?: stream.channelLogin?.lowercase(Locale.ROOT) ?: stream.id.orEmpty()
+                    key.isEmpty() || seenStreamKeys.add(key)
+                }
+            collectedStreams.addAll(matched)
+            scannedPages++
+
+            if (!response.nextPageUrl.isNullOrBlank()) {
+                currentPage++
+                nextPageKey = currentPage
+            } else {
+                nextPageKey = null
             }
-            .map {
-                val itemCat = it.categories?.firstOrNull()
-                kickRepository.toStream(
-                    item = it,
-                    gameId = itemCat?.id?.toString() ?: gameId,
-                    gameSlug = itemCat?.slug ?: slug,
-                    gameName = itemCat?.name ?: gameName
-                )
+
+            if (!hasFilters || collectedStreams.size >= minTargetSize) {
+                break
             }
+        }
+
         return LoadResult.Page(
-            data = list,
+            data = collectedStreams,
             prevKey = null,
-            nextKey = if (!response.nextPageUrl.isNullOrBlank()) {
-                page + 1
-            } else null
+            nextKey = nextPageKey
         )
     }
 

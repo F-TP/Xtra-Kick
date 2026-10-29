@@ -8,11 +8,12 @@ import android.view.ViewGroup
 import com.xtrakick.app.util.bundleOf
 import com.xtrakick.app.databinding.DialogGamesSortBinding
 import com.xtrakick.app.model.ui.Tag
+import com.xtrakick.app.ui.common.AddTagDialog
 import com.google.android.material.bottomsheet.BottomSheetBehavior
 import com.google.android.material.bottomsheet.BottomSheetDialogFragment
 import com.google.android.material.chip.Chip
 
-class GamesSortDialog : BottomSheetDialogFragment() {
+class GamesSortDialog : BottomSheetDialogFragment(), AddTagDialog.OnTagSelectedListener {
 
     interface OnFilter {
         fun onChange(tags: Array<Tag>)
@@ -62,21 +63,11 @@ class GamesSortDialog : BottomSheetDialogFragment() {
                 }
             } ?: emptyList()
             selectedTags = originalTags.toMutableList()
-            originalTags.forEach { tag ->
-                tagGroup.addView(
-                    Chip(requireContext()).apply {
-                        text = tag.name
-                        isCloseIconVisible = true
-                        setOnCloseIconClickListener {
-                            selectedTags.find { it.id == tag.id }?.let { selectedTags.remove(it) }
-                            tagGroup.removeView(this)
-                        }
-                    }
-                )
+            updateTagGroup()
+            selectTags.visibility = View.VISIBLE
+            selectTags.setOnClickListener {
+                AddTagDialog.newInstance().show(childFragmentManager, "addTag")
             }
-            selectTags.visibility = View.GONE
-            tagGroup.visibility = View.GONE
-            selectedTags.clear()
             apply.setOnClickListener {
                 val tags = selectedTags.sortedBy { it.id }
                 if (!tags.mapNotNull { it.id }.toTypedArray().contentEquals(originalTagIds)) {
@@ -86,6 +77,32 @@ class GamesSortDialog : BottomSheetDialogFragment() {
                 }
                 dismiss()
             }
+        }
+    }
+
+    private fun updateTagGroup() {
+        with(binding) {
+            tagGroup.removeAllViews()
+            tagGroup.visibility = if (selectedTags.isNotEmpty()) View.VISIBLE else View.GONE
+            selectedTags.forEach { tag ->
+                tagGroup.addView(
+                    Chip(requireContext()).apply {
+                        text = tag.name ?: tag.id
+                        isCloseIconVisible = true
+                        setOnCloseIconClickListener {
+                            selectedTags.removeAll { it.id.equals(tag.id, ignoreCase = true) || it.name.equals(tag.name, ignoreCase = true) }
+                            updateTagGroup()
+                        }
+                    }
+                )
+            }
+        }
+    }
+
+    override fun onTagSelected(tag: String) {
+        if (!selectedTags.any { it.name.equals(tag, ignoreCase = true) || it.id.equals(tag, ignoreCase = true) }) {
+            selectedTags.add(Tag(id = tag, name = tag))
+            updateTagGroup()
         }
     }
 

@@ -26,6 +26,7 @@ class LivestreamV2(
     val title: String? = null,
     @SerialName("viewer_count")
     val viewerCount: Int? = null,
+    val tags: List<String>? = null,
 ) {
     @Serializable
     class BroadcasterUser(
@@ -59,6 +60,6 @@ internal fun LivestreamV2.toLegacyLivestream(): Livestream = Livestream(
     thumbnail = thumbnail,
     profilePicture = broadcasterUser?.profilePicture,
     language = languageCode,
-    customTags = null,
+    customTags = tags,
     category = category?.let { Livestream.Category(id = it.id, name = it.name) },
 )

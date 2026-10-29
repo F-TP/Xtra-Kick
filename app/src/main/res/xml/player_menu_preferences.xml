@@ -80,6 +80,13 @@
 
     <SwitchPreferenceCompat
         android:defaultValue="true"
+        android:key="player_menu_rewind"
+        android:title="@string/rewind_live_stream"
+        app:iconSpaceReserved="false"
+        app:singleLineTitle="false" />
+
+    <SwitchPreferenceCompat
+        android:defaultValue="true"
         android:key="player_menu_chat_bar"
         android:title="@string/toggle_chat_bar"
         app:iconSpaceReserved="false"

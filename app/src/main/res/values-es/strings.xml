@@ -163,6 +163,7 @@
     <string name="chat_modes_updated">Modos del chat actualizados: %s</string>
     <string name="chat_modes_none">ninguno</string>
     <string name="copy_clip">Copiar al portapapeles</string>
+    <string name="copy_emote_name">Copiar nombre</string>
     <string name="chat_clear">El chat ha sido limpiado por un moderador.</string>
     <string name="chat_timeout">%1$s ha sido expulsado temporalmente por %2$s.</string>
     <string name="chat_ban">%s ha sido baneado permanentemente.</string>
@@ -526,6 +527,7 @@
     <string name="hide">Ocultar</string>
     <string name="redeemed">Canjeado %s</string>
     <string name="user_redeemed">%1$s canjeó %2$s</string>
+    <string name="has_redeemed">ha canjeado</string>
     <string name="close">Cerrar</string>
     <string name="pinned_message_restore">Restaurar mensaje fijado</string>
     <string name="pinned_message_expand">Expandir mensaje fijado</string>
@@ -988,6 +990,10 @@ Son descargas que eliminaste conservando los archivos. Android oculta esta carpe
     <string name="game_tabs">Pestañas del juego</string>
     <string name="search_tabs">Pestañas de búsqueda</string>
     <string name="add_tag">Agregar etiqueta</string>
+    <string name="add">Añadir</string>
+    <string name="enter_tag_hint">Nombre de etiqueta (ej. Shooter, Drops)</string>
+    <string name="popular_tags">Etiquetas sugeridas</string>
+    <string name="show_tags">Mostrar etiquetas en tarjetas</string>
     <string name="save_filters">Guardar filtros</string>
     <string name="delete_filter_message">¿Seguro que quieres eliminar este filtro?</string>
     <string name="move_player_freely">Mover libremente el reproductor minimizado</string>
@@ -1228,4 +1234,23 @@ Son descargas que eliminaste conservando los archivos. Android oculta esta carpe
     <string name="link_copied_to_clipboard">Enlace copiado al portapapeles</string>
     <string name="share_clip">Compartir clip</string>
     <string name="watch_clip">Ver clip</string>
+    <string name="rewind_live_stream">Rebobinar transmisión en vivo</string>
+    <string name="return_to_live_stream">Volver al directo</string>
+    <string name="rewind_last_30_seconds">Ver los últimos 30 segundos</string>
+    <string name="rewind_last_minute">Ver el último minuto</string>
+    <string name="rewind_last_2_minutes">Ver los últimos 2 minutos</string>
+    <string name="rewind_last_5_minutes">Ver los últimos 5 minutos</string>
+    <string name="rewind_last_10_minutes">Ver los últimos 10 minutos</string>
+    <string name="rewind_last_15_minutes">Ver los últimos 15 minutos</string>
+    <string name="rewind_last_30_minutes">Ver los últimos 30 minutos</string>
+    <string name="rewind_from_beginning">Ver desde el principio</string>
+    <string name="rewind_rel_30_seconds">Rebobinar 30 segundos</string>
+    <string name="rewind_rel_minute">Rebobinar 1 minuto</string>
+    <string name="rewind_rel_2_minutes">Rebobinar 2 minutos</string>
+    <string name="rewind_rel_5_minutes">Rebobinar 5 minutos</string>
+    <string name="rewind_rel_10_minutes">Rebobinar 10 minutos</string>
+    <string name="rewind_rel_15_minutes">Rebobinar 15 minutos</string>
+    <string name="rewind_rel_30_minutes">Rebobinar 30 minutos</string>
+    <string name="recording">Grabación</string>
+    <string name="rewind_unavailable">El rebobinado no está disponible para esta transmisión</string>
 </resources>

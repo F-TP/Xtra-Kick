@@ -44,12 +44,16 @@ class TopStreamsViewModel @Inject constructor(
 
     @OptIn(ExperimentalCoroutinesApi::class)
     val flow = filter.flatMapLatest { filter ->
+        val hasFilters = tags.isNotEmpty() || languages.isNotEmpty()
+        val isCompact = applicationContext.prefs().getString(AppConstants.COMPACT_STREAMS, "disabled") == "all"
+        val prefetch = if (hasFilters) (if (isCompact) 12 else 8) else (if (isCompact) 10 else 3)
+        val initialSize = if (hasFilters) 60 else 30
         Pager(
-            if (applicationContext.prefs().getString(AppConstants.COMPACT_STREAMS, "disabled") == "all") {
-                PagingConfig(pageSize = 30, prefetchDistance = 10, initialLoadSize = 30)
-            } else {
-                PagingConfig(pageSize = 30, prefetchDistance = 3, initialLoadSize = 30)
-            }
+            PagingConfig(
+                pageSize = 30,
+                prefetchDistance = prefetch,
+                initialLoadSize = initialSize
+            )
         ) {
             StreamsDataSource(
                 gqlSort = when (sort) {

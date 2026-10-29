@@ -6,6 +6,7 @@ import com.xtrakick.app.model.ui.Game
 import com.xtrakick.app.model.ui.Tag
 import com.xtrakick.app.repository.KickRepository
 import com.xtrakick.app.util.AppConstants
+import java.util.Locale
 
 class GamesDataSource(
     private val tags: List<String>?,
@@ -39,7 +40,7 @@ class GamesDataSource(
     private suspend fun loadFromApi(apiPref: String?, params: LoadParams<Int>): LoadResult<Int, Game> {
         api = apiPref
         return when (apiPref) {
-            AppConstants.KICK -> if (tags.isNullOrEmpty()) kickLoad(params) else throw Exception()
+            AppConstants.KICK -> kickLoad(params)
             else -> throw Exception()
         }
     }
@@ -47,7 +48,15 @@ class GamesDataSource(
     private suspend fun kickLoad(params: LoadParams<Int>): LoadResult<Int, Game> {
         val page = params.key ?: 1
         val response = kickRepository.getSubcategories(page = page, limit = params.loadSize)
-        val list = response.data.map { kickRepository.toGame(it) }
+        val list = response.data
+            .map { kickRepository.toGame(it) }
+            .filter { game ->
+                if (tags.isNullOrEmpty()) true
+                else {
+                    val gameTags = game.tags.orEmpty().mapNotNull { it.name?.trim()?.lowercase(Locale.ROOT) }
+                    tags.any { tag -> gameTags.contains(tag.trim().lowercase(Locale.ROOT)) }
+                }
+            }
         return LoadResult.Page(
             data = list,
             prevKey = null,

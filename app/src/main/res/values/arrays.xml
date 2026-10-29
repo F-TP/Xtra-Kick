@@ -440,6 +440,8 @@
         <item>@string/language_english</item>
         <item>@string/language_spanish</item>
         <item>@string/language_portuguese_brazil</item>
+        <item>@string/language_german</item>
+        <item>@string/language_turkish</item>
     </string-array>
 
     <string-array name="languageValues">
@@ -447,5 +449,7 @@
         <item>en</item>
         <item>es</item>
         <item>pt-BR</item>
+        <item>de</item>
+        <item>tr</item>
     </string-array>
 </resources>

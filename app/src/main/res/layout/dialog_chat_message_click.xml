@@ -94,7 +94,6 @@
                                 android:layout_width="52dp"
                                 android:layout_height="52dp"
                                 android:layout_marginEnd="12dp"
-                                android:background="?attr/colorSurfaceContainerHighest"
                                 android:scaleType="centerCrop"
                                 android:visibility="gone"
                                 tools:src="@tools:sample/avatars"

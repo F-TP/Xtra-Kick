@@ -69,6 +69,8 @@
             style="?attr/bottomSheetButtonStyle"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
+            android:layout_marginTop="2dp"
+            android:layout_marginBottom="2dp"
             android:text="@string/add_tag" />
 
         <Button
@@ -76,6 +78,8 @@
             style="?attr/bottomSheetButtonStyle"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
+            android:layout_marginTop="2dp"
+            android:layout_marginBottom="2dp"
             android:text="@string/languages" />
 
         <Button
@@ -83,12 +87,16 @@
             style="?attr/bottomSheetButtonStyle"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
+            android:layout_marginTop="2dp"
+            android:layout_marginBottom="2dp"
             android:text="@string/save_default" />
 
         <LinearLayout
             android:id="@+id/saveSortLayout"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
+            android:layout_marginTop="2dp"
+            android:layout_marginBottom="2dp"
             android:orientation="horizontal">
 
             <Button
@@ -116,13 +124,17 @@
             style="?attr/bottomSheetButtonStyle"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
+            android:layout_marginTop="2dp"
+            android:layout_marginBottom="2dp"
             android:text="@string/save_filters" />
 
         <Button
             android:id="@+id/apply"
-            style="?attr/bottomSheetButtonStyle"
+            style="?attr/primaryButtonStyle"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:layout_marginBottom="4dp"
             android:text="@string/apply" />
 
     </LinearLayout>

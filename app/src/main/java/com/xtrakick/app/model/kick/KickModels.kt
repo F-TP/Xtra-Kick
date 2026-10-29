@@ -21,6 +21,8 @@ class KickLivestream(
     @SerialName("channel_id")
     val channelId: Long? = null,
     val language: String? = null,
+    @SerialName("is_mature")
+    val isMature: Boolean? = null,
     @SerialName("created_at")
     val createdAt: String? = null,
     @SerialName("session_title")
@@ -51,6 +53,7 @@ class KickSubcategory(
     val slug: String? = null,
     val viewers: Int? = null,
     val banner: KickBanner? = null,
+    val tags: List<String>? = null,
 )
 
 @Serializable
@@ -108,6 +111,10 @@ class KickChannelLivestream(
     val vodId: String? = null,
     val thumbnail: KickThumbnail? = null,
     val category: KickCategory? = null,
+    val tags: List<String>? = null,
+    val language: String? = null,
+    @SerialName("is_mature")
+    val isMature: Boolean? = null,
 )
 
 @Serializable
@@ -120,6 +127,7 @@ class KickCategory(
     val id: Long? = null,
     val name: String? = null,
     val slug: String? = null,
+    val tags: List<String>? = null,
 )
 
 @Serializable

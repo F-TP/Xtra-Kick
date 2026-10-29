@@ -99,6 +99,7 @@ import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.sync.Mutex
@@ -256,6 +257,11 @@ class KickRepository @Inject constructor(
     private val typesenseSearchCache = boundedCache<Pair<Long, KickTypesenseResult>>()
     private val categorySlugById = ConcurrentHashMap<String, String>()
     private val categorySlugByName = ConcurrentHashMap<String, String>()
+    private val categoryTagsById = ConcurrentHashMap<String, List<String>>()
+    private val categoryTagsBySlug = ConcurrentHashMap<String, List<String>>()
+    private val categoryTagsByName = ConcurrentHashMap<String, List<String>>()
+    private val channelEventCache = boundedCache<Pair<Long, String?>>()
+    private val channelEventCacheTtlMs = TimeUnit.MINUTES.toMillis(5)
     private val kickSubscriberAccessCache = boundedCache<Pair<Long, Boolean>>()
     private val kickEmoteGroupsCache = boundedCache<Pair<Long, List<KickEmoteGroup>>>()
     private val kickInlineBadgeSanitizedCache = ConcurrentHashMap<String, String>()
@@ -556,6 +562,19 @@ class KickRepository @Inject constructor(
         return get("https://kick.com/api/v1/subcategories${encodeQuery(mapOf("page" to page.toString(), "limit" to limit.toString()))}")
     }
 
+    suspend fun getSubcategory(slug: String): KickSubcategory? {
+        val normalized = slug.trim()
+        if (normalized.isBlank()) return null
+        return try {
+            get<KickSubcategory>("https://kick.com/api/v1/subcategories/${urlEncode(normalized)}").also { sub ->
+                cacheCategorySlug(sub.id?.toString(), sub.name, sub.slug)
+                cacheCategoryTags(sub.id?.toString(), sub.slug, sub.name, sub.tags)
+            }
+        } catch (_: Exception) {
+            null
+        }
+    }
+
     suspend fun searchWebsite(query: String): KickWebsiteSearchResponse {
         val normalizedQuery = query.trim()
         val cacheKey = normalizedQuery.lowercase(Locale.ROOT)
@@ -640,6 +659,58 @@ class KickRepository @Inject constructor(
             cacheCategorySlug(cleanId, cleanName, fallbackSlug)
         }
         return fallbackSlug
+    }
+
+    fun cacheCategoryTags(id: String?, slug: String?, name: String?, tags: List<String>?) {
+        val cleanTags = tags?.filter { it.isNotBlank() }?.takeIf { it.isNotEmpty() } ?: return
+        id?.trim()?.takeIf { it.isNotBlank() }?.let { categoryTagsById[it] = cleanTags }
+        slug?.trim()?.lowercase(Locale.ROOT)?.takeIf { it.isNotBlank() }?.let { categoryTagsBySlug[it] = cleanTags }
+        name?.trim()?.lowercase(Locale.ROOT)?.takeIf { it.isNotBlank() }?.let { categoryTagsByName[it] = cleanTags }
+    }
+
+    fun getCachedCategoryTags(id: String?, slug: String?, name: String? = null): List<String>? {
+        id?.trim()?.takeIf { it.isNotBlank() }?.let { categoryTagsById[it] }?.let { return it }
+        slug?.trim()?.lowercase(Locale.ROOT)?.takeIf { it.isNotBlank() }?.let { categoryTagsBySlug[it] }?.let { return it }
+        name?.trim()?.lowercase(Locale.ROOT)?.takeIf { it.isNotBlank() }?.let { categoryTagsByName[it] }?.let { return it }
+        return null
+    }
+
+    suspend fun resolveCategoryTags(id: String?, slug: String?, name: String? = null): List<String>? {
+        getCachedCategoryTags(id, slug, name)?.let { return it }
+        val resolvedSlug = slug ?: getCachedCategorySlug(id) ?: getCachedCategorySlugByName(name)
+        if (!resolvedSlug.isNullOrBlank()) {
+            return getSubcategory(resolvedSlug)?.tags
+        }
+        return null
+    }
+
+    fun getCachedChannelEventTitle(channelId: String?): String? {
+        val cleanId = channelId?.trim()?.takeIf { it.isNotEmpty() } ?: return null
+        return channelEventCache[cleanId]?.second
+    }
+
+    suspend fun getChannelEventTitle(channelId: String?): String? = withContext(Dispatchers.IO) {
+        val id = channelId?.trim()?.takeIf { it.isNotEmpty() } ?: return@withContext null
+        val now = System.currentTimeMillis()
+        channelEventCache[id]?.let { (cachedAt, eventTitle) ->
+            if (now - cachedAt <= channelEventCacheTtlMs) {
+                return@withContext eventTitle
+            }
+        }
+        runCatching {
+            val response = getRaw("https://web.kick.com/api/v1/channels/$id/event")
+            val element = json.parseToJsonElement(response)
+            val dataObj = (element as? JsonObject)?.objOrNull("data")
+            val phase = dataObj?.primitiveOrNull("phase")
+            val title = if (phase == "live" || phase == "upcoming") {
+                dataObj.primitiveOrNull("title")
+            } else null
+            channelEventCache[id] = now to title
+            title
+        }.getOrElse {
+            channelEventCache[id] = now to null
+            null
+        }
     }
 
     private suspend fun searchTypesense(
@@ -757,7 +828,7 @@ class KickRepository @Inject constructor(
         val root = json.parseToJsonElement(
             executeKickWebSessionRequest("https://kick.com/api/v1/user/livestreams")
         ) as? JsonArray ?: throw IOException("Invalid Kick live followed response")
-        root.mapNotNull { element ->
+        val parsed = root.mapNotNull { element ->
             val item = element as? JsonObject ?: return@mapNotNull null
             val channel = item.objOrNull("channel")
             val channelUser = channel?.objOrNull("user")
@@ -767,10 +838,25 @@ class KickRepository @Inject constructor(
             val categoryName = category?.primitiveOrNull("name")
             val thumbnail = item.objOrNull("thumbnail")
             cacheCategorySlug(categoryId, categoryName, categorySlug)
+
+            val rawTags = item.arrayOrNull("tags")?.mapNotNull { (it as? JsonPrimitive)?.contentOrNull }
+            val rawCategoryTags = category?.arrayOrNull("tags")?.mapNotNull { (it as? JsonPrimitive)?.contentOrNull }
+            cacheCategoryTags(categoryId, categorySlug, categoryName, rawCategoryTags)
+            val lang = item.primitiveOrNull("language")
+            val isMature = item.booleanOrNull("is_mature") == true
+            val baseTags = buildList {
+                lang?.takeIf { it.isNotBlank() }?.let(::add)
+                if (isMature) add("18+")
+                rawTags?.filter { it.isNotBlank() }?.let(::addAll)
+            }.distinct()
+
+            val channelId = item.firstLongOrNull("channel_id")?.toString()
+                ?: channel?.firstLongOrNull("id")?.toString()
+
             Stream(
                 id = item.firstLongOrNull("id")?.toString(),
                 source = AppConstants.KICK,
-                channelId = item.firstLongOrNull("channel_id")?.toString(),
+                channelId = channelId,
                 channelLogin = channel?.primitiveOrNull("slug"),
                 channelName = channelUser?.primitiveOrNull("username"),
                 playbackUrl = channel?.primitiveOrNull("playback_url"),
@@ -782,7 +868,23 @@ class KickRepository @Inject constructor(
                 startedAt = normalizeDate(item.primitiveOrNull("start_time")),
                 thumbnailUrl = thumbnail?.primitiveOrNull("src"),
                 profileImageUrl = channelUser?.primitiveOrNull("profilepic"),
+                tags = baseTags.ifEmpty { null },
             ).takeIf { !it.channelLogin.isNullOrBlank() || !it.channelId.isNullOrBlank() }
+        }
+
+        coroutineScope {
+            parsed.map { stream ->
+                async {
+                    val eventTitle = stream.channelId?.let { getChannelEventTitle(it) }
+                    if (!eventTitle.isNullOrBlank()) {
+                        stream.tags = buildList {
+                            add(eventTitle)
+                            stream.tags?.let { addAll(it) }
+                        }.distinct()
+                    }
+                    stream
+                }
+            }.awaitAll()
         }
     }
 
@@ -828,6 +930,14 @@ class KickRepository @Inject constructor(
                 channelLivestreamCache[normalizedKey] = cachedAt to livestream
                 channel.slug?.trim()?.lowercase(Locale.ROOT)?.takeIf { it.isNotBlank() }?.let { channelLivestreamCache[it] = cachedAt to livestream }
                 channel.id?.toString()?.takeIf { it.isNotBlank() }?.let { channelLivestreamCache[it] = cachedAt to livestream }
+                if (livestream != null) {
+                    val chId = channel.id?.toString() ?: (channel.userId ?: channel.user?.id)?.toString()
+                    if (chId != null) {
+                        livestreamPrefetchScope.launch {
+                            runCatching { getChannelEventTitle(chId) }
+                        }
+                    }
+                }
                 val changed = cacheKickBadgeUrls(channel)
                 if (changed) {
                     schedulePersistBadgeCache()
@@ -2172,6 +2282,35 @@ class KickRepository @Inject constructor(
         val root = runCatching { JSONObject(raw) }.getOrNull() ?: return@withContext null
         val livestream = root.optJSONObject("livestream") ?: return@withContext null
         livestream.optString("vod_id").takeIf { it.isNotBlank() && it != "null" }
+    }
+
+    /**
+     * Resolves the active in-progress VOD playback URL (.m3u8) for a live stream.
+     * Matches video id against the active livestream id, or falls back to the most recent video
+     * if livestream id is omitted/mismatched.
+     */
+    data class LiveVodInfo(
+        val url: String,
+        val startedAt: String? = null,
+    )
+
+    suspend fun getLiveVodInfo(channelSlug: String, livestreamId: String? = null): LiveVodInfo? = withContext(Dispatchers.IO) {
+        val normalized = channelSlug.trim().lowercase(Locale.ROOT)
+        if (normalized.isBlank()) return@withContext null
+        val videos = runCatching { getChannelVideos(normalized, limit = 5) }.getOrNull() ?: return@withContext null
+        if (videos.isEmpty()) return@withContext null
+        val matched = if (!livestreamId.isNullOrBlank()) {
+            videos.firstOrNull { it.id == livestreamId || it.uuid == livestreamId || it.slug == livestreamId }
+                ?: videos.first()
+        } else {
+            videos.first()
+        }
+        val url = matched.url ?: return@withContext null
+        LiveVodInfo(url = url, startedAt = matched.uploadDate)
+    }
+
+    suspend fun getLiveVodPlaybackUrl(channelSlug: String, livestreamId: String? = null): String? = withContext(Dispatchers.IO) {
+        getLiveVodInfo(channelSlug, livestreamId)?.url
     }
 
     /**
@@ -4185,11 +4324,22 @@ class KickRepository @Inject constructor(
         val resolvedId = gameId ?: category?.id?.toString()
         val resolvedName = gameName ?: category?.name
         cacheCategorySlug(resolvedId, resolvedName, resolvedSlug)
+        item.categories?.forEach { cat ->
+            cacheCategoryTags(cat.id?.toString(), cat.slug, cat.name, cat.tags)
+        }
         val channelLogin = item.channel?.slug ?: item.channel?.user?.username?.lowercase(Locale.ROOT)
+        val channelId = item.channel?.id?.toString() ?: item.channelId?.toString()
+        val eventTitle = channelId?.let { getCachedChannelEventTitle(it) }
+        val combinedTags = buildList {
+            eventTitle?.takeIf { it.isNotBlank() }?.let(::add)
+            item.language?.takeIf { it.isNotBlank() }?.let(::add)
+            if (item.isMature == true) add("18+")
+            item.tags?.filter { it.isNotBlank() }?.let(::addAll)
+        }.distinct().ifEmpty { null }
         return Stream(
             id = item.id?.toString(),
             source = AppConstants.KICK,
-            channelId = item.channel?.id?.toString() ?: item.channelId?.toString(),
+            channelId = channelId,
             channelLogin = channelLogin,
             channelName = item.channel?.user?.username,
             playbackUrl = item.channel?.playbackUrl,
@@ -4201,16 +4351,30 @@ class KickRepository @Inject constructor(
             startedAt = normalizeDate(item.createdAt),
             thumbnailUrl = item.thumbnail?.imageUrl,
             profileImageUrl = item.channel?.user?.profileImage,
-            tags = item.tags
+            tags = combinedTags
         )
     }
 
     fun toStream(channel: KickChannelResponse, livestreamOverride: KickChannelLivestream? = null): Stream {
         val livestream = livestreamOverride ?: channel.livestream
-        cacheCategorySlug(livestream?.category?.id?.toString(), livestream?.category?.name, livestream?.category?.slug)
+        val catId = livestream?.category?.id?.toString()
+        val catSlug = livestream?.category?.slug
+        val catName = livestream?.category?.name
+        cacheCategorySlug(catId, catName, catSlug)
+        livestream?.category?.let { cat ->
+            cacheCategoryTags(cat.id?.toString(), cat.slug, cat.name, cat.tags)
+        }
         // Canonical key must be the broadcaster user id so the polling fallback road shares
         // dedupe rows and notification ids with the public-API road and the FCM/chat event road.
         val canonicalChannelId = (channel.userId ?: channel.user?.id ?: channel.id)?.toString()
+        val eventTitle = channel.id?.toString()?.let { getCachedChannelEventTitle(it) }
+            ?: canonicalChannelId?.let { getCachedChannelEventTitle(it) }
+        val combinedTags = buildList {
+            eventTitle?.takeIf { it.isNotBlank() }?.let(::add)
+            livestream?.language?.takeIf { it.isNotBlank() }?.let(::add)
+            if (livestream?.isMature == true) add("18+")
+            livestream?.tags?.filter { it.isNotBlank() }?.let(::addAll)
+        }.distinct().ifEmpty { null }
         return Stream(
             id = livestream?.id?.toString(),
             source = AppConstants.KICK,
@@ -4218,14 +4382,15 @@ class KickRepository @Inject constructor(
             channelLogin = channel.slug,
             channelName = channel.user?.username,
             playbackUrl = livestream?.playbackUrl ?: channel.playbackUrl?.takeIf { livestream != null },
-            gameId = livestream?.category?.id?.toString(),
-            gameSlug = livestream?.category?.slug,
-            gameName = livestream?.category?.name,
+            gameId = catId,
+            gameSlug = catSlug,
+            gameName = catName,
             title = livestream?.title,
             viewerCount = livestream?.viewerCount,
             startedAt = normalizeDate(livestream?.createdAt),
             thumbnailUrl = livestream?.thumbnail?.imageUrl,
             profileImageUrl = channel.user?.profileImage,
+            tags = combinedTags
         )
     }
 
@@ -4243,6 +4408,7 @@ class KickRepository @Inject constructor(
 
     fun toGame(item: KickSubcategory): Game {
         cacheCategorySlug(item.id?.toString(), item.name, item.slug)
+        cacheCategoryTags(item.id?.toString(), item.slug, item.name, item.tags)
         return KickWebsiteSearchMapper.toGame(item)
     }
 
@@ -4886,7 +5052,7 @@ class KickRepository @Inject constructor(
             return rawContent to null
         }
         val extractedEmotes = mutableListOf<ChatEmote>()
-        val sb = StringBuilder(rawContent.length)
+        val sb = StringBuilder(rawContent.length + 8)
         var lastIndex = 0
         var currentCodePointCount = 0
         emoteRegex.findAll(rawContent).forEach { matchResult ->
@@ -4899,6 +5065,11 @@ class KickRepository @Inject constructor(
             }
             val id = matchResult.groups[1]?.value ?: ""
             val name = matchResult.groups[2]?.value ?: ""
+
+            if (sb.isNotEmpty() && !sb.last().isWhitespace()) {
+                sb.append(' ')
+                currentCodePointCount += 1
+            }
 
             val emoteBegin = currentCodePointCount
             val nameCodePoints = name.codePointCount(0, name.length)
@@ -4918,6 +5089,12 @@ class KickRepository @Inject constructor(
             )
             sb.append(name)
             currentCodePointCount += nameCodePoints
+
+            if (end < rawContent.length && !rawContent[end].isWhitespace()) {
+                sb.append(' ')
+                currentCodePointCount += 1
+            }
+
             lastIndex = end
         }
         if (lastIndex < rawContent.length) {

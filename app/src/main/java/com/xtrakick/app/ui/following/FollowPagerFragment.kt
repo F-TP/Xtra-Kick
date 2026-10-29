@@ -89,14 +89,19 @@ class FollowPagerFragment : Fragment(), Scrollable, FragmentHost, KickFollowImpo
                     kickFollowImporter.importState.collect { state ->
                         when (state) {
                             is KickFollowImportState.Importing -> {
-                                importProgressContainer.setOnClickListener(null)
-                                importProgressContainer.alpha = 1f
-                                importProgressContainer.visibility = View.VISIBLE
-                                importProgressBar.visibility = View.VISIBLE
-                                if (state.count > 0) {
-                                    importProgressText.text = getString(R.string.importing_kick_follows_progress, state.count)
+                                if (!AuthStateHelper.isKickLoggedIn(requireContext())) {
+                                    importProgressContainer.visibility = View.GONE
+                                    importProgressContainer.setOnClickListener(null)
                                 } else {
-                                    importProgressText.text = getString(R.string.importing_kick_follows)
+                                    importProgressContainer.setOnClickListener(null)
+                                    importProgressContainer.alpha = 1f
+                                    importProgressContainer.visibility = View.VISIBLE
+                                    importProgressBar.visibility = View.VISIBLE
+                                    if (state.count > 0) {
+                                        importProgressText.text = getString(R.string.importing_kick_follows_progress, state.count)
+                                    } else {
+                                        importProgressText.text = getString(R.string.importing_kick_follows)
+                                    }
                                 }
                             }
                             is KickFollowImportState.Success -> {
@@ -295,6 +300,12 @@ class FollowPagerFragment : Fragment(), Scrollable, FragmentHost, KickFollowImpo
             viewLifecycleOwner.lifecycleScope.launch {
                 viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
                     merge(localFollowChannelRepository.followsChanged, AuthStateHelper.authStateChanged).collect {
+                        val isLoggedIn = AuthStateHelper.isKickLoggedIn(requireContext())
+                        if (!isLoggedIn) {
+                            kickFollowImporter.resetState()
+                            importProgressContainer.visibility = View.GONE
+                            importProgressContainer.setOnClickListener(null)
+                        }
                         updateNotificationBanner()
                     }
                 }

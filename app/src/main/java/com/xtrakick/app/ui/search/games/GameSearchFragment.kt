@@ -85,7 +85,7 @@ class GameSearchFragment : PagedListFragment(), Searchable {
                             recyclerView.adapter = recentSearchAdapter
                         } else {
                             if (recyclerView.adapter is RecentSearchAdapter) {
-                                recyclerView.adapter = pagingAdapter
+                                recyclerView.adapter = concatAdapter ?: pagingAdapter
                             }
                         }
                         if ((loadState.refresh as? LoadState.Error ?:

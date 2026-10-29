@@ -34,8 +34,11 @@ import com.xtrakick.app.model.chat.Emote
 import com.xtrakick.app.model.chat.NamePaint
 import com.xtrakick.app.model.chat.StvBadge
 import com.xtrakick.app.model.chat.StvUser
+import android.text.Spanned
+import android.view.MotionEvent
 import com.xtrakick.app.model.chat.ChatBadge
 import com.xtrakick.app.model.chat.ChatEmote
+import com.xtrakick.app.model.chat.ChatEmoteSpan
 import com.xtrakick.app.ui.view.NamePaintImageSpan
 import com.xtrakick.app.util.chat.ChatAdapterUtils
 import com.xtrakick.app.util.chat.ChatBackgroundUtils
@@ -546,6 +549,8 @@ class ChatAdapter(
         private val expandView: ImageView = itemView.findViewById(R.id.chatMessageExpand)
         private var currentBindKey: String? = null
         private var bindSeq = 0L
+        private var lastDownX = 0f
+        private var lastDownY = 0f
 
         fun isBoundTo(bindKey: String): Boolean = currentBindKey == bindKey
 
@@ -569,6 +574,9 @@ class ChatAdapter(
             val isKicksDonation = chatMessage.kicksDonation != null
             val isGiftedSub = chatMessage.giftedSubInfo != null
             textView.apply {
+                movementMethod = if (chatMessage.isReply) null else LinkMovementMethod.getInstance()
+                maxLines = if (chatMessage.isReply && !expanded) 3 else Int.MAX_VALUE
+                ellipsize = if (chatMessage.isReply && !expanded) TextUtils.TruncateAt.END else null
                 text = formattedMessage
                 textSize = if (chatMessage.isReply) messageTextSize * 0.88f else messageTextSize
                 alpha = if (chatMessage.isDeleted) 0.62f else if (chatMessage.isReply) 0.78f else 1f
@@ -586,8 +594,9 @@ class ChatAdapter(
                         val vPad = (6f * density).toInt()
                         setPaddingRelative(hPadLeft, vPad, hPadRight, vPad)
                     }
-                    isRewardRedemption && rewardColor != null -> {
-                        containerView.background = createRewardBackgroundDrawable(resolvedBackgroundColor, rewardColor)
+                    isRewardRedemption -> {
+                        val effectiveRewardColor = rewardColor ?: Color.parseColor("#53FC18")
+                        containerView.background = createRewardBackgroundDrawable(resolvedBackgroundColor, effectiveRewardColor)
                         val hPadRewardLeft = (26f * density).toInt()
                         val vPadReward = (6f * density).toInt()
                         val hPadRewardRight = (12f * density).toInt()
@@ -623,9 +632,6 @@ class ChatAdapter(
                 minimumHeight = minHeight
                 setBackgroundColor(android.graphics.Color.TRANSPARENT)
                 if (chatMessage.isReply) {
-                    movementMethod = null
-                    maxLines = if (expanded) Int.MAX_VALUE else 3
-                    ellipsize = if (expanded) null else TextUtils.TruncateAt.END
                     TooltipCompat.setTooltipText(this, chatMessage.replyParent?.message ?: chatMessage.replyParent?.systemMsg)
                     setOnClickListener {
                         if (selectionStart == -1 && selectionEnd == -1) {
@@ -645,9 +651,14 @@ class ChatAdapter(
                             updateReplyExpandUi(showExpand = true, expanded = true)
                             return@doOnLayout
                         }
-                        val isTruncated = layout.lineCount > 3 || (0 until layout.lineCount).any { lineIndex ->
-                            layout.getEllipsisCount(lineIndex) > 0
+                        val lastLine = layout.lineCount - 1
+                        val text = layout.text
+                        var visibleLength = text.length
+                        while (visibleLength > 0 && text[visibleLength - 1].isWhitespace()) {
+                            visibleLength--
                         }
+                        val isTruncated = layout.lineCount > 3 ||
+                            (lastLine >= 0 && (layout.getLineEnd(lastLine) < visibleLength || layout.getEllipsisCount(lastLine) > 0))
                         if (isTruncated) {
                             previewKey?.let { truncatableReplyPreviewKeys.add(it) }
                         }
@@ -657,9 +668,6 @@ class ChatAdapter(
                         )
                     }
                 } else {
-                    movementMethod = LinkMovementMethod.getInstance()
-                    maxLines = Int.MAX_VALUE
-                    ellipsize = null
                     updateReplyExpandUi(showExpand = false, expanded = false)
                     TooltipCompat.setTooltipText(this, chatMessage.message ?: chatMessage.systemMsg)
                     setOnClickListener {
@@ -670,6 +678,31 @@ class ChatAdapter(
                                 messageClickListener?.invoke(channelId, tappedMessage)
                             }
                         }
+                    }
+                }
+                setOnTouchListener { _, event ->
+                    if (event.actionMasked == MotionEvent.ACTION_DOWN) {
+                        lastDownX = event.x
+                        lastDownY = event.y
+                    }
+                    false
+                }
+                setOnLongClickListener { view ->
+                    val tv = view as? TextView ?: return@setOnLongClickListener false
+                    val emoteSpan = findEmoteSpanAt(tv, lastDownX, lastDownY)
+                    if (emoteSpan != null && imageClickListener != null) {
+                        imageClickListener.invoke(
+                            emoteSpan.url,
+                            emoteSpan.name,
+                            emoteSpan.format,
+                            emoteSpan.isAnimated,
+                            emoteSpan.source,
+                            emoteSpan.thirdParty,
+                            emoteSpan.emoteId
+                        )
+                        true
+                    } else {
+                        false
                     }
                 }
             }
@@ -701,6 +734,52 @@ class ChatAdapter(
                 endToStart = if (showExpand) R.id.chatMessageExpand else ConstraintLayout.LayoutParams.UNSET
                 endToEnd = if (showExpand) ConstraintLayout.LayoutParams.UNSET else ConstraintLayout.LayoutParams.PARENT_ID
             }
+        }
+
+        private fun findEmoteSpanAt(tv: TextView, touchX: Float, touchY: Float): ChatEmoteSpan? {
+            val layout = tv.layout ?: return null
+            val spanned = tv.text as? Spanned ?: return null
+            if (spanned.isEmpty() || layout.lineCount == 0) return null
+
+            val x = (touchX - tv.totalPaddingLeft + tv.scrollX).coerceAtLeast(0f)
+            val y = (touchY - tv.totalPaddingTop + tv.scrollY).coerceAtLeast(0f)
+
+            val line = layout.getLineForVertical(y.toInt())
+            val lineTop = layout.getLineTop(line)
+            val lineBottom = layout.getLineBottom(line)
+            if (y < lineTop || y > lineBottom) return null
+
+            val lineStart = layout.getLineStart(line)
+            val lineEnd = layout.getLineEnd(line)
+            val candidateSpans = spanned.getSpans(lineStart, lineEnd, ChatEmoteSpan::class.java)
+            if (candidateSpans.isEmpty()) return null
+
+            val density = tv.resources.displayMetrics.density
+            val slop = 10f * density
+
+            var bestSpan: ChatEmoteSpan? = null
+            var minDistance = Float.MAX_VALUE
+
+            for (span in candidateSpans) {
+                val spanStart = spanned.getSpanStart(span)
+                val spanEnd = spanned.getSpanEnd(span)
+                if (spanStart < 0 || spanEnd < 0) continue
+
+                val spanLeft = layout.getPrimaryHorizontal(spanStart)
+                val spanRight = layout.getPrimaryHorizontal(spanEnd)
+                val minX = minOf(spanLeft, spanRight)
+                val maxX = maxOf(spanLeft, spanRight)
+
+                if (x in (minX - slop)..(maxX + slop)) {
+                    val center = (minX + maxX) / 2f
+                    val distance = kotlin.math.abs(x - center)
+                    if (distance < minDistance) {
+                        minDistance = distance
+                        bestSpan = span
+                    }
+                }
+            }
+            return bestSpan
         }
     }
 }

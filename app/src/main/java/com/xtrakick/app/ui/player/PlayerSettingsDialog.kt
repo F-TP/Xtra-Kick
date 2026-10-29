@@ -80,6 +80,13 @@ class PlayerSettingsDialog : BottomSheetDialogFragment() {
                         dismiss()
                     }
                 }
+                if (requireContext().prefs().getBoolean(AppConstants.PLAYER_MENU_REWIND, true)) {
+                    menuRewind.visibility = View.VISIBLE
+                    menuRewind.setOnClickListener {
+                        (parentFragment as? PlayerFragment)?.showRewindLiveDialog()
+                        dismiss()
+                    }
+                }
                 if (!requireContext().prefs().getBoolean(AppConstants.CHAT_DISABLE, false)) {
                     val isLoggedIn = AuthStateHelper.isKickLoggedIn(requireContext())
                     if (requireContext().prefs().getBoolean(AppConstants.PLAYER_MENU_CHAT_BAR, true)) {

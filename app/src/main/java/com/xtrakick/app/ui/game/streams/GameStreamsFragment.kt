@@ -22,6 +22,7 @@ import com.xtrakick.app.databinding.SortBarBinding
 import com.xtrakick.app.model.ui.SavedFilter
 import com.xtrakick.app.model.ui.SortGame
 import com.xtrakick.app.model.ui.Stream
+import com.xtrakick.app.ui.common.ActiveTagsAdapter
 import com.xtrakick.app.ui.common.FragmentHost
 import com.xtrakick.app.ui.common.IntegrityDialog
 import com.xtrakick.app.ui.common.PagedListFragment
@@ -30,6 +31,7 @@ import com.xtrakick.app.ui.common.Sortable
 import com.xtrakick.app.ui.common.StreamsAdapter
 import com.xtrakick.app.ui.common.StreamsCompactAdapter
 import com.xtrakick.app.ui.common.StreamsSortDialog
+import com.xtrakick.app.ui.common.TagFilterHelper
 import com.xtrakick.app.ui.common.StreamsSortDialog.Companion.RECENT
 import com.xtrakick.app.ui.common.StreamsSortDialog.Companion.SORT_VIEWERS
 import com.xtrakick.app.ui.common.StreamsSortDialog.Companion.SORT_VIEWERS_ASC
@@ -57,9 +59,9 @@ class GameStreamsFragment : PagedListFragment(), Scrollable, Sortable, StreamsSo
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
         pagingAdapter = if (requireContext().prefs().getString(AppConstants.COMPACT_STREAMS, "disabled") == "all") {
-            StreamsCompactAdapter(this, { addTag(it) }, showGame = false)
+            StreamsCompactAdapter(this, { toggleTag(it) }, showGame = false)
         } else {
-            StreamsAdapter(this, { addTag(it) }, showGame = false)
+            StreamsAdapter(this, { toggleTag(it) }, showGame = false)
         }
         setAdapter(binding.recyclerView, pagingAdapter)
         ViewCompat.setOnApplyWindowInsetsListener(view) { _, windowInsets ->
@@ -118,6 +120,7 @@ class GameStreamsFragment : PagedListFragment(), Scrollable, Sortable, StreamsSo
                     }
                 }
             } else null
+            (pagingAdapter as? ActiveTagsAdapter)?.activeTags = viewModel.tags.toSet()
             repeatOnLifecycle(Lifecycle.State.STARTED) {
                 viewModel.flow.collectLatest { pagingData ->
                     pagingAdapter.submitData(pagingData)
@@ -160,11 +163,25 @@ class GameStreamsFragment : PagedListFragment(), Scrollable, Sortable, StreamsSo
         }
     }
 
-    private fun addTag(tag: String) {
+    private fun toggleTag(tag: String) {
         viewLifecycleOwner.lifecycleScope.launch {
-            val tags = viewModel.tags.plus(tag).sortedArray()
-            viewModel.setFilter(viewModel.sort, tags, viewModel.languages)
-            viewModel.filtersText.value = buildString {
+            val current = viewModel.tags.toList()
+            val normalized = tag.trim()
+            val isCurrentlyActive = TagFilterHelper.isTagActive(normalized, current)
+            val newTags = if (isCurrentlyActive) {
+                current.filterNot { TagFilterHelper.isTagActive(it, listOf(normalized)) }
+            } else {
+                current + normalized
+            }.distinct().sorted().toTypedArray()
+            viewModel.setFilter(viewModel.sort, newTags, viewModel.languages)
+            updateFiltersText()
+            (pagingAdapter as? ActiveTagsAdapter)?.activeTags = newTags.toSet()
+        }
+    }
+
+    private fun updateFiltersText() {
+        viewModel.filtersText.value = if (viewModel.tags.isNotEmpty() || viewModel.languages.isNotEmpty()) {
+            buildString {
                 if (viewModel.tags.isNotEmpty()) {
                     append(
                         resources.getQuantityString(
@@ -187,7 +204,7 @@ class GameStreamsFragment : PagedListFragment(), Scrollable, Sortable, StreamsSo
                     )
                 }
             }
-        }
+        } else null
     }
 
     override fun onChange(sort: String, sortText: CharSequence, tags: Array<String>, languages: Array<String>, changed: Boolean, saveFilters: Boolean, saveSort: Boolean, saveDefault: Boolean) {
@@ -196,31 +213,8 @@ class GameStreamsFragment : PagedListFragment(), Scrollable, Sortable, StreamsSo
                 if (changed) {
                     viewModel.setFilter(sort, tags, languages)
                     viewModel.sortText.value = getString(R.string.sort_by, sortText)
-                    viewModel.filtersText.value = if (viewModel.tags.isNotEmpty() || viewModel.languages.isNotEmpty()) {
-                        buildString {
-                            if (viewModel.tags.isNotEmpty()) {
-                                append(
-                                    resources.getQuantityString(
-                                        R.plurals.tags,
-                                        viewModel.tags.size,
-                                        viewModel.tags.joinToString()
-                                    )
-                                )
-                            }
-                            if (viewModel.languages.isNotEmpty()) {
-                                if (isNotEmpty()) {
-                                    append(". ")
-                                }
-                                append(
-                                    resources.getQuantityString(
-                                        R.plurals.languages,
-                                        viewModel.languages.size,
-                                        viewModel.languages.joinToString()
-                                    )
-                                )
-                            }
-                        }
-                    } else null
+                    updateFiltersText()
+                    (pagingAdapter as? ActiveTagsAdapter)?.activeTags = tags.toSet()
                 }
                 if (saveFilters && (tags.isNotEmpty() || languages.isNotEmpty())) {
                     viewModel.saveFilters(

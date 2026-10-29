@@ -368,7 +368,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
     }
 
     open fun rewind() {
-        if (videoType == STREAM) {
+        if (videoType == STREAM && !viewModel.isLiveRewound) {
             executeRawRewind()
         } else {
             handleStackableSkip(isForward = false)
@@ -376,7 +376,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
     }
 
     open fun fastForward() {
-        if (videoType == STREAM) {
+        if (videoType == STREAM && !viewModel.isLiveRewound) {
             executeRawFastForward()
         } else {
             handleStackableSkip(isForward = true)
@@ -385,11 +385,14 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
 
     open fun seek(position: Long) {}
     open fun seekToLivePosition() {}
+    open fun switchLiveToVod(vodUrl: String, targetPositionMs: Long, startedAtStr: String? = null) {}
+    open fun returnLiveEdge() {}
     open fun setPlaybackSpeed(speed: Float) {}
     open fun updateChannelLogo(logo: String?) {}
 
     /** Hold-for-2x is only meaningful where speed does not fight the live edge. */
-    open fun isHoldToSpeedAvailable(): Boolean = false
+    open fun isHoldToSpeedAvailable(): Boolean =
+        videoType == VIDEO || videoType == CLIP || videoType == OFFLINE_VIDEO || viewModel.isLiveRewound
 
     private fun engageHoldToSpeed() {
         holdToSpeedDownX = -1f
@@ -517,7 +520,9 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
     open fun toggleSubtitles(enabled: Boolean) {}
     open fun showPlaylistTags(mediaPlaylist: Boolean) {}
     open fun changeQuality(selectedQuality: String?) {}
-    open fun startAudioOnly() {}
+    open fun startAudioOnly() {
+        clearPipDismissState()
+    }
     open fun downloadVideo() {}
     open fun close() {}
 
@@ -1422,6 +1427,16 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
 
                         override fun onScrubStop(timeBar: TimeBar, position: Long, canceled: Boolean) {
                             if (!canceled) {
+                                if (viewModel.isLiveRewound) {
+                                    val dur = getDuration() ?: 0L
+                                    if (dur > 0L && position >= dur - 5000L) {
+                                        returnLiveEdge()
+                                        context?.let {
+                                            Toast.makeText(it, R.string.syncing_to_live, Toast.LENGTH_SHORT).show()
+                                        }
+                                        return
+                                    }
+                                }
                                 seek(position)
                             } else {
                                 if (controllerAutoHide && controllerHideOnTouch) {
@@ -1446,23 +1461,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                 } else {
                     channelName ?: channelLogin
                 }
-                if (prefs.getBoolean(AppConstants.PLAYER_CHANNEL, true) && !displayName.isNullOrBlank()) {
-                    channel.visibility = View.VISIBLE
-                    channel.text = displayName
-                    channel.setOnClickListener {
-                        val navChannelId = requireArguments().getString(KEY_CHANNEL_ID)
-                        val navChannelLogin = requireArguments().getString(KEY_CHANNEL_LOGIN) ?: channelLogin ?: channelName
-                        val navChannelName = requireArguments().getString(KEY_CHANNEL_NAME) ?: channelName ?: channelLogin
-                        findNavController().navigate(
-                            ChannelPagerFragmentDirections.actionGlobalChannelPagerFragment(
-                                channelId = navChannelId,
-                                channelLogin = navChannelLogin,
-                                channelName = navChannelName,
-                            )
-                        )
-                        minimize()
-                    }
-                }
+                updateChannelName(channelLogin, channelName)
                 viewersLayout.setOnClickListener {
                     if (requireContext().prefs().getBoolean(AppConstants.PLAYER_VIEWERLIST, false)) {
                         showController(force = true)
@@ -1644,6 +1643,13 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                                         requireArguments().putString(KEY_CHANNEL_LOGO, logo)
                                         updateChannelLogo(logo)
                                     }
+                                    if (!stream.channelLogin.isNullOrBlank() && requireArguments().getString(KEY_CHANNEL_LOGIN) != stream.channelLogin) {
+                                        requireArguments().putString(KEY_CHANNEL_LOGIN, stream.channelLogin)
+                                    }
+                                    if (!stream.channelName.isNullOrBlank() && requireArguments().getString(KEY_CHANNEL_NAME) != stream.channelName) {
+                                        requireArguments().putString(KEY_CHANNEL_NAME, stream.channelName)
+                                    }
+                                    updateChannelName(stream.channelLogin, stream.channelName)
                                     updateViewerCount(stream.viewerCount)
                                     if (prefs.getBoolean(AppConstants.CHAT_DISABLE, false) ||
                                         !prefs.getBoolean(AppConstants.CHAT_PUBSUB_ENABLED, true) ||
@@ -1682,12 +1688,24 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                     }
                         updateRestartButtonUi()
                     }
-                    if (prefs.getBoolean(AppConstants.PLAYER_SEEKLIVE, false)) {
-                        seekLive.visibility = View.VISIBLE
-                        seekLive.setOnClickListener {
+                    rewindLive.setOnClickListener {
+                        showController(force = true)
+                        showRewindLiveDialog()
+                    }
+                    TooltipCompat.setTooltipText(rewindLive, getString(R.string.rewind_live_stream))
+                    rewindLive.contentDescription = getString(R.string.rewind_live_stream)
+                    if (prefs.getBoolean(AppConstants.PLAYER_REWIND_LIVE, false)) {
+                        rewindLive.visibility = View.VISIBLE
+                    }
+
+                    seekLive.setOnClickListener {
                         showController(force = true)
                         seekToLivePosition()
                     }
+                    TooltipCompat.setTooltipText(seekLive, getString(R.string.seek_to_live))
+                    seekLive.contentDescription = getString(R.string.seek_to_live)
+                    if (prefs.getBoolean(AppConstants.PLAYER_SEEKLIVE, false)) {
+                        seekLive.visibility = View.VISIBLE
                     }
                     if (prefs.getBoolean(AppConstants.PLAYER_SHOW_UPTIME, true)) {
                         requireArguments().getString(KEY_STARTED_AT)?.let {
@@ -1706,6 +1724,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                     rewind.visibility = View.GONE
                     fastForward.visibility = View.GONE
                     position.visibility = View.GONE
+                    bottomLayout.visibility = View.GONE
                     progressBar.visibility = View.GONE
                     duration.visibility = View.GONE
                     updateStreamInfo(
@@ -1984,6 +2003,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                                 KickApiHelper.getKickWebHeaders(requireContext(), true),
                                 requireContext().prefs().getBoolean(AppConstants.ENABLE_INTEGRITY, false),
                                 kickFollow = kickFollow,
+                                channelLogo = requireArguments().getString(KEY_CHANNEL_LOGO),
                             )
                         }
                         val myUsername = requireContext().tokenPrefs().getString(AppConstants.USERNAME, null)?.trim()
@@ -2221,6 +2241,10 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                     }
                     aspectRatio.visibility = View.GONE
                     toggleChat.visibility = View.GONE
+                    updateChannelName(
+                        requireArguments().getString(KEY_CHANNEL_LOGIN),
+                        requireArguments().getString(KEY_CHANNEL_NAME)
+                    )
                 }
             } else {
                 requireActivity().window.decorView.setOnSystemUiVisibilityChangeListener {
@@ -2772,6 +2796,41 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
         }
     }
 
+    fun updateChannelName(channelLogin: String?, channelName: String?) {
+        val effectiveLogin = channelLogin?.trim()?.takeIf { it.isNotBlank() }
+        val effectiveName = channelName?.trim()?.takeIf { it.isNotBlank() }
+        val displayName = if (!effectiveLogin.isNullOrBlank() && !effectiveName.isNullOrBlank() && !effectiveLogin.equals(effectiveName, true)) {
+            when (prefs.getString(AppConstants.UI_NAME_DISPLAY, "1")) {
+                "0" -> "${effectiveName}(${effectiveLogin})"
+                "1" -> effectiveName
+                else -> effectiveLogin
+            }
+        } else {
+            effectiveName ?: effectiveLogin
+        }
+        binding.playerControls.channel.apply {
+            if (prefs.getBoolean(AppConstants.PLAYER_CHANNEL, true) && !displayName.isNullOrBlank()) {
+                text = displayName
+                visibility = View.VISIBLE
+                setOnClickListener {
+                    val navChannelId = requireArguments().getString(KEY_CHANNEL_ID)
+                    val navChannelLogin = requireArguments().getString(KEY_CHANNEL_LOGIN) ?: effectiveLogin ?: effectiveName
+                    val navChannelName = requireArguments().getString(KEY_CHANNEL_NAME) ?: effectiveName ?: effectiveLogin
+                    findNavController().navigate(
+                        ChannelPagerFragmentDirections.actionGlobalChannelPagerFragment(
+                            channelId = navChannelId,
+                            channelLogin = navChannelLogin,
+                            channelName = navChannelName,
+                        )
+                    )
+                    minimize()
+                }
+            } else {
+                visibility = View.GONE
+            }
+        }
+    }
+
     fun restartPlayer() {
         if (viewModel.quality != CHAT_ONLY_QUALITY) {
             val shouldRetryPreferredKickEngine =
@@ -2788,6 +2847,123 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                 ) ?: loadStream()
             } else {
                 loadStream()
+            }
+        }
+    }
+
+    fun showRewindLiveDialog() {
+        val isRewound = viewModel.isLiveRewound
+        val options = mutableListOf<Pair<String, Long>>()
+        if (isRewound) {
+            options.add(getString(R.string.return_to_live_stream) to Long.MAX_VALUE)
+            options.add(getString(R.string.rewind_rel_30_seconds) to 30L)
+            options.add(getString(R.string.rewind_rel_minute) to 60L)
+            options.add(getString(R.string.rewind_rel_2_minutes) to 120L)
+            options.add(getString(R.string.rewind_rel_5_minutes) to 300L)
+            options.add(getString(R.string.rewind_rel_10_minutes) to 600L)
+            options.add(getString(R.string.rewind_rel_15_minutes) to 900L)
+            options.add(getString(R.string.rewind_rel_30_minutes) to 1800L)
+        } else {
+            options.add(getString(R.string.rewind_last_30_seconds) to 30L)
+            options.add(getString(R.string.rewind_last_minute) to 60L)
+            options.add(getString(R.string.rewind_last_2_minutes) to 120L)
+            options.add(getString(R.string.rewind_last_5_minutes) to 300L)
+            options.add(getString(R.string.rewind_last_10_minutes) to 600L)
+            options.add(getString(R.string.rewind_last_15_minutes) to 900L)
+            options.add(getString(R.string.rewind_last_30_minutes) to 1800L)
+        }
+        options.add(getString(R.string.rewind_from_beginning) to -1L)
+
+        val itemTitles = options.map { it.first }.toTypedArray()
+        requireContext().getAlertDialogBuilder()
+            .setTitle(R.string.rewind_live_stream)
+            .setItems(itemTitles) { _, which ->
+                val seconds = options[which].second
+                if (seconds == Long.MAX_VALUE) {
+                    seekToLivePosition()
+                } else {
+                    rewindLiveStream(seconds)
+                }
+            }
+            .setNegativeButton(R.string.close, null)
+            .show()
+    }
+
+    fun rewindLiveStream(rewindSeconds: Long) {
+        if (viewModel.isLiveRewound) {
+            val currentPos = getCurrentPosition() ?: 0L
+            val targetPositionMs = if (rewindSeconds < 0L) {
+                0L
+            } else {
+                (currentPos - rewindSeconds * 1000L).coerceAtLeast(0L)
+            }
+            seek(targetPositionMs)
+            return
+        }
+
+        val channelSlug = requireArguments().getString(KEY_CHANNEL_LOGIN)?.trim()?.takeIf { it.isNotBlank() } ?: return
+        val streamId = requireArguments().getString(KEY_STREAM_ID)
+        val startedAtStr = requireArguments().getString(KEY_STARTED_AT) ?: viewModel.stream.value?.startedAt
+        val startedAtMs = startedAtStr?.let { KickApiHelper.parseIso8601DateUTC(it) } ?: 0L
+        val now = System.currentTimeMillis()
+        val liveDurationMs = if (startedAtMs > 0L) {
+            (now - startedAtMs).coerceAtLeast(0L)
+        } else {
+            (getDuration() ?: 0L).coerceAtLeast(0L)
+        }
+
+        val targetPositionMs = if (rewindSeconds < 0L) {
+            0L
+        } else {
+            (liveDurationMs - rewindSeconds * 1000L).coerceAtLeast(0L)
+        }
+
+        binding.bufferingIndicator.isVisible = true
+        viewLifecycleOwner.lifecycleScope.launch {
+            val vodInfo = viewModel.getLiveVodInfo(channelSlug, streamId)
+            if (vodInfo == null || vodInfo.url.isBlank()) {
+                binding.bufferingIndicator.isVisible = false
+                context?.let {
+                    Toast.makeText(it, R.string.rewind_unavailable, Toast.LENGTH_SHORT).show()
+                }
+                return@launch
+            }
+            val effectiveStartedAt = startedAtStr ?: vodInfo.startedAt ?: viewModel.stream.value?.startedAt
+            if (!effectiveStartedAt.isNullOrBlank() && requireArguments().getString(KEY_STARTED_AT) != effectiveStartedAt) {
+                requireArguments().putString(KEY_STARTED_AT, effectiveStartedAt)
+            }
+            switchLiveToVod(vodInfo.url, targetPositionMs, effectiveStartedAt)
+        }
+    }
+
+    fun updateLiveRewindUi(isRewound: Boolean) {
+        if (_binding == null) return
+        with(binding.playerControls) {
+            val originalTitle = requireArguments().getString(KEY_TITLE)
+            if (isRewound) {
+                bottomLayout.visibility = View.VISIBLE
+                progressBar.visibility = View.VISIBLE
+                position.visibility = View.VISIBLE
+                duration.visibility = View.VISIBLE
+                rewind.visibility = View.VISIBLE
+                fastForward.visibility = View.VISIBLE
+                seekLive.visibility = View.VISIBLE
+                if (!originalTitle.isNullOrBlank() && prefs.getBoolean(AppConstants.PLAYER_TITLE, true)) {
+                    title.text = "$originalTitle • ${getString(R.string.recording)}"
+                    title.visibility = View.VISIBLE
+                }
+            } else {
+                bottomLayout.visibility = View.GONE
+                progressBar.visibility = View.GONE
+                position.visibility = View.GONE
+                duration.visibility = View.GONE
+                rewind.visibility = View.GONE
+                fastForward.visibility = View.GONE
+                seekLive.visibility = if (prefs.getBoolean(AppConstants.PLAYER_SEEKLIVE, false)) View.VISIBLE else View.GONE
+                if (!originalTitle.isNullOrBlank() && prefs.getBoolean(AppConstants.PLAYER_TITLE, true)) {
+                    title.text = originalTitle
+                    title.visibility = View.VISIBLE
+                }
             }
         }
     }
@@ -3232,12 +3408,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
     fun secondViewIsHidden() = _binding?.let { !it.chatLayout.isVisible && isMaximized } == true
 
     fun canEnterPictureInPicture(): Boolean {
-        val quality = if (viewModel.restoreQuality) {
-            viewModel.previousQuality
-        } else {
-            viewModel.quality
-        }
-        return quality != AUDIO_ONLY_QUALITY && quality != CHAT_ONLY_QUALITY
+        return viewModel.quality != AUDIO_ONLY_QUALITY && viewModel.quality != CHAT_ONLY_QUALITY
     }
 
     protected fun isScreenLockedOrOff(): Boolean {
@@ -3284,15 +3455,17 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
         }
         val act = activity
         val isLockedOrOff = isScreenLockedOrOff()
-        val wasOrInPip = wasInPictureInPictureMode || isGenuinePip() ||
-            (act != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && act.isInPictureInPictureMode)
+        val inGenuinePip = isGenuinePip()
 
-        if (wasOrInPip) {
+        if (inGenuinePip) {
             return if (isLockedOrOff) {
                 prefs.getBoolean(AppConstants.PLAYER_BACKGROUND_AUDIO_PIP_LOCKED, true)
             } else {
                 prefs.getBoolean(AppConstants.PLAYER_BACKGROUND_AUDIO_PIP_CLOSED, false)
             }
+        }
+        if (viewModel.quality == AUDIO_ONLY_QUALITY) {
+            return true
         }
         if (prefs.getBoolean(AppConstants.PLAYER_BACKGROUND_AUDIO, true)) {
             return true
@@ -3304,12 +3477,16 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
         if (isScreenLockedOrOff()) return false
         val act = activity ?: return false
         if (act.isChangingConfigurations) return false
-        val wasOrInPip = wasInPictureInPictureMode || isGenuinePip() ||
-            (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && act.isInPictureInPictureMode)
-        return wasOrInPip && !prefs.getBoolean(AppConstants.PLAYER_BACKGROUND_AUDIO_PIP_CLOSED, false)
+        if (viewModel.quality == AUDIO_ONLY_QUALITY) return false
+        // Only genuine PiP sessions (active >= MIN_PIP_DURATION_MS) can be dismissed.
+        // A momentary auto-enter PiP transition when locking the screen is not genuine PiP.
+        if (!isGenuinePip()) return false
+        // If the activity is still in PiP and not finishing, PiP remains active (e.g. screen lock).
+        if (act.isInPictureInPictureMode && !act.isFinishing) return false
+        return !prefs.getBoolean(AppConstants.PLAYER_BACKGROUND_AUDIO_PIP_CLOSED, false)
     }
 
-    protected fun clearPipDismissState() {
+    fun clearPipDismissState() {
         wasInPictureInPictureMode = false
         pipEnteredAtMs = 0L
     }
@@ -3536,6 +3713,16 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
     }
 
     private fun loadStream(forceRefresh: Boolean = false, stalePlaybackUrl: String? = null) {
+        viewModel.isLiveRewound = false
+        viewModel.cachedLiveVodInfo = null
+        viewModel.cachedLiveVodUrl = null
+        viewModel.liveStreamUrl = null
+        updateLiveRewindUi(false)
+        activeChatFragment()?.let {
+            if (it.isLiveRewound) {
+                it.returnToLiveChat()
+            }
+        }
         clearFreezeFrame()
         if (forceRefresh) {
             hideOfflineOverlay()
@@ -4527,6 +4714,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                                 KickApiHelper.getKickWebHeaders(requireContext(), true),
                                 requireContext().prefs().getBoolean(AppConstants.ENABLE_INTEGRITY, false),
                                 kickFollow = kickFollow,
+                                channelLogo = requireArguments().getString(KEY_CHANNEL_LOGO),
                             )
                         }
                         "unfollow" -> {

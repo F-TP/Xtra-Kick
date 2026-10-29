@@ -9,7 +9,7 @@
         <item name="tabLayoutHeight">48dp</item>
         <item name="bottomNavigationHeight">80dp</item>
         <item name="cardStyle">@style/Card</item>
-        <item name="bottomSheetButtonStyle">@style/Widget.Material3.Button.ElevatedButton</item>
+        <item name="bottomSheetButtonStyle">@style/BottomSheetButton</item>
         <item name="elevatedButtonStyle">@style/Widget.Material3.Button.ElevatedButton</item>
         <item name="dialogButtonStyle">@style/Widget.Material3.Button.TextButton.Dialog</item>
         <item name="primaryButtonColor">@color/accent</item>
@@ -35,7 +35,7 @@
         <item name="tabLayoutHeight">48dp</item>
         <item name="bottomNavigationHeight">80dp</item>
         <item name="cardStyle">@style/Card</item>
-        <item name="bottomSheetButtonStyle">@style/Widget.Material3.Button.ElevatedButton</item>
+        <item name="bottomSheetButtonStyle">@style/BottomSheetButton</item>
         <item name="elevatedButtonStyle">@style/Widget.Material3.Button.ElevatedButton</item>
         <item name="dialogButtonStyle">@style/Widget.Material3.Button.TextButton.Dialog</item>
         <item name="primaryButtonColor">@color/accent</item>
@@ -67,7 +67,7 @@
         <item name="tabLayoutHeight">48dp</item>
         <item name="bottomNavigationHeight">80dp</item>
         <item name="cardStyle">@style/CardAmoled</item>
-        <item name="bottomSheetButtonStyle">@style/Widget.Material3.Button.ElevatedButton</item>
+        <item name="bottomSheetButtonStyle">@style/BottomSheetButton</item>
         <item name="elevatedButtonStyle">@style/Widget.Material3.Button.ElevatedButton</item>
         <item name="dialogButtonStyle">@style/Widget.Material3.Button.TextButton.Dialog</item>
         <item name="primaryButtonColor">@android:color/white</item>
@@ -103,7 +103,7 @@
         <item name="tabLayoutHeight">48dp</item>
         <item name="bottomNavigationHeight">80dp</item>
         <item name="cardStyle">@style/Card</item>
-        <item name="bottomSheetButtonStyle">@style/Widget.Material3.Button.ElevatedButton</item>
+        <item name="bottomSheetButtonStyle">@style/BottomSheetButton</item>
         <item name="elevatedButtonStyle">@style/Widget.Material3.Button.ElevatedButton</item>
         <item name="dialogButtonStyle">@style/Widget.Material3.Button.TextButton.Dialog</item>
         <item name="primaryButtonColor">@color/accent</item>
@@ -1483,6 +1483,11 @@
 
     <style name="MaterialCardOverlay">
         <item name="colorPrimary">?attr/colorSurface</item>
+    </style>
+
+    <style name="BottomSheetButton" parent="Widget.Material3.Button.TonalButton">
+        <item name="android:layout_marginTop">3dp</item>
+        <item name="android:layout_marginBottom">3dp</item>
     </style>
 
     <style name="MaterialButton" parent="Widget.MaterialComponents.Button">

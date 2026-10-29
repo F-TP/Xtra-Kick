@@ -4,16 +4,45 @@ import androidx.paging.PagingSource
 import androidx.paging.PagingState
 import com.xtrakick.app.model.ui.LocalFollowChannel
 import com.xtrakick.app.model.ui.User
+import com.xtrakick.app.repository.KickRepository
 import com.xtrakick.app.repository.LocalFollowChannelRepository
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 
 class FollowedChannelsDataSource(
     private val sort: String,
     private val order: String,
     private val localFollowsChannel: LocalFollowChannelRepository,
+    private val kickRepository: KickRepository? = null,
 ) : PagingSource<Int, User>() {
+
+    companion object {
+        private val attemptedLogins = java.util.concurrent.ConcurrentHashMap.newKeySet<String>()
+    }
 
     override suspend fun load(params: LoadParams<Int>): LoadResult<Int, User> {
         val follows = localFollowsChannel.loadFollows()
+        kickRepository?.let { repo ->
+            val missing = follows.filter {
+                it.channelLogo.isNullOrBlank() && !it.userLogin.isNullOrBlank() && attemptedLogins.add(it.userLogin!!)
+            }
+            if (missing.isNotEmpty()) {
+                CoroutineScope(Dispatchers.IO).launch {
+                    for (follow in missing) {
+                        val login = follow.userLogin ?: continue
+                        try {
+                            val channelResp = repo.getChannel(login)
+                            val pic = channelResp.user?.profilePic ?: channelResp.user?.profilePicV2
+                            if (!pic.isNullOrBlank()) {
+                                follow.channelLogo = pic
+                                localFollowsChannel.updateFollow(follow)
+                            }
+                        } catch (_: Exception) {}
+                    }
+                }
+            }
+        }
         val list = follows.map { FollowedChannelRow(it.toUser(), it.id) }
         val sorted = list.sortedForFilter().map { it.user }
 

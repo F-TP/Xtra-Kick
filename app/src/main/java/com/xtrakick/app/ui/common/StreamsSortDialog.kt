@@ -15,8 +15,9 @@ import com.xtrakick.app.ui.top.TopStreamsFragment
 import com.xtrakick.app.util.AppConstants
 import com.google.android.material.bottomsheet.BottomSheetBehavior
 import com.google.android.material.bottomsheet.BottomSheetDialogFragment
+import com.google.android.material.chip.Chip
 
-class StreamsSortDialog : BottomSheetDialogFragment(), SelectLanguagesDialog.OnSelectedLanguagesChanged {
+class StreamsSortDialog : BottomSheetDialogFragment(), SelectLanguagesDialog.OnSelectedLanguagesChanged, AddTagDialog.OnTagSelectedListener {
 
     interface OnFilter {
         fun onChange(sort: String, sortText: CharSequence, tags: Array<String>, languages: Array<String>, changed: Boolean, saveFilters: Boolean, saveSort: Boolean, saveDefault: Boolean)
@@ -45,6 +46,7 @@ class StreamsSortDialog : BottomSheetDialogFragment(), SelectLanguagesDialog.OnS
     private lateinit var listener: OnFilter
 
     private var selectedLanguages: Array<String> = emptyArray()
+    private var selectedTags = mutableListOf<String>()
 
     override fun onAttach(context: Context) {
         super.onAttach(context)
@@ -84,8 +86,12 @@ class StreamsSortDialog : BottomSheetDialogFragment(), SelectLanguagesDialog.OnS
             }
             sort.check(originalSortId)
             selectedLanguages = originalLanguages
-            tagGroup.isVisible = false
-            selectTags.isVisible = false
+            selectedTags = originalTags.toMutableList()
+            updateTagGroup()
+            selectTags.isVisible = true
+            selectTags.setOnClickListener {
+                AddTagDialog.newInstance().show(childFragmentManager, "addTag")
+            }
             selectLanguages.setOnClickListener {
                 SelectLanguagesDialog.newInstance(selectedLanguages).show(childFragmentManager, "closeOnPip")
             }
@@ -112,10 +118,35 @@ class StreamsSortDialog : BottomSheetDialogFragment(), SelectLanguagesDialog.OnS
         }
     }
 
+    private fun updateTagGroup() {
+        with(binding) {
+            tagGroup.removeAllViews()
+            tagGroup.isVisible = selectedTags.isNotEmpty()
+            selectedTags.forEach { tag ->
+                val chip = Chip(requireContext()).apply {
+                    text = tag
+                    isCloseIconVisible = true
+                    setOnCloseIconClickListener {
+                        selectedTags.remove(tag)
+                        updateTagGroup()
+                    }
+                }
+                tagGroup.addView(chip)
+            }
+        }
+    }
+
+    override fun onTagSelected(tag: String) {
+        if (!selectedTags.any { it.equals(tag, ignoreCase = true) }) {
+            selectedTags.add(tag)
+            updateTagGroup()
+        }
+    }
+
     private fun applyFilters(originalSortId: Int, originalTags: Array<String>, originalLanguages: Array<String>, saveFilters: Boolean, saveSort: Boolean, saveDefault: Boolean) {
         with(binding) {
             val checkedSortId = sort.checkedRadioButtonId
-            val tags = emptyArray<String>()
+            val tags = selectedTags.sorted().toTypedArray()
             val sortBtn = requireView().findViewById<RadioButton>(checkedSortId)
             listener.onChange(
                 when (checkedSortId) {
@@ -127,7 +158,7 @@ class StreamsSortDialog : BottomSheetDialogFragment(), SelectLanguagesDialog.OnS
                 sortBtn.text,
                 tags,
                 selectedLanguages,
-                checkedSortId != originalSortId || originalTags.isNotEmpty() || !selectedLanguages.contentEquals(originalLanguages),
+                checkedSortId != originalSortId || !tags.contentEquals(originalTags) || !selectedLanguages.contentEquals(originalLanguages),
                 saveFilters,
                 saveSort,
                 saveDefault

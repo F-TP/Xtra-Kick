@@ -4304,6 +4304,73 @@ class ChatViewModel @Inject constructor(
         }
     }
 
+    fun startLiveRewindChat(
+        channelId: String,
+        channelLogin: String,
+        channelName: String?,
+        replayStartTimeMs: Long,
+        targetPositionMs: Long,
+        getCurrentPosition: () -> Long?,
+        getCurrentSpeed: () -> Float? = { 1.0f },
+    ) {
+        logKickReplayChat(stage = "startLiveRewindChat", sessionKey = null) {
+            "channelId=$channelId channelLogin=$channelLogin targetPos=$targetPositionMs startTime=$replayStartTimeMs"
+        }
+        stopReplayChat()
+        stopLiveChat()
+        kickReplayFallbackEnabled = true
+        kickReplayFallbackChannelId = channelId
+        kickReplayFallbackChannelLogin = channelLogin
+        kickReplayFallbackStartTimeMs = replayStartTimeMs
+        kickReplayFallbackUrl = null
+        kickReplayFallbackGetCurrentPosition = getCurrentPosition
+        startKickReplayChat(
+            channelId = channelId,
+            channelLogin = channelLogin,
+            channelName = channelName ?: channelLogin,
+            replayStartTimeMs = replayStartTimeMs,
+            kickReplayUrl = null,
+            getCurrentPosition = getCurrentPosition,
+            showClipStartMarker = false,
+            forceNewSession = true,
+            seekPosition = targetPositionMs
+        )
+    }
+
+    fun returnToLiveChat(
+        networkLibrary: String?,
+        channelId: String?,
+        channelLogin: String?,
+        channelName: String?,
+        streamId: String?,
+    ) {
+        logKickReplayChat(stage = "returnToLiveChat", sessionKey = kickReplaySessionKey) {
+            "channelId=$channelId channelLogin=$channelLogin"
+        }
+        stopReplayChat()
+        kickReplayFallbackEnabled = false
+        kickReplayFallbackChannelId = null
+        kickReplayFallbackChannelLogin = null
+        kickReplayFallbackStartTimeMs = null
+        kickReplayFallbackUrl = null
+        kickReplayFallbackGetCurrentPosition = null
+        kickReplaySessionKey = null
+        kickReplayLastPlaybackPositionMs = null
+        this.streamId = streamId
+        currentChatChannelName = channelName
+        currentChatChannelLogin = channelLogin
+        viewModelScope.launch {
+            clearChatMessages()
+            if (!channelLogin.isNullOrBlank()) {
+                startLiveChat(channelId, channelLogin)
+                if (applicationContext.prefs().getBoolean(AppConstants.CHAT_RECENT, true)) {
+                    loadRecentMessages(networkLibrary, channelLogin, channelId)
+                }
+            }
+            refreshMessages.emit(Unit)
+        }
+    }
+
     fun stopReplayChat() {
         kickReplayGeneration.incrementAndGet()
         if (kickReplayFallbackEnabled) {

@@ -72,6 +72,7 @@ class FollowedLiveStreamsRepository @Inject constructor(
         val startedAt: String? = null,
         val thumbnailUrl: String? = null,
         val profileImageUrl: String? = null,
+        val tags: List<String>? = null,
     ) {
         fun toStream(): Stream = Stream(
             id = id,
@@ -88,6 +89,7 @@ class FollowedLiveStreamsRepository @Inject constructor(
             startedAt = startedAt,
             thumbnailUrl = thumbnailUrl,
             profileImageUrl = profileImageUrl,
+            tags = tags,
         )
     }
 
@@ -512,22 +514,30 @@ class FollowedLiveStreamsRepository @Inject constructor(
     ): Stream {
         val catId = category?.id?.toString()
         val catName = category?.name
+        val catSlug = kickRepository.getOrInferCachedCategorySlug(catId, catName)
+        val chId = broadcasterUserId?.toString() ?: follow?.userId ?: channelId?.toString()
+        val eventTitle = chId?.let { kickRepository.getCachedChannelEventTitle(it) }
+        val combinedTags = buildList {
+            eventTitle?.takeIf { it.isNotBlank() }?.let(::add)
+            language?.takeIf { it.isNotBlank() }?.let(::add)
+            customTags?.filter { it.isNotBlank() }?.let(::addAll)
+        }.distinct().ifEmpty { null }
         return Stream(
             id = null,
             source = AppConstants.KICK,
-            channelId = broadcasterUserId?.toString() ?: follow?.userId ?: channelId?.toString(),
+            channelId = chId,
             channelLogin = slug ?: follow?.userLogin,
             channelName = follow?.userName ?: slug,
             playbackUrl = null,
             gameId = catId,
-            gameSlug = kickRepository.getOrInferCachedCategorySlug(catId, catName),
+            gameSlug = catSlug,
             gameName = catName,
             title = streamTitle,
             viewerCount = viewerCount,
             startedAt = startedAt,
             thumbnailUrl = thumbnail,
             profileImageUrl = profilePicture ?: follow?.channelLogo,
-            tags = customTags,
+            tags = combinedTags,
         )
     }
 
@@ -552,6 +562,7 @@ class FollowedLiveStreamsRepository @Inject constructor(
                     startedAt = it.startedAt,
                     thumbnailUrl = it.thumbnailUrl,
                     profileImageUrl = it.profileImageUrl,
+                    tags = it.tags,
                 )
             }
         )

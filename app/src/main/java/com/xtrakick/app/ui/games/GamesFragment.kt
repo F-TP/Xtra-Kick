@@ -25,9 +25,11 @@ import com.xtrakick.app.R
 import com.xtrakick.app.databinding.FragmentGamesBinding
 import com.xtrakick.app.model.ui.Game
 import com.xtrakick.app.model.ui.Tag
+import com.xtrakick.app.ui.common.ActiveTagsAdapter
 import com.xtrakick.app.ui.common.GamesAdapter
 import com.xtrakick.app.ui.common.PagedListFragment
 import com.xtrakick.app.ui.common.Scrollable
+import com.xtrakick.app.ui.common.TagFilterHelper
 import com.xtrakick.app.ui.login.LoginActivity
 import com.xtrakick.app.ui.main.MainActivity
 import com.xtrakick.app.ui.search.SearchPagerFragmentDirections
@@ -117,7 +119,7 @@ class GamesFragment : PagedListFragment(), Scrollable, GamesSortDialog.OnFilter 
                 WindowInsetsCompat.CONSUMED
             }
         }
-        pagingAdapter = GamesAdapter(this) { addTag(it) }
+        pagingAdapter = GamesAdapter(this) { toggleTag(it) }
         setAdapter(binding.recyclerViewLayout.recyclerView, pagingAdapter)
     }
 
@@ -137,6 +139,7 @@ class GamesFragment : PagedListFragment(), Scrollable, GamesSortDialog.OnFilter 
                     }
                 } else null
             }
+            (pagingAdapter as? ActiveTagsAdapter)?.activeTags = viewModel.tags.mapNotNull { it.name ?: it.id }.toSet()
             repeatOnLifecycle(Lifecycle.State.STARTED) {
                 viewModel.flow.collectLatest { pagingData ->
                     pagingAdapter.submitData(pagingData)
@@ -180,11 +183,25 @@ class GamesFragment : PagedListFragment(), Scrollable, GamesSortDialog.OnFilter 
         }
     }
 
-    private fun addTag(tag: Tag) {
+    private fun toggleTag(tag: Tag) {
         viewLifecycleOwner.lifecycleScope.launch {
-            val tags = viewModel.tags.plus(tag).sortedBy { it.id }.toTypedArray()
-            viewModel.setFilter(tags)
-            viewModel.filtersText.value = buildString {
+            val current = viewModel.tags.toList()
+            val tagName = tag.name ?: tag.id.orEmpty()
+            val isCurrentlyActive = TagFilterHelper.isTagActive(tagName, current.mapNotNull { it.name ?: it.id })
+            val newTags = if (isCurrentlyActive) {
+                current.filterNot { TagFilterHelper.isTagActive(it.name ?: it.id.orEmpty(), listOf(tagName)) }
+            } else {
+                current + tag
+            }.distinctBy { it.id ?: it.name }.sortedBy { it.id }.toTypedArray()
+            viewModel.setFilter(newTags)
+            updateFiltersText()
+            (pagingAdapter as? ActiveTagsAdapter)?.activeTags = newTags.mapNotNull { it.name ?: it.id }.toSet()
+        }
+    }
+
+    private fun updateFiltersText() {
+        viewModel.filtersText.value = if (viewModel.tags.isNotEmpty()) {
+            buildString {
                 append(
                     resources.getQuantityString(
                         R.plurals.tags,
@@ -193,23 +210,14 @@ class GamesFragment : PagedListFragment(), Scrollable, GamesSortDialog.OnFilter 
                     )
                 )
             }
-        }
+        } else null
     }
 
     override fun onChange(tags: Array<Tag>) {
         viewLifecycleOwner.lifecycleScope.launch {
             viewModel.setFilter(tags)
-            viewModel.filtersText.value = if (viewModel.tags.isNotEmpty()) {
-                buildString {
-                    append(
-                        resources.getQuantityString(
-                            R.plurals.tags,
-                            viewModel.tags.size,
-                            viewModel.tags.mapNotNull { it.name }.joinToString()
-                        )
-                    )
-                }
-            } else null
+            updateFiltersText()
+            (pagingAdapter as? ActiveTagsAdapter)?.activeTags = tags.mapNotNull { it.name ?: it.id }.toSet()
         }
     }
 

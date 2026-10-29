@@ -6,6 +6,7 @@ import androidx.paging.Pager
 import androidx.paging.PagingConfig
 import androidx.paging.cachedIn
 import com.xtrakick.app.model.ui.SortChannel
+import com.xtrakick.app.repository.KickRepository
 import com.xtrakick.app.repository.LocalFollowChannelRepository
 import com.xtrakick.app.repository.SortChannelRepository
 import com.xtrakick.app.repository.datasource.FollowedChannelsDataSource
@@ -20,6 +21,7 @@ import javax.inject.Inject
 class FollowedChannelsViewModel @Inject constructor(
     private val sortChannelRepository: SortChannelRepository,
     private val localFollowsChannel: LocalFollowChannelRepository,
+    private val kickRepository: KickRepository,
 ) : ViewModel() {
 
     val filter = MutableStateFlow<Filter?>(null)
@@ -58,6 +60,7 @@ class FollowedChannelsViewModel @Inject constructor(
                     else -> "asc"
                 },
                 localFollowsChannel = localFollowsChannel,
+                kickRepository = kickRepository,
             ).also { currentDataSource = it }
         }.flow
     }.cachedIn(viewModelScope)

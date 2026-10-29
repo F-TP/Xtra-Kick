@@ -51,6 +51,7 @@ import com.xtrakick.app.model.chat.StvBadge
 import com.xtrakick.app.model.chat.StvUser
 import com.xtrakick.app.model.chat.ChatBadge
 import com.xtrakick.app.model.chat.ChatEmote
+import com.xtrakick.app.model.chat.ChatEmoteSpan
 import com.xtrakick.app.repository.KickInlineBadgeData
 import com.xtrakick.app.ui.view.CenteredImageSpan
 import com.xtrakick.app.ui.view.NamePaintImageSpan
@@ -199,47 +200,6 @@ object ChatAdapterUtils {
         } else {
             drawable
         }
-    }
-
-    private fun resolveKickRewardNoticeColor(
-        rewardColor: String?,
-        savedColors: HashMap<String, Int>,
-        useReadableColors: Boolean,
-        isLightTheme: Boolean,
-    ): Int {
-        val parsed = runCatching { Color.parseColor(rewardColor) }.getOrNull()
-        if (parsed != null) {
-            val background = if (isLightTheme) Color.WHITE else Color.BLACK
-            val contrast = ColorUtils.calculateContrast(parsed, background)
-            return if (contrast >= 3.0) {
-                parsed
-            } else if (isLightTheme) {
-                ColorUtils.blendARGB(parsed, Color.BLACK, 0.45f)
-            } else {
-                ColorUtils.blendARGB(parsed, Color.WHITE, 0.35f)
-            }
-        }
-        return getSavedColor("#999999", savedColors, useReadableColors, isLightTheme)
-    }
-
-    private fun applyKickRewardNoticeStyle(
-        builder: SpannableStringBuilder,
-        start: Int,
-        end: Int,
-        rewardColor: String?,
-        savedColors: HashMap<String, Int>,
-        useReadableColors: Boolean,
-        isLightTheme: Boolean,
-    ) {
-        if (end <= start) return
-        builder.setSpan(
-            ForegroundColorSpan(resolveKickRewardNoticeColor(rewardColor, savedColors, useReadableColors, isLightTheme)),
-            start,
-            end,
-            SPAN_EXCLUSIVE_EXCLUSIVE,
-        )
-        builder.setSpan(RelativeSizeSpan(1.08f), start, end, SPAN_EXCLUSIVE_EXCLUSIVE)
-        builder.setSpan(StyleSpan(Typeface.BOLD), start, end, SPAN_EXCLUSIVE_EXCLUSIVE)
     }
 
     internal fun splitConcatenatedThirdPartyEmotes(token: String, emotes: List<Emote>): List<Emote>? {
@@ -403,18 +363,23 @@ object ChatAdapterUtils {
         }
     }
 
+    private fun resolveDisplayName(userName: String?, userLogin: String?, nameDisplay: String?): String {
+        return if (userName != null && userLogin != null && !userLogin.equals(userName, true)) {
+            when (nameDisplay) {
+                "0" -> "$userName($userLogin)"
+                "1" -> userName
+                else -> userLogin
+            }
+        } else {
+            userName ?: userLogin ?: "Anonymous"
+        }
+    }
+
     private fun resolveReplyDisplayName(chatMessage: ChatMessage, nameDisplay: String?): String? {
         val replyLogin = chatMessage.replyParent?.userLogin ?: chatMessage.reply?.userLogin
         val replyName = chatMessage.replyParent?.userName ?: chatMessage.reply?.userName
-        return if (replyName != null && replyLogin != null && !replyLogin.equals(replyName, true)) {
-            when (nameDisplay) {
-                "0" -> "${replyName}(${replyLogin})"
-                "1" -> replyName
-                else -> replyLogin
-            }
-        } else {
-            replyName ?: replyLogin
-        }
+        if (replyName == null && replyLogin == null) return null
+        return resolveDisplayName(replyName, replyLogin, nameDisplay)
     }
 
     private fun appendDeletedLabel(
@@ -676,7 +641,7 @@ object ChatAdapterUtils {
                     builderIndex += giftee.length
                 }
             }
-            chatMessage.message.isNullOrBlank() && (chatMessage.systemMsg != null || chatMessage.reward?.title != null) -> {
+            chatMessage.reward?.title != null -> {
                 if (chatMessage.timestamp != null && enableTimestamps) {
                     val timestamp = KickApiHelper.getTimestamp(chatMessage.timestamp, timestampFormat)
                     if (timestamp != null) {
@@ -685,56 +650,92 @@ object ChatAdapterUtils {
                         builderIndex += timestamp.length + 1
                     }
                 }
-                if (chatMessage.systemMsg != null) {
-                    builder.append(chatMessage.systemMsg)
-                    builder.setSpan(ForegroundColorSpan(getSavedColor("#999999", savedColors, useReadableColors, isLightTheme)), builderIndex, builderIndex + chatMessage.systemMsg.length, SPAN_EXCLUSIVE_EXCLUSIVE)
-                    if (showSystemMessageEmotes) {
-                        prepareEmotes(chatMessage, chatMessage.systemMsg, builder, builderIndex, images, imageClick, useReadableColors, isLightTheme, enableOverlayEmotes, useBoldNames, loggedInUser, chatUrl, getEmoteBytes, savedColors, localChatEmotes, showPersonalEmotes, personalEmoteSets, null, thirdPartyEmotes, cheerEmotes, savedLocalChatEmotes, savedLocalCheerEmotes, savedLocalEmotes)
-                    }
-                    builderIndex = builder.length
+
+                val pointsDrawable = context?.let { ContextCompat.getDrawable(it, R.drawable.ic_channel_points_black_24)?.mutate() }
+                if (pointsDrawable != null) {
+                    val density = context.resources.displayMetrics.density
+                    val iconSize = (16f * density).toInt()
+                    pointsDrawable.setBounds(0, 0, iconSize, iconSize)
+                    pointsDrawable.setTint(if (isLightTheme) Color.BLACK else Color.WHITE)
+                    builder.append(". ")
+                    builder.setSpan(CenteredImageSpan(pointsDrawable), builderIndex, builderIndex + 1, SPAN_EXCLUSIVE_EXCLUSIVE)
+                    builder.setSpan(ForegroundColorSpan(Color.TRANSPARENT), builderIndex, builderIndex + 1, SPAN_EXCLUSIVE_EXCLUSIVE)
+                    builderIndex += 2
+                }
+
+                val rawColor = chatMessage.color
+                val userColor = if (rawColor != null) {
+                    getSavedColor(rawColor, savedColors, useReadableColors, isLightTheme)
                 } else {
-                    if (chatMessage.reward?.title != null) {
-                        val userName = if (chatMessage.userLogin != null && !chatMessage.userLogin.equals(chatMessage.userName, true)) {
-                            when (nameDisplay) {
-                                "0" -> "${chatMessage.userName}(${chatMessage.userLogin})"
-                                "1" -> chatMessage.userName
-                                else -> chatMessage.userLogin
-                            }
-                        } else {
-                            chatMessage.userName
-                        }
-                        val string = redeemedNoMsg.format(userName, chatMessage.reward.title)
-                        builder.append("$string ")
-                        applyKickRewardNoticeStyle(
-                            builder = builder,
-                            start = builderIndex,
-                            end = builderIndex + string.length,
-                            rewardColor = chatMessage.reward.backgroundColor,
-                            savedColors = savedColors,
-                            useReadableColors = useReadableColors,
-                            isLightTheme = isLightTheme,
-                        )
-                        if (showSystemMessageEmotes) {
-                            prepareEmotes(chatMessage, string, builder, builderIndex, images, imageClick, useReadableColors, isLightTheme, enableOverlayEmotes, useBoldNames, loggedInUser, chatUrl, getEmoteBytes, savedColors, localChatEmotes, showPersonalEmotes, personalEmoteSets, null, thirdPartyEmotes, cheerEmotes, savedLocalChatEmotes, savedLocalCheerEmotes, savedLocalEmotes)
-                        }
-                        builderIndex = builder.length
-                        builder.append(". ")
-                        builder.setSpan(ForegroundColorSpan(Color.TRANSPARENT), builderIndex, builderIndex + 1, SPAN_EXCLUSIVE_EXCLUSIVE)
-                        images.add(Image(
-                            url1x = chatMessage.reward.url1x,
-                            url2x = chatMessage.reward.url2x,
-                            url3x = chatMessage.reward.url4x,
-                            url4x = chatMessage.reward.url4x,
-                            start = builderIndex++,
-                            end = builderIndex++
-                        ))
-                        if (chatMessage.reward.cost != null) {
-                            builder.append("${chatMessage.reward.cost}")
-                            builder.setSpan(ForegroundColorSpan(getSavedColor("#999999", savedColors, useReadableColors, isLightTheme)), builderIndex, builderIndex + chatMessage.reward.cost.toString().length, SPAN_EXCLUSIVE_EXCLUSIVE)
-                            builderIndex += chatMessage.reward.cost.toString().length
-                        }
+                    userColors[chatMessage.userName] ?: if (useRandomColors) {
+                        chatNameColors[random.nextInt(chatNameColors.size)]
+                    } else {
+                        -10066329
+                    }.let { newColor ->
+                        if (useReadableColors) adaptUsernameColor(newColor, isLightTheme) else newColor
+                    }.also { if (chatMessage.userName != null) userColors[chatMessage.userName] = it }
+                }
+
+                val displayName = resolveDisplayName(chatMessage.userName, chatMessage.userLogin, nameDisplay)
+
+                val nameStart = builderIndex
+                builder.append(displayName)
+                builder.setSpan(ForegroundColorSpan(userColor), nameStart, nameStart + displayName.length, SPAN_EXCLUSIVE_EXCLUSIVE)
+                if (useBoldNames) {
+                    builder.setSpan(StyleSpan(Typeface.BOLD), nameStart, nameStart + displayName.length, SPAN_EXCLUSIVE_EXCLUSIVE)
+                }
+                userName = displayName
+                userNameStartIndex = nameStart
+                builderIndex += displayName.length
+
+                val hasRedeemedLabel = (context?.getString(R.string.has_redeemed) ?: "has redeemed") + " "
+                builder.append("\n$hasRedeemedLabel")
+                builderIndex += 1
+                val actionStart = builderIndex
+                val actionColor = if (isLightTheme) Color.parseColor("#666666") else Color.parseColor("#C8CCD0")
+                builder.setSpan(ForegroundColorSpan(actionColor), actionStart, actionStart + hasRedeemedLabel.length, SPAN_EXCLUSIVE_EXCLUSIVE)
+                builderIndex += hasRedeemedLabel.length
+
+                val rewardTitle = chatMessage.reward.title.orEmpty()
+                val titleStart = builderIndex
+                builder.append(rewardTitle)
+                val titleColor = if (isLightTheme) Color.BLACK else Color.WHITE
+                builder.setSpan(ForegroundColorSpan(titleColor), titleStart, titleStart + rewardTitle.length, SPAN_EXCLUSIVE_EXCLUSIVE)
+                builder.setSpan(StyleSpan(Typeface.BOLD), titleStart, titleStart + rewardTitle.length, SPAN_EXCLUSIVE_EXCLUSIVE)
+                builderIndex += rewardTitle.length
+
+                if (!chatMessage.message.isNullOrBlank()) {
+                    builder.append("\n")
+                    builderIndex += 1
+                    val msgStart = builderIndex
+                    builder.append(chatMessage.message)
+                    val msgColor = if (isLightTheme) Color.BLACK else Color.WHITE
+                    builder.setSpan(ForegroundColorSpan(msgColor), msgStart, msgStart + chatMessage.message.length, SPAN_EXCLUSIVE_EXCLUSIVE)
+                    prepareEmotes(
+                        chatMessage, chatMessage.message, builder, msgStart, images, imageClick,
+                        useReadableColors, isLightTheme, enableOverlayEmotes, useBoldNames,
+                        loggedInUser, chatUrl, getEmoteBytes, savedColors, localChatEmotes,
+                        showPersonalEmotes, personalEmoteSets, null, thirdPartyEmotes, cheerEmotes,
+                        savedLocalChatEmotes, savedLocalCheerEmotes, savedLocalEmotes
+                    )
+                    builderIndex = builder.length
+                }
+            }
+            chatMessage.message.isNullOrBlank() && chatMessage.systemMsg != null -> {
+                if (chatMessage.timestamp != null && enableTimestamps) {
+                    val timestamp = KickApiHelper.getTimestamp(chatMessage.timestamp, timestampFormat)
+                    if (timestamp != null) {
+                        builder.append("$timestamp ")
+                        builder.setSpan(ForegroundColorSpan(getSavedColor("#999999", savedColors, useReadableColors, isLightTheme)), 0, timestamp.length, SPAN_EXCLUSIVE_EXCLUSIVE)
+                        builderIndex += timestamp.length + 1
                     }
                 }
+                builder.append(chatMessage.systemMsg)
+                builder.setSpan(ForegroundColorSpan(getSavedColor("#999999", savedColors, useReadableColors, isLightTheme)), builderIndex, builderIndex + chatMessage.systemMsg.length, SPAN_EXCLUSIVE_EXCLUSIVE)
+                if (showSystemMessageEmotes) {
+                    prepareEmotes(chatMessage, chatMessage.systemMsg, builder, builderIndex, images, imageClick, useReadableColors, isLightTheme, enableOverlayEmotes, useBoldNames, loggedInUser, chatUrl, getEmoteBytes, savedColors, localChatEmotes, showPersonalEmotes, personalEmoteSets, null, thirdPartyEmotes, cheerEmotes, savedLocalChatEmotes, savedLocalCheerEmotes, savedLocalEmotes)
+                }
+                builderIndex = builder.length
             }
             else -> {
                 if (chatMessage.systemMsg != null) {
@@ -751,40 +752,9 @@ object ChatAdapterUtils {
                     builder.append("$firstChatMsg\n")
                     builderIndex += firstChatMsg.length + 1
                 }
-                if (chatMessage.reward?.title != null) {
-                    val string = redeemedChatMsg.format(chatMessage.reward.title)
-                    builder.append("$string ")
-                    applyKickRewardNoticeStyle(
-                        builder = builder,
-                        start = builderIndex,
-                        end = builderIndex + string.length,
-                        rewardColor = chatMessage.reward.backgroundColor,
-                        savedColors = savedColors,
-                        useReadableColors = useReadableColors,
-                        isLightTheme = isLightTheme,
-                    )
-                    builderIndex += string.length + 1
-                    builder.append(". ")
-                    builder.setSpan(ForegroundColorSpan(Color.TRANSPARENT), builderIndex, builderIndex + 1, SPAN_EXCLUSIVE_EXCLUSIVE)
-                    images.add(Image(
-                        url1x = chatMessage.reward.url1x,
-                        url2x = chatMessage.reward.url2x,
-                        url3x = chatMessage.reward.url4x,
-                        url4x = chatMessage.reward.url4x,
-                        start = builderIndex++,
-                        end = builderIndex++
-                    ))
-                    if (chatMessage.reward.cost != null) {
-                        builder.append("${chatMessage.reward.cost}")
-                        builderIndex += chatMessage.reward.cost.toString().length
-                    }
-                    builder.append("\n")
-                    builderIndex += 1
-                } else {
-                    if (chatMessage.reward?.id != null && firstMsgVisibility == 0) {
-                        builder.append("$rewardChatMsg\n")
-                        builderIndex += rewardChatMsg.length + 1
-                    }
+                if (chatMessage.reward?.id != null && firstMsgVisibility == 0) {
+                    builder.append("$rewardChatMsg\n")
+                    builderIndex += rewardChatMsg.length + 1
                 }
                 if (chatMessage.timestamp != null && enableTimestamps) {
                     val timestamp = KickApiHelper.getTimestamp(chatMessage.timestamp, timestampFormat)
@@ -908,15 +878,7 @@ object ChatAdapterUtils {
                     }
                 }
                 if (!chatMessage.userName.isNullOrBlank()) {
-                    userName = if (chatMessage.userLogin != null && !chatMessage.userLogin.equals(chatMessage.userName, true)) {
-                        when (nameDisplay) {
-                            "0" -> "${chatMessage.userName}(${chatMessage.userLogin})"
-                            "1" -> chatMessage.userName
-                            else -> chatMessage.userLogin
-                        }
-                    } else {
-                        chatMessage.userName
-                    }
+                    userName = resolveDisplayName(chatMessage.userName, chatMessage.userLogin, nameDisplay)
                     builder.append(userName)
                     builder.setSpan(ForegroundColorSpan(color), builderIndex, builderIndex + userName.length, SPAN_EXCLUSIVE_EXCLUSIVE)
                     if (useBoldNames) {
@@ -1134,7 +1096,21 @@ object ChatAdapterUtils {
                         setId = emote.setId,
                         ownerId = emote.ownerId
                     )
-                } ?: ChatEmote(id = it.id, begin = realBegin, end = realEnd)
+                } ?: ChatEmote(
+                    id = it.id,
+                    name = it.name,
+                    localData = it.localData,
+                    url1x = it.url1x,
+                    url2x = it.url2x,
+                    url3x = it.url3x,
+                    url4x = it.url4x,
+                    format = it.format,
+                    isAnimated = it.isAnimated,
+                    begin = realBegin,
+                    end = realEnd,
+                    setId = it.setId,
+                    ownerId = it.ownerId
+                )
             }?.sortedBy { it.begin }?.toMutableList()
             val personalEmotes = if (showPersonalEmotes) {
                 stvUser?.emoteSetId?.let { setId ->
@@ -1169,6 +1145,20 @@ object ChatAdapterUtils {
                                     override fun updateDrawState(ds: TextPaint) {}
                                 }, builderIndex, builderIndex + 1, SPAN_EXCLUSIVE_EXCLUSIVE)
                             }
+                            builder.setSpan(
+                                ChatEmoteSpan(
+                                    url = emote.url4x ?: emote.url3x ?: emote.url2x ?: emote.url1x,
+                                    name = value,
+                                    format = emote.format,
+                                    isAnimated = emote.isAnimated,
+                                    source = null,
+                                    thirdParty = null,
+                                    emoteId = null
+                                ),
+                                builderIndex,
+                                builderIndex + 1,
+                                SPAN_EXCLUSIVE_EXCLUSIVE
+                            )
                             images.add(Image(
                                 localDataLoader = emote.localData?.let { getLocalEmoteData(emote.name + emote.minBits, it, savedLocalCheerEmotes, chatUrl, getEmoteBytes) },
                                 url1x = emote.url1x,
@@ -1237,6 +1227,20 @@ object ChatAdapterUtils {
                                 override fun updateDrawState(ds: TextPaint) {}
                             }, builderIndex, builderIndex + 1, SPAN_EXCLUSIVE_EXCLUSIVE)
                         }
+                        builder.setSpan(
+                            ChatEmoteSpan(
+                                url = emote.url4x ?: emote.url3x ?: emote.url2x ?: emote.url1x,
+                                name = emote.name ?: value,
+                                format = emote.format,
+                                isAnimated = emote.isAnimated,
+                                source = emote.source,
+                                thirdParty = emote.thirdParty,
+                                emoteId = null
+                            ),
+                            builderIndex,
+                            builderIndex + 1,
+                            SPAN_EXCLUSIVE_EXCLUSIVE
+                        )
                         val image = Image(
                             localDataLoader = emote.localData?.let { getLocalEmoteData(emote.name!!, it, savedLocalEmotes, chatUrl, getEmoteBytes) },
                             url1x = emote.url1x,
@@ -1304,6 +1308,20 @@ object ChatAdapterUtils {
                                     override fun updateDrawState(ds: TextPaint) {}
                                 }, imageStart, imageStart + 1, SPAN_EXCLUSIVE_EXCLUSIVE)
                             }
+                            builder.setSpan(
+                                ChatEmoteSpan(
+                                    url = matchedEmote.url4x ?: matchedEmote.url3x ?: matchedEmote.url2x ?: matchedEmote.url1x,
+                                    name = matchedEmote.name,
+                                    format = matchedEmote.format,
+                                    isAnimated = matchedEmote.isAnimated,
+                                    source = matchedEmote.source,
+                                    thirdParty = matchedEmote.thirdParty,
+                                    emoteId = null
+                                ),
+                                imageStart,
+                                imageStart + 1,
+                                SPAN_EXCLUSIVE_EXCLUSIVE
+                            )
                             val image = Image(
                                 localDataLoader = matchedEmote.localData?.let { getLocalEmoteData(matchedEmote.name!!, it, savedLocalEmotes, chatUrl, getEmoteBytes) },
                                 url1x = matchedEmote.url1x,
@@ -1359,7 +1377,7 @@ object ChatAdapterUtils {
                             setId = emote.setId,
                             ownerId = emote.ownerId
                         )
-                    } ?: ChatEmote(id = chatEmote.id)
+                    } ?: chatEmote
                     if (imageClick != null) {
                         builder.setSpan(object : ClickableSpan() {
                             override fun onClick(widget: View) {
@@ -1369,6 +1387,20 @@ object ChatAdapterUtils {
                             override fun updateDrawState(ds: TextPaint) {}
                         }, builderIndex, builderIndex + 1, SPAN_EXCLUSIVE_EXCLUSIVE)
                     }
+                    builder.setSpan(
+                        ChatEmoteSpan(
+                            url = emote.url4x ?: emote.url3x ?: emote.url2x ?: emote.url1x ?: "https://files.kick.com/emotes/${emote.id}/fullsize",
+                            name = emote.name ?: value,
+                            format = emote.format,
+                            isAnimated = emote.isAnimated,
+                            source = null,
+                            thirdParty = null,
+                            emoteId = emote.id
+                        ),
+                        builderIndex,
+                        builderIndex + 1,
+                        SPAN_EXCLUSIVE_EXCLUSIVE
+                    )
                     val image = Image(
                         localDataLoader = emote.localData?.let { getLocalEmoteData(emote.id!!, it, savedLocalChatEmotes, chatUrl, getEmoteBytes) },
                         url1x = emote.url1x,

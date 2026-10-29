@@ -67,8 +67,9 @@ class FollowedChannelsAdapter(
                             )
                         )
                     }
-                    if (item.channelLogo != null) {
-                        userImage.visibility = View.VISIBLE
+                    userImage.visibility = View.VISIBLE
+                    userImage.setImageResource(R.drawable.baseline_person_black_24)
+                    if (!item.channelLogo.isNullOrBlank()) {
                         fragment.requireContext().imageLoader.enqueue(
                             ImageRequest.Builder(fragment.requireContext()).apply {
                                 data(item.channelLogo)
@@ -79,8 +80,6 @@ class FollowedChannelsAdapter(
                                 target(userImage)
                             }.build()
                         )
-                    } else {
-                        userImage.visibility = View.GONE
                     }
                     if (item.channelName != null) {
                         username.visibility = View.VISIBLE

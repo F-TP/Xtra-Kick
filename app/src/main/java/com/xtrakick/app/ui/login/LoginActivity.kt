@@ -566,6 +566,7 @@ class LoginActivity : AppCompatActivity() {
             AuthStateHelper.clearUnexpectedLogoutNotice(this@LoginActivity)
             AuthStateHelper.clearKickAuth(this@LoginActivity)
             AuthStateHelper.clearLegacyWebAuth(this@LoginActivity)
+            followImporter.resetState()
             Toast.makeText(
                 this@LoginActivity,
                 if (revokeSucceeded) R.string.logout_success_toast else R.string.logout_revoke_failed_toast,

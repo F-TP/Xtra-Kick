@@ -28,8 +28,10 @@ import com.xtrakick.app.model.ui.SortGame
 import com.xtrakick.app.model.ui.Stream
 import com.xtrakick.app.ui.common.PagedListFragment
 import com.xtrakick.app.ui.common.Scrollable
+import com.xtrakick.app.ui.common.ActiveTagsAdapter
 import com.xtrakick.app.ui.common.StreamsAdapter
 import com.xtrakick.app.ui.common.StreamsCompactAdapter
+import com.xtrakick.app.ui.common.TagFilterHelper
 import com.xtrakick.app.ui.common.StreamsSortDialog
 import com.xtrakick.app.ui.common.StreamsSortDialog.Companion.RECENT
 import com.xtrakick.app.ui.common.StreamsSortDialog.Companion.SORT_VIEWERS
@@ -125,9 +127,9 @@ class TopStreamsFragment : PagedListFragment(), Scrollable, StreamsSortDialog.On
             }
         }
         pagingAdapter = if (requireContext().prefs().getString(AppConstants.COMPACT_STREAMS, "disabled") == "all") {
-            StreamsCompactAdapter(this, { addTag(it) })
+            StreamsCompactAdapter(this, { toggleTag(it) })
         } else {
-            StreamsAdapter(this, { addTag(it) })
+            StreamsAdapter(this, { toggleTag(it) })
         }
         setAdapter(binding.recyclerViewLayout.recyclerView, pagingAdapter)
     }
@@ -179,6 +181,7 @@ class TopStreamsFragment : PagedListFragment(), Scrollable, StreamsSortDialog.On
                     }
                 }
             } else null
+            (pagingAdapter as? ActiveTagsAdapter)?.activeTags = viewModel.tags.toSet()
             repeatOnLifecycle(Lifecycle.State.STARTED) {
                 viewModel.flow.collectLatest { pagingData ->
                     pagingAdapter.submitData(pagingData)
@@ -224,11 +227,25 @@ class TopStreamsFragment : PagedListFragment(), Scrollable, StreamsSortDialog.On
         }
     }
 
-    private fun addTag(tag: String) {
+    private fun toggleTag(tag: String) {
         viewLifecycleOwner.lifecycleScope.launch {
-            val tags = viewModel.tags.plus(tag).sortedArray()
-            viewModel.setFilter(viewModel.sort, tags, viewModel.languages)
-            viewModel.filtersText.value = buildString {
+            val current = viewModel.tags.toList()
+            val normalized = tag.trim()
+            val isCurrentlyActive = TagFilterHelper.isTagActive(normalized, current)
+            val newTags = if (isCurrentlyActive) {
+                current.filterNot { TagFilterHelper.isTagActive(it, listOf(normalized)) }
+            } else {
+                current + normalized
+            }.distinct().sorted().toTypedArray()
+            viewModel.setFilter(viewModel.sort, newTags, viewModel.languages)
+            updateFiltersText()
+            (pagingAdapter as? ActiveTagsAdapter)?.activeTags = newTags.toSet()
+        }
+    }
+
+    private fun updateFiltersText() {
+        viewModel.filtersText.value = if (viewModel.tags.isNotEmpty() || viewModel.languages.isNotEmpty()) {
+            buildString {
                 if (viewModel.tags.isNotEmpty()) {
                     append(
                         resources.getQuantityString(
@@ -251,7 +268,7 @@ class TopStreamsFragment : PagedListFragment(), Scrollable, StreamsSortDialog.On
                     )
                 }
             }
-        }
+        } else null
     }
 
     override fun onChange(sort: String, sortText: CharSequence, tags: Array<String>, languages: Array<String>, changed: Boolean, saveFilters: Boolean, saveSort: Boolean, saveDefault: Boolean) {
@@ -259,31 +276,8 @@ class TopStreamsFragment : PagedListFragment(), Scrollable, StreamsSortDialog.On
             if (changed) {
                 viewModel.setFilter(sort, tags, languages)
                 viewModel.sortText.value = getString(R.string.sort_by, sortText)
-                viewModel.filtersText.value = if (viewModel.tags.isNotEmpty() || viewModel.languages.isNotEmpty()) {
-                    buildString {
-                        if (viewModel.tags.isNotEmpty()) {
-                            append(
-                                resources.getQuantityString(
-                                    R.plurals.tags,
-                                    viewModel.tags.size,
-                                    viewModel.tags.joinToString()
-                                )
-                            )
-                        }
-                        if (viewModel.languages.isNotEmpty()) {
-                            if (isNotEmpty()) {
-                                append(". ")
-                            }
-                            append(
-                                resources.getQuantityString(
-                                    R.plurals.languages,
-                                    viewModel.languages.size,
-                                    viewModel.languages.joinToString()
-                                )
-                            )
-                        }
-                    }
-                } else null
+                updateFiltersText()
+                (pagingAdapter as? ActiveTagsAdapter)?.activeTags = tags.toSet()
             }
             if (saveFilters && (tags.isNotEmpty() || languages.isNotEmpty())) {
                 viewModel.saveFilters(

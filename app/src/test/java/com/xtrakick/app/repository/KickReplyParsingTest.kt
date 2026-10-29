@@ -220,5 +220,77 @@ class KickReplyParsingTest {
         org.junit.Assert.assertNull(reply?.userLogin)
         assertEquals("some old message", reply?.message)
     }
+
+    @Test
+    fun parsesUnspacedConsecutiveKickNativeEmotesWithAccurateOffsets() {
+        val rawJson = """
+            {
+              "id": "msg-unspaced-1",
+              "content": "WERE WATXHING YOU[emote:952119:collectiblesSCHIZO][emote:952119:collectiblesSCHIZO]"
+            }
+        """.trimIndent()
+
+        val kickMessage = json.decodeFromString<KickMessage>(rawJson)
+        val chatMessage = kickRepository.toChatMessage(kickMessage)
+
+        assertEquals("WERE WATXHING YOU collectiblesSCHIZO collectiblesSCHIZO", chatMessage.message)
+        assertEquals(2, chatMessage.emotes?.size)
+
+        val firstEmote = chatMessage.emotes?.get(0)
+        assertEquals("952119", firstEmote?.id)
+        assertEquals("collectiblesSCHIZO", firstEmote?.name)
+        assertEquals(18, firstEmote?.begin) // "WERE WATXHING YOU " is length 18
+        assertEquals(35, firstEmote?.end)   // 18 + 18 - 1 = 35
+
+        val secondEmote = chatMessage.emotes?.get(1)
+        assertEquals("952119", secondEmote?.id)
+        assertEquals("collectiblesSCHIZO", secondEmote?.name)
+        assertEquals(37, secondEmote?.begin) // "WERE WATXHING YOU collectiblesSCHIZO " is length 37
+        assertEquals(54, secondEmote?.end)   // 37 + 18 - 1 = 54
+    }
+
+    @Test
+    fun parsesKickNativeEmoteAttachedToPunctuation() {
+        val rawJson = """
+            {
+              "id": "msg-punct-1",
+              "content": "good stream [emote:111:heart]!"
+            }
+        """.trimIndent()
+
+        val kickMessage = json.decodeFromString<KickMessage>(rawJson)
+        val chatMessage = kickRepository.toChatMessage(kickMessage)
+
+        assertEquals("good stream heart !", chatMessage.message)
+        assertEquals(1, chatMessage.emotes?.size)
+
+        val emote = chatMessage.emotes?.get(0)
+        assertEquals("111", emote?.id)
+        assertEquals("heart", emote?.name)
+        assertEquals(12, emote?.begin) // "good stream " is length 12
+        assertEquals(16, emote?.end)   // 12 + 5 - 1 = 16
+    }
+
+    @Test
+    fun parsesKickNativeEmoteAttachedToPrecedingAndFollowingWords() {
+        val rawJson = """
+            {
+              "id": "msg-attached-1",
+              "content": "hello[emote:222:clap]world"
+            }
+        """.trimIndent()
+
+        val kickMessage = json.decodeFromString<KickMessage>(rawJson)
+        val chatMessage = kickRepository.toChatMessage(kickMessage)
+
+        assertEquals("hello clap world", chatMessage.message)
+        assertEquals(1, chatMessage.emotes?.size)
+
+        val emote = chatMessage.emotes?.get(0)
+        assertEquals("222", emote?.id)
+        assertEquals("clap", emote?.name)
+        assertEquals(6, emote?.begin) // "hello " is length 6
+        assertEquals(9, emote?.end)   // 6 + 4 - 1 = 9
+    }
 }
 

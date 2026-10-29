@@ -1,12 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
 <androidx.core.widget.NestedScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
-    android:layout_height="match_parent">
+    android:layout_height="wrap_content">
 
     <LinearLayout
         android:layout_width="match_parent"
-        android:layout_height="match_parent"
+        android:layout_height="wrap_content"
         android:gravity="center_horizontal"
         android:orientation="vertical"
         android:padding="?attr/dialogPadding">
@@ -36,6 +37,42 @@
             android:visibility="gone"
             tools:text="@string/global_stv_emote"
             tools:visibility="visible" />
+
+        <LinearLayout
+            android:id="@+id/actionsRow"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:orientation="horizontal">
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnCopyName"
+                style="@style/Widget.Material3.Button.TonalButton"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginEnd="8dp"
+                android:text="@string/copy_emote_name"
+                android:textAllCaps="false"
+                android:visibility="gone"
+                app:cornerRadius="10dp"
+                app:icon="@drawable/baseline_content_copy_24"
+                app:iconGravity="textStart"
+                tools:visibility="visible" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnCopyLink"
+                style="@style/Widget.Material3.Button.TonalButton"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/copy_link"
+                android:textAllCaps="false"
+                android:visibility="gone"
+                app:cornerRadius="10dp"
+                app:icon="@drawable/baseline_content_copy_24"
+                app:iconGravity="textStart"
+                tools:visibility="visible" />
+
+        </LinearLayout>
 
     </LinearLayout>
 

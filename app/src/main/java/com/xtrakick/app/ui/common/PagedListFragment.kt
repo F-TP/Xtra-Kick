@@ -7,6 +7,7 @@ import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
 import androidx.paging.LoadState
 import androidx.paging.PagingDataAdapter
+import androidx.recyclerview.widget.GridLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.xtrakick.app.databinding.CommonRecyclerViewLayoutBinding
 import com.xtrakick.app.util.AppConstants
@@ -17,7 +18,14 @@ import kotlinx.coroutines.launch
 
 abstract class PagedListFragment : BaseNetworkFragment(), IntegrityDialog.CallbackListener {
 
-    fun <T : Any, VH : RecyclerView.ViewHolder> setAdapter(recyclerView: RecyclerView, adapter: PagingDataAdapter<T, VH>) {
+    var concatAdapter: RecyclerView.Adapter<*>? = null
+        protected set
+
+    fun <T : Any, VH : RecyclerView.ViewHolder> setAdapter(
+        recyclerView: RecyclerView,
+        adapter: PagingDataAdapter<T, VH>,
+        withFooter: Boolean = true
+    ) {
         adapter.registerAdapterDataObserver(object : RecyclerView.AdapterDataObserver() {
 
             override fun onItemRangeInserted(positionStart: Int, itemCount: Int) {
@@ -35,7 +43,27 @@ abstract class PagedListFragment : BaseNetworkFragment(), IntegrityDialog.Callba
                 })
             }
         })
-        recyclerView.adapter = adapter
+        val targetAdapter: RecyclerView.Adapter<*> = if (withFooter) {
+            val footerAdapter = CommonLoadStateAdapter { adapter.retry() }
+            val combined = adapter.withLoadStateFooter(footerAdapter)
+            (recyclerView.layoutManager as? GridLayoutManager)?.let { glm ->
+                val defaultSpanLookup = glm.spanSizeLookup
+                glm.spanSizeLookup = object : GridLayoutManager.SpanSizeLookup() {
+                    override fun getSpanSize(position: Int): Int {
+                        return if (position >= adapter.itemCount) {
+                            glm.spanCount
+                        } else {
+                            defaultSpanLookup.getSpanSize(position)
+                        }
+                    }
+                }
+            }
+            combined
+        } else {
+            adapter
+        }
+        concatAdapter = targetAdapter
+        recyclerView.adapter = targetAdapter
     }
 
     fun shouldShowButton(recyclerView: RecyclerView): Boolean {
@@ -58,7 +86,7 @@ abstract class PagedListFragment : BaseNetworkFragment(), IntegrityDialog.Callba
                         if (enableSwipeRefresh) {
                             swipeRefresh.isRefreshing = loadState.refresh is LoadState.Loading && pagingAdapter.itemCount != 0
                         }
-                        nothingHere.isVisible = loadState.refresh !is LoadState.Loading && pagingAdapter.itemCount == 0
+                        nothingHere.isVisible = loadState.refresh !is LoadState.Loading && loadState.append !is LoadState.Loading && pagingAdapter.itemCount == 0
                         if ((loadState.refresh as? LoadState.Error ?:
                             loadState.append as? LoadState.Error ?:
                             loadState.prepend as? LoadState.Error)?.error?.message == "failed integrity check" &&

@@ -44,6 +44,9 @@ class FollowedStreamsViewModel @Inject constructor(
 
     val sortText = MutableStateFlow<CharSequence?>(null)
     val sort = MutableStateFlow(FollowedStreamsSortDialog.SORT_VIEWERS)
+    val filtersText = MutableStateFlow<CharSequence?>(null)
+    val activeTags = MutableStateFlow<Set<String>>(emptySet())
+    private var allLoadedStreams = emptyList<Stream>()
 
     private val _uiState = MutableStateFlow(FollowedStreamsUiState())
     val uiState: StateFlow<FollowedStreamsUiState> = _uiState.asStateFlow()
@@ -100,7 +103,7 @@ class FollowedStreamsViewModel @Inject constructor(
         val normalizedSort = normalizeSort(value)
         sort.value = normalizedSort
         sortText.value = buildSortText(normalizedSort)
-        _uiState.value = _uiState.value.copy(items = _uiState.value.items.distinctByStreamer().sortedForFollowedLive())
+        applyFilterAndSort()
         if (persist) {
             viewModelScope.launch {
                 val item = sortChannelRepository.getById("followed_streams")?.apply {
@@ -110,6 +113,70 @@ class FollowedStreamsViewModel @Inject constructor(
                     videoSort = normalizedSort,
                 )
                 sortChannelRepository.save(item)
+            }
+        }
+    }
+
+    fun toggleTagFilter(tag: String) {
+        val current = activeTags.value
+        val normalized = tag.trim()
+        val newSet = if (current.any { it.equals(normalized, ignoreCase = true) }) {
+            current.filterNot { it.equals(normalized, ignoreCase = true) }.toSet()
+        } else {
+            current + normalized
+        }
+        setTagFilters(newSet)
+    }
+
+    fun clearTagFilters() {
+        setTagFilters(emptySet())
+    }
+
+    fun setTagFilters(tags: Set<String>) {
+        activeTags.value = tags
+        updateFiltersText()
+        applyFilterAndSort()
+    }
+
+    private fun updateFiltersText() {
+        val tags = activeTags.value
+        filtersText.value = if (tags.isNotEmpty()) {
+            applicationContext.resources.getQuantityString(
+                com.xtrakick.app.R.plurals.tags,
+                tags.size,
+                tags.joinToString()
+            )
+        } else {
+            null
+        }
+    }
+
+    private fun applyFilterAndSort() {
+        val deduped = allLoadedStreams.filterByTags(activeTags.value).distinctByStreamer().sortedForFollowedLive()
+        _uiState.value = _uiState.value.copy(
+            items = deduped,
+            showEmpty = deduped.isEmpty() && _uiState.value.hasLoadedOnce,
+        )
+    }
+
+    private fun List<Stream>.filterByTags(tags: Set<String>): List<Stream> {
+        if (tags.isEmpty()) return this
+        return filter { stream ->
+            val streamTags = stream.tags?.map { it.trim().lowercase(Locale.ROOT) } ?: emptyList()
+            val title = stream.title?.trim()?.lowercase(Locale.ROOT)
+            val game = stream.gameName?.trim()?.lowercase(Locale.ROOT)
+            tags.all { req ->
+                val q = req.trim().lowercase(Locale.ROOT)
+                if (q.isEmpty()) return@all true
+                val qClean = q.replace(" ", "").replace("_", "").replace("-", "")
+                val matchTag = streamTags.any { t ->
+                    t == q || t.contains(q) || q.contains(t) ||
+                    (qClean.isNotEmpty() && t.replace(" ", "").replace("_", "").replace("-", "").contains(qClean))
+                }
+                if (matchTag) return@all true
+                if (title != null && (title.contains(q) || (qClean.isNotEmpty() && title.replace(" ", "").replace("_", "").replace("-", "").contains(qClean)))) return@all true
+                if (game != null && (game.contains(q) || (qClean.isNotEmpty() && game.replace(" ", "").replace("_", "").replace("-", "").contains(qClean)))) return@all true
+                false
             }
         }
     }
@@ -215,12 +282,13 @@ class FollowedStreamsViewModel @Inject constructor(
         hasLoadedOnce: Boolean,
     ) {
         if (refreshGeneration != generation) return
-        val deduped = items.distinctByStreamer()
+        allLoadedStreams = items
+        val deduped = items.filterByTags(activeTags.value).distinctByStreamer().sortedForFollowedLive()
         _uiState.value = _uiState.value.copy(
             items = deduped,
             isInitialLoading = isInitialLoading,
             isRefreshing = isRefreshing,
-            showEmpty = showEmpty,
+            showEmpty = deduped.isEmpty() && hasLoadedOnce,
             integrityAction = integrityAction,
             hasLoadedOnce = hasLoadedOnce,
         )

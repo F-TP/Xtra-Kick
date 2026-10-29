@@ -3,6 +3,7 @@ package com.xtrakick.app.ui.following
 import android.annotation.SuppressLint
 import android.app.Dialog
 import android.content.Context
+import android.content.DialogInterface
 import android.os.Bundle
 import android.util.Log
 import android.view.View
@@ -180,8 +181,25 @@ class KickFollowImportDialog : DialogFragment() {
         }
     }
 
+    override fun onCancel(dialog: DialogInterface) {
+        super.onCancel(dialog)
+        if (!importCompleted) {
+            importer.resetState()
+        }
+    }
+
+    override fun onDismiss(dialog: DialogInterface) {
+        super.onDismiss(dialog)
+        if (!importCompleted) {
+            importer.resetState()
+        }
+    }
+
     override fun onDestroy() {
         debugLogI("onDestroy: tearing down import dialog")
+        if (!importCompleted) {
+            importer.resetState()
+        }
         _binding?.webView?.apply {
             removeJavascriptInterface("KickFollowImportBridge")
             loadUrl("about:blank")

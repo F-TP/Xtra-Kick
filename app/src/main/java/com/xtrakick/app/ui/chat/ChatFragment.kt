@@ -162,6 +162,7 @@ class ChatFragment : BaseNetworkFragment(), MessageClickedDialog.OnButtonClickLi
         updateHeaderBadgeLayout()
     }
     private var messagingEnabled = false
+    var isLiveRewound = false
     private var pinnedMessageDialogSeed: ChatMessage? = null
     private var tappedMessageDialogSeed: ChatMessage? = null
     private var pinnedGiftUiState = PinnedGiftUiState()
@@ -2442,7 +2443,9 @@ class ChatFragment : BaseNetworkFragment(), MessageClickedDialog.OnButtonClickLi
                         imageClickListener = { url, name, format, isAnimated, source, thirdParty, emoteId ->
                             (requireContext().getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager).hideSoftInputFromWindow(editText.windowToken, 0)
                             editText.clearFocus()
-                            ImageClickedDialog.newInstance(url, name, format, isAnimated, source, thirdParty, emoteId).show(this@ChatFragment.childFragmentManager, "imageDialog")
+                            if (this@ChatFragment.childFragmentManager.findFragmentByTag("imageDialog") == null) {
+                                ImageClickedDialog.newInstance(url, name, format, isAnimated, source, thirdParty, emoteId).show(this@ChatFragment.childFragmentManager, "imageDialog")
+                            }
                         },
                     )
                     recyclerView.let {
@@ -3188,8 +3191,11 @@ class ChatFragment : BaseNetworkFragment(), MessageClickedDialog.OnButtonClickLi
         val channelId = args.getString(KEY_CHANNEL_ID)
         val channelLogin = args.getString(KEY_CHANNEL_LOGIN)
         refreshKickRewardState()
-        if (args.getBoolean(KEY_IS_LIVE)) {
+        if (args.getBoolean(KEY_IS_LIVE) && !isLiveRewound) {
             viewModel.resumeLive(channelId, channelLogin)
+        } else if (isLiveRewound) {
+            val currentPos = (parentFragment as? PlayerFragment)?.getCurrentPosition() ?: 0L
+            startLiveRewind(null, currentPos)
         } else {
             viewModel.resumeReplay(
                 channelId = channelId,
@@ -3220,7 +3226,7 @@ class ChatFragment : BaseNetworkFragment(), MessageClickedDialog.OnButtonClickLi
         val currentLoggedIn = isLoggedIn ?: AuthStateHelper.isKickLoggedIn(ctx)
         val args = arguments ?: return
         val isLive = args.getBoolean(KEY_IS_LIVE)
-        val enableMessaging = isLive && currentLoggedIn
+        val enableMessaging = isLive && !isLiveRewound && currentLoggedIn
         val isPlayerContext = parentFragment is PlayerFragment || parentFragment is MultiPovFragment || (view?.parent?.parent?.parent?.parent as? View)?.id == R.id.slidingLayout
         val accountLogin = ctx.tokenPrefs().getString(AppConstants.KICK_USER_LOGIN, null)
 
@@ -3254,7 +3260,7 @@ class ChatFragment : BaseNetworkFragment(), MessageClickedDialog.OnButtonClickLi
             } else {
                 messageView.visibility = View.GONE
                 val isChatBarVisible = !isPlayerContext || ctx.prefs().getBoolean(AppConstants.KEY_CHAT_BAR_VISIBLE, true)
-                guestLoginPromptView.visibility = if (isLive && !currentLoggedIn && isChatBarVisible) View.VISIBLE else View.GONE
+                guestLoginPromptView.visibility = if (isLive && !isLiveRewound && !currentLoggedIn && isChatBarVisible) View.VISIBLE else View.GONE
                 messagingEnabled = false
             }
         }
@@ -3281,6 +3287,49 @@ class ChatFragment : BaseNetworkFragment(), MessageClickedDialog.OnButtonClickLi
         viewModel.reloadEmotes(
             requireArguments().getString(KEY_CHANNEL_ID),
             requireArguments().getString(KEY_CHANNEL_LOGIN)
+        )
+    }
+
+    fun startLiveRewind(streamStartTime: String?, targetPositionMs: Long) {
+        if (!isAdded) return
+        isLiveRewound = true
+        updateMessagingState()
+        val effectiveStart = streamStartTime ?: requireArguments().getString(KEY_STARTED_AT)
+        if (!effectiveStart.isNullOrBlank()) {
+            requireArguments().putString(KEY_STARTED_AT, effectiveStart)
+        }
+        val channelId = requireArguments().getString(KEY_CHANNEL_ID)
+        val channelLogin = requireArguments().getString(KEY_CHANNEL_LOGIN) ?: return
+        val channelName = requireArguments().getString(KEY_CHANNEL_NAME)
+        val startTimeMs = effectiveStart?.let { KickApiHelper.parseIso8601DateUTC(it) } ?: 0L
+        val getCurrentPosition = (parentFragment as? PlayerFragment)?.let { it::getCurrentPosition } ?: { targetPositionMs }
+        val getCurrentSpeed = (parentFragment as? PlayerFragment)?.let { it::getCurrentSpeed } ?: { 1.0f }
+        viewModel.startLiveRewindChat(
+            channelId = channelId ?: "",
+            channelLogin = channelLogin,
+            channelName = channelName,
+            replayStartTimeMs = startTimeMs,
+            targetPositionMs = targetPositionMs,
+            getCurrentPosition = getCurrentPosition,
+            getCurrentSpeed = getCurrentSpeed
+        )
+    }
+
+    fun returnToLiveChat() {
+        if (!isAdded) return
+        isLiveRewound = false
+        updateMessagingState()
+        val channelId = requireArguments().getString(KEY_CHANNEL_ID)
+        val channelLogin = requireArguments().getString(KEY_CHANNEL_LOGIN) ?: return
+        val channelName = requireArguments().getString(KEY_CHANNEL_NAME)
+        val streamId = requireArguments().getString(KEY_STREAM_ID)
+        val networkLibrary = requireContext().prefs().getString(AppConstants.NETWORK_LIBRARY, "OkHttp")
+        viewModel.returnToLiveChat(
+            networkLibrary = networkLibrary,
+            channelId = channelId,
+            channelLogin = channelLogin,
+            channelName = channelName,
+            streamId = streamId
         )
     }
 
@@ -3767,6 +3816,7 @@ class ChatFragment : BaseNetworkFragment(), MessageClickedDialog.OnButtonClickLi
         private const val HEADER_BADGE_HORIZONTAL_MARGIN_DP = 8
         private const val HEADER_BADGE_MIN_WIDTH_DP = 96
         private const val KEY_IS_LIVE = "isLive"
+        private const val KEY_STARTED_AT = "startedAt"
         private const val KEY_CHANNEL_ID = "channel_id"
         private const val KEY_CHANNEL_LOGIN = "channel_login"
         private const val KEY_CHANNEL_NAME = "channel_name"

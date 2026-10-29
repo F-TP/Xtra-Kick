@@ -1,5 +1,6 @@
 package com.xtrakick.app.ui.common
 
+import android.annotation.SuppressLint
 import android.util.TypedValue
 import android.view.LayoutInflater
 import android.view.View
@@ -36,9 +37,21 @@ class GamesAdapter(
         override fun areItemsTheSame(oldItem: Game, newItem: Game): Boolean =
             oldItem.gameId == newItem.gameId
 
+        @SuppressLint("DiffUtilEquals")
         override fun areContentsTheSame(oldItem: Game, newItem: Game): Boolean =
-            oldItem.viewersCount == newItem.viewersCount
-    }) {
+            oldItem.viewersCount == newItem.viewersCount &&
+                    oldItem.tags == newItem.tags
+    }), ActiveTagsAdapter {
+
+    override var activeTags: Set<String> = emptySet()
+        set(value) {
+            if (field != value) {
+                field = value
+                if (itemCount > 0) {
+                    notifyItemRangeChanged(0, itemCount)
+                }
+            }
+        }
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): PagingViewHolder {
         val binding = FragmentGamesListItemBinding.inflate(LayoutInflater.from(parent.context), parent, false)
@@ -139,16 +152,13 @@ class GamesAdapter(
                             text.id = id
                             ids.add(id)
                             text.text = tag.name
-                            context.obtainStyledAttributes(intArrayOf(com.google.android.material.R.attr.textAppearanceBodyMedium)).use {
-                                TextViewCompat.setTextAppearance(text, it.getResourceId(0, 0))
-                            }
+                            val tagName = tag.name ?: tag.id.orEmpty()
+                            TagFilterHelper.applyTagStyle(text, tagName, activeTags)
                             if (tag.id != null) {
                                 text.setOnClickListener {
                                     selectTag(tag)
                                 }
                             }
-                            val padding = TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, 5f, context.resources.displayMetrics).toInt()
-                            text.setPadding(padding, 0, padding, 0)
                             tagsLayout.addView(text)
                         }
                         tagsFlowLayout.referencedIds = ids.toIntArray()

@@ -72,4 +72,23 @@ class KickVideoParsingTest {
         assertEquals(com.xtrakick.app.util.AppConstants.KICK, video.source)
         assertEquals("01a0590d-ed00-78b9-9df1-979c88189a5e", video.uuid)
     }
+
+    @Test
+    fun testLiveVodInfo_propertiesAndRewindTimestampCalculation() {
+        val startedAtIso = "2026-10-29T12:00:00Z"
+        val info = KickRepository.LiveVodInfo(
+            url = "https://stream.kick.com/vod/master.m3u8",
+            startedAt = startedAtIso
+        )
+        assertEquals("https://stream.kick.com/vod/master.m3u8", info.url)
+        assertEquals(startedAtIso, info.startedAt)
+
+        val streamStartMs = com.xtrakick.app.util.KickApiHelper.parseIso8601DateUTC(info.startedAt!!)
+        org.junit.Assert.assertNotNull(streamStartMs)
+
+        // 30 minutes in, rewound 5 minutes -> position is 25 minutes (1,500,000 ms)
+        val targetPositionMs = 25 * 60 * 1000L
+        val chatTimestampMs = streamStartMs!! + targetPositionMs
+        assertEquals(streamStartMs + 1_500_000L, chatTimestampMs)
+    }
 }

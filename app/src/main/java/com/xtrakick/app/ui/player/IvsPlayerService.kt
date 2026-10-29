@@ -64,6 +64,7 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
 import javax.inject.Inject
 import javax.net.ssl.X509TrustManager
 
@@ -623,7 +624,11 @@ class IvsPlayerService : Service() {
                         }, delayMs)
                     } else {
                         releasePlaybackLocks()
-                        if (!surfaceAttached) {
+                        // A bound fragment retries on its own and stays bound while
+                        // stopped behind another activity (e.g. in-app Settings):
+                        // surface detached, audio still foreground. Stopping here
+                        // would kill its recovery.
+                        if (!surfaceAttached && boundClients == 0) {
                             // Background playback failed for good — stop instead of
                             // leaving a dead ERROR-state notification up.
                             stopPlaybackForGood()
@@ -1013,7 +1018,10 @@ class IvsPlayerService : Service() {
         }
         attachedSurfaceRef = surface
         surfaceAttached = surface != null
-        runPlayerOp("attachSurface attached=$surfaceAttached") { it.setSurface(surface) }
+        runPlayerOp("attachSurface attached=$surfaceAttached") { player ->
+            val targetSurface = surface?.takeIf { it.isValid && attachedSurfaceRef == surface }
+            player.setSurface(targetSurface)
+        }
         playerDebugLog("attachSurface attached=$surfaceAttached")
         // The stream may already be dead (READY/IDLE/ENDED) from while the surface
         // was attached; no state change will fire after detach, so re-evaluate here.
@@ -1610,10 +1618,15 @@ class IvsPlayerService : Service() {
         // and release. Releasing straight from PLAYING/BUFFERING stalls the next load.
         val doomed = player
         player = null
-        playerExecutor.shutdownNow()
+        playerExecutor.shutdown()
         Thread({
             val target = doomed ?: return@Thread
             try {
+                try {
+                    playerExecutor.awaitTermination(SAFE_RELEASE_WAIT_MS, TimeUnit.MILLISECONDS)
+                } catch (_: InterruptedException) {
+                    playerExecutor.shutdownNow()
+                }
                 try {
                     val state = target.state
                     if (state == Player.State.PLAYING || state == Player.State.BUFFERING) {

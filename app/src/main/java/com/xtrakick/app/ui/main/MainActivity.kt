@@ -156,8 +156,9 @@ class MainActivity : AppCompatActivity() {
         override fun onReceive(context: Context?, intent: Intent?) {
             when (intent?.action) {
                 INTENT_START_AUDIO_ONLY -> {
+                    playerFragment?.clearPipDismissState()
                     playerFragment?.startAudioOnly()
-                    moveTaskToBack(false)
+                    moveTaskToBack(true)
                 }
                 INTENT_PLAY_PAUSE_PLAYER -> {
                     if (multiPovFragment != null) {

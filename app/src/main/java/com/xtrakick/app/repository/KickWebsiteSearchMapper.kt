@@ -7,6 +7,7 @@ import com.xtrakick.app.model.kick.KickSubcategory
 import com.xtrakick.app.model.kick.KickTypesenseDocument
 import com.xtrakick.app.model.ui.Game
 import com.xtrakick.app.model.ui.Stream
+import com.xtrakick.app.model.ui.Tag
 import com.xtrakick.app.model.ui.User
 import com.xtrakick.app.util.AppConstants
 import java.util.Locale
@@ -46,18 +47,25 @@ internal object KickWebsiteSearchMapper {
     }
 
     fun toGame(item: KickSubcategory): Game {
+        val gameTags = item.tags?.filter { it.isNotBlank() }?.map { Tag(id = it, name = it) }
         return Game(
             gameId = item.id?.toString(),
             gameSlug = item.slug,
             gameName = item.name,
             boxArtUrl = item.banner?.imageUrl,
-            viewersCount = item.viewers
+            viewersCount = item.viewers,
+            tags = gameTags
         )
     }
 
     fun toStream(item: KickLivestream): Stream {
         val category = item.categories?.firstOrNull()
         val channelLogin = item.channel?.slug ?: item.channel?.user?.username?.lowercase(Locale.ROOT)
+        val combinedTags = buildList {
+            item.language?.takeIf { it.isNotBlank() }?.let(::add)
+            if (item.isMature == true) add("18+")
+            item.tags?.filter { it.isNotBlank() }?.let(::addAll)
+        }.distinct().ifEmpty { null }
         return Stream(
             id = item.id?.toString(),
             source = AppConstants.KICK,
@@ -73,12 +81,17 @@ internal object KickWebsiteSearchMapper {
             startedAt = normalizeDate(item.createdAt),
             thumbnailUrl = item.thumbnail?.imageUrl,
             profileImageUrl = item.channel?.user?.profileImage,
-            tags = item.tags
+            tags = combinedTags
         )
     }
 
     fun toStream(channel: KickSearchChannel, livestream: KickChannelLivestream): Stream {
         val channelLogin = channel.slug ?: channel.user?.username?.lowercase(Locale.ROOT)
+        val combinedTags = buildList {
+            livestream.language?.takeIf { it.isNotBlank() }?.let(::add)
+            if (livestream.isMature == true) add("18+")
+            livestream.tags?.filter { it.isNotBlank() }?.let(::addAll)
+        }.distinct().ifEmpty { null }
         return Stream(
             id = livestream.id?.toString(),
             source = AppConstants.KICK,
@@ -93,7 +106,8 @@ internal object KickWebsiteSearchMapper {
             viewerCount = livestream.viewerCount,
             startedAt = normalizeDate(livestream.createdAt),
             thumbnailUrl = livestream.thumbnail?.imageUrl,
-            profileImageUrl = channel.user?.profileImage
+            profileImageUrl = channel.user?.profileImage,
+            tags = combinedTags
         )
     }
 

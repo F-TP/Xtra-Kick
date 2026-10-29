@@ -352,10 +352,20 @@ class ChannelPagerViewModel @Inject constructor(
                     } else {
                         AppConstants.FOLLOW_SOURCE_MASK_LOCAL
                     }
-                    val logo = _stream.value?.channelLogo
+                    val effectiveLogin = channelLogin ?: args.channelLogin
+                    val logo = _user.value?.profileImageUrl
+                        ?: _stream.value?.channelLogo
                         ?: _stream.value?.user?.profileImageUrl
-                        ?: _user.value?.profileImageUrl
-                    localFollowsChannel.saveFollow(LocalFollowChannel(followId, channelLogin ?: args.channelLogin, channelName, logo, mask))
+                        ?: args.channelLogo
+                        ?: effectiveLogin?.let { slug ->
+                            try {
+                                val resp = kickRepository.getChannel(slug)
+                                resp.user?.profilePic ?: resp.user?.profilePicV2
+                            } catch (_: Exception) {
+                                null
+                            }
+                        }
+                    localFollowsChannel.saveFollow(LocalFollowChannel(followId, effectiveLogin, channelName, logo, mask))
                     _isFollowing.value = true
                     follow.value = Pair(true, null)
                     followOnKickAccount(channelLogin ?: args.channelLogin, true, kickFollow)

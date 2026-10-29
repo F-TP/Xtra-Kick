@@ -855,9 +855,43 @@ class Media3Fragment : PlayerFragment() {
     }
 
     override fun isHoldToSpeedAvailable(): Boolean =
-        videoType == VIDEO || videoType == CLIP || videoType == OFFLINE_VIDEO
+        videoType == VIDEO || videoType == CLIP || videoType == OFFLINE_VIDEO || viewModel.isLiveRewound
+
+    override fun switchLiveToVod(vodUrl: String, targetPositionMs: Long, startedAtStr: String?) {
+        if (viewModel.isLiveRewound) {
+            seek(targetPositionMs)
+            return
+        }
+        if (activePlaybackUrl != null) {
+            viewModel.liveStreamUrl = activePlaybackUrl
+        }
+        viewModel.isLiveRewound = true
+        startVideo(vodUrl, targetPositionMs, true)
+        updateLiveRewindUi(isRewound = true)
+        val effectiveStart = startedAtStr ?: requireArguments().getString(KEY_STARTED_AT) ?: viewModel.stream.value?.startedAt
+        activeChatFragment()?.startLiveRewind(effectiveStart, targetPositionMs)
+    }
+
+    override fun returnLiveEdge() {
+        val liveUrl = viewModel.liveStreamUrl ?: requireArguments().getString(KEY_RESOLVED_STREAM_URL)
+        viewModel.isLiveRewound = false
+        if (!liveUrl.isNullOrBlank()) {
+            startStream(liveUrl)
+        } else {
+            reloadKickStreamWithFreshResolvedUrl(reason = "return-to-live")
+        }
+        updateLiveRewindUi(isRewound = false)
+        activeChatFragment()?.returnToLiveChat()
+    }
 
     override fun seekToLivePosition() {
+        if (viewModel.isLiveRewound) {
+            returnLiveEdge()
+            context?.let {
+                Toast.makeText(it, R.string.syncing_to_live, Toast.LENGTH_SHORT).show()
+            }
+            return
+        }
         player?.seekToDefaultPosition()
     }
 
@@ -874,7 +908,7 @@ class Media3Fragment : PlayerFragment() {
     override fun updateProgress() {
         with(binding.playerControls) {
             if (videoType == STREAM) {
-                val offset = player?.currentLiveOffset?.takeIf { it != androidx.media3.common.C.TIME_UNSET }
+                val offset = if (viewModel.isLiveRewound) null else player?.currentLiveOffset?.takeIf { it != androidx.media3.common.C.TIME_UNSET }
                 val isKickStream = requireArguments().getString(KEY_STREAM_SOURCE).equals(AppConstants.KICK, true)
                 val catchupEnabled = if (isKickStream) {
                     prefs.getBoolean(AppConstants.PLAYER_IVS_LATENCY_CATCHUP, true)
@@ -889,7 +923,7 @@ class Media3Fragment : PlayerFragment() {
                 position.text = DateUtils.formatElapsedTime(currentPosition / 1000)
                 progressBar.setPosition(currentPosition)
                 progressBar.setBufferedPosition(player?.bufferedPosition ?: 0)
-                if (videoType != STREAM) {
+                if (videoType != STREAM || viewModel.isLiveRewound) {
                     updateDurationDisplay()
                 }
             }
@@ -1184,6 +1218,7 @@ class Media3Fragment : PlayerFragment() {
     }
 
     override fun startAudioOnly() {
+        super.startAudioOnly()
         player?.let { player ->
             if (player.isConnected) {
                 savePosition()

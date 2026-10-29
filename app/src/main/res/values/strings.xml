@@ -167,6 +167,7 @@
     <string name="chat_modes_updated">Chat modes updated: %s</string>
     <string name="chat_modes_none">none</string>
     <string name="copy_clip">Copy to clipboard</string>
+    <string name="copy_emote_name">Copy name</string>
     <string name="chat_clear">Chat has been cleared by a moderator.</string>
     <string name="chat_timeout">%1$s has been timed out for %2$s.</string>
     <string name="chat_ban">%s has been permanently banned.</string>
@@ -531,6 +532,7 @@
     <string name="hide">Hide</string>
     <string name="redeemed">Redeemed %s</string>
     <string name="user_redeemed">%1$s redeemed %2$s</string>
+    <string name="has_redeemed">has redeemed</string>
     <string name="close">Close</string>
     <string name="pinned_message_restore">Restore pinned message</string>
     <string name="pinned_message_expand">Expand pinned message</string>
@@ -994,6 +996,10 @@ These are downloads you removed while keeping the files. Android hides this fold
     <string name="game_tabs">Game tabs</string>
     <string name="search_tabs">Search tabs</string>
     <string name="add_tag">Add tag</string>
+    <string name="add">Add</string>
+    <string name="enter_tag_hint">Tag name (e.g. Shooter, Drops)</string>
+    <string name="popular_tags">Suggested tags</string>
+    <string name="show_tags">Show tags on cards</string>
     <string name="save_filters">Save filters</string>
     <string name="delete_filter_message">Are you sure you want to delete this filter?</string>
     <string name="move_player_freely">Move minimized player freely</string>
@@ -1218,6 +1224,8 @@ These are downloads you removed while keeping the files. Android hides this fold
     <string name="language_english" translatable="false">English</string>
     <string name="language_spanish" translatable="false">Español</string>
     <string name="language_portuguese_brazil" translatable="false">Português (Brasil)</string>
+    <string name="language_german" translatable="false">Deutsch</string>
+    <string name="language_turkish" translatable="false">Türkçe</string>
     <string name="emote_section_recent">Recent</string>
     <string name="emote_section_collectibles">Collectibles</string>
     <string name="emote_section_global">Global</string>
@@ -1239,4 +1247,23 @@ These are downloads you removed while keeping the files. Android hides this fold
     <string name="link_copied_to_clipboard">Link copied to clipboard</string>
     <string name="share_clip">Share clip</string>
     <string name="watch_clip">Watch clip</string>
+    <string name="rewind_live_stream">Rewind live stream</string>
+    <string name="return_to_live_stream">Return to live stream</string>
+    <string name="rewind_last_30_seconds">Watch last 30 seconds</string>
+    <string name="rewind_last_minute">Watch last minute</string>
+    <string name="rewind_last_2_minutes">Watch last 2 minutes</string>
+    <string name="rewind_last_5_minutes">Watch last 5 minutes</string>
+    <string name="rewind_last_10_minutes">Watch last 10 minutes</string>
+    <string name="rewind_last_15_minutes">Watch last 15 minutes</string>
+    <string name="rewind_last_30_minutes">Watch last 30 minutes</string>
+    <string name="rewind_from_beginning">Watch from beginning</string>
+    <string name="rewind_rel_30_seconds">Rewind 30 seconds</string>
+    <string name="rewind_rel_minute">Rewind 1 minute</string>
+    <string name="rewind_rel_2_minutes">Rewind 2 minutes</string>
+    <string name="rewind_rel_5_minutes">Rewind 5 minutes</string>
+    <string name="rewind_rel_10_minutes">Rewind 10 minutes</string>
+    <string name="rewind_rel_15_minutes">Rewind 15 minutes</string>
+    <string name="rewind_rel_30_minutes">Rewind 30 minutes</string>
+    <string name="recording">Recording</string>
+    <string name="rewind_unavailable">Rewind is not available for this stream</string>
 </resources>

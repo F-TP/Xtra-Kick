@@ -104,6 +104,13 @@
         app:singleLineTitle="false" />
 
     <SwitchPreferenceCompat
+        android:defaultValue="false"
+        android:icon="@drawable/baseline_history_black_24"
+        android:key="player_rewind_live"
+        android:title="@string/rewind_live_stream"
+        app:singleLineTitle="false" />
+
+    <SwitchPreferenceCompat
         android:defaultValue="true"
         android:icon="@drawable/exo_ic_speed"
         android:key="player_speedbutton"

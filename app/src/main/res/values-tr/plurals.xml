@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <plurals name="daily_reward_streak">
+        <item quantity="one">%d günlük seri</item>
+        <item quantity="other">%d günlük seri</item>
+    </plurals>
+    <plurals name="views">
+        <item quantity="one">%s görüntüleme</item>
+        <item quantity="other">%s görüntüleme</item>
+    </plurals>
+    <plurals name="viewers">
+        <item quantity="one">%s izleyici</item>
+        <item quantity="other">%s izleyici</item>
+    </plurals>
+    <plurals name="hours">
+        <item quantity="one">%d saat</item>
+        <item quantity="other">%d saat</item>
+    </plurals>
+    <plurals name="minutes">
+        <item quantity="one">%d dakika</item>
+        <item quantity="other">%d dakika</item>
+    </plurals>
+    <plurals name="broadcasters">
+        <item quantity="one">%s yayıncı</item>
+        <item quantity="other">%s yayıncı</item>
+    </plurals>
+    <plurals name="languages">
+        <item quantity="one">Dil: %s</item>
+        <item quantity="other">Diller: %s</item>
+    </plurals>
+    <plurals name="tags">
+        <item quantity="one">Etiket: %s</item>
+        <item quantity="other">Etiketler: %s</item>
+    </plurals>
+    <plurals name="followers">
+        <item quantity="one">%s takipçi</item>
+        <item quantity="other">%s takipçi</item>
+    </plurals>
+    <plurals name="kick_reward_count">
+        <item quantity="one">%d ödül</item>
+        <item quantity="other">%d ödül</item>
+    </plurals>
+</resources>

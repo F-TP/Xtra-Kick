@@ -163,6 +163,7 @@
     <string name="chat_modes_updated">Modos do chat atualizados: %s</string>
     <string name="chat_modes_none">nenhum</string>
     <string name="copy_clip">Copiar para a área de transferência</string>
+    <string name="copy_emote_name">Copiar nome</string>
     <string name="chat_clear">Um moderador limpou o chat.</string>
     <string name="chat_timeout">%1$s foi temporariamente silenciado por %2$s.</string>
     <string name="chat_ban">%s foi banido permanentemente.</string>
@@ -526,6 +527,7 @@
     <string name="hide">Ocultar</string>
     <string name="redeemed">Resgatado %s</string>
     <string name="user_redeemed">%1$s resgatou %2$s</string>
+    <string name="has_redeemed">resgatou</string>
     <string name="close">Fechar</string>
     <string name="pinned_message_restore">Restaurar mensagem fixada</string>
     <string name="pinned_message_expand">Expandir mensagem fixada</string>
@@ -983,6 +985,10 @@ São downloads que você removeu mantendo os arquivos. O Android oculta esta pas
     <string name="game_tabs">Abas de jogos</string>
     <string name="search_tabs">Abas de pesquisa</string>
     <string name="add_tag">Adicionar tag</string>
+    <string name="add">Adicionar</string>
+    <string name="enter_tag_hint">Nome da tag (ex.: Shooter, Drops)</string>
+    <string name="popular_tags">Tags sugeridas</string>
+    <string name="show_tags">Mostrar tags nos cartões</string>
     <string name="save_filters">Salvar filtros</string>
     <string name="delete_filter_message">Tem certeza de que deseja excluir este filtro?</string>
     <string name="move_player_freely">Mover livremente o player minimizado</string>
@@ -1223,4 +1229,23 @@ São downloads que você removeu mantendo os arquivos. O Android oculta esta pas
     <string name="link_copied_to_clipboard">Link copiado para a área de transferência</string>
     <string name="share_clip">Compartilhar clipe</string>
     <string name="watch_clip">Assistir ao clipe</string>
+    <string name="rewind_live_stream">Retroceder transmissão ao vivo</string>
+    <string name="return_to_live_stream">Voltar ao vivo</string>
+    <string name="rewind_last_30_seconds">Assistir aos últimos 30 segundos</string>
+    <string name="rewind_last_minute">Assistir ao último minuto</string>
+    <string name="rewind_last_2_minutes">Assistir aos últimos 2 minutos</string>
+    <string name="rewind_last_5_minutes">Assistir aos últimos 5 minutos</string>
+    <string name="rewind_last_10_minutes">Assistir aos últimos 10 minutos</string>
+    <string name="rewind_last_15_minutes">Assistir aos últimos 15 minutos</string>
+    <string name="rewind_last_30_minutes">Assistir aos últimos 30 minutos</string>
+    <string name="rewind_from_beginning">Assistir do início</string>
+    <string name="rewind_rel_30_seconds">Retroceder 30 segundos</string>
+    <string name="rewind_rel_minute">Retroceder 1 minuto</string>
+    <string name="rewind_rel_2_minutes">Retroceder 2 minutos</string>
+    <string name="rewind_rel_5_minutes">Retroceder 5 minutos</string>
+    <string name="rewind_rel_10_minutes">Retroceder 10 minutos</string>
+    <string name="rewind_rel_15_minutes">Retroceder 15 minutos</string>
+    <string name="rewind_rel_30_minutes">Retroceder 30 minutos</string>
+    <string name="recording">Gravação</string>
+    <string name="rewind_unavailable">O retrocesso não está disponível para esta transmissão</string>
 </resources>

@@ -112,6 +112,10 @@ class KickFollowImporter @Inject constructor(
     private val _importState = kotlinx.coroutines.flow.MutableStateFlow<KickFollowImportState>(KickFollowImportState.Idle)
     val importState: kotlinx.coroutines.flow.StateFlow<KickFollowImportState> = _importState
 
+    fun resetState() {
+        _importState.value = KickFollowImportState.Idle
+    }
+
     companion object {
         private const val LOG_TAG = "KickFollowImport"
     }
@@ -139,6 +143,7 @@ class KickFollowImporter @Inject constructor(
             _importState.value = KickFollowImportState.Success(count)
             count
         } catch (error: CancellationException) {
+            _importState.value = KickFollowImportState.Idle
             throw error
         } catch (error: Exception) {
             _importState.value = KickFollowImportState.Error(error.message)
@@ -165,6 +170,7 @@ class KickFollowImporter @Inject constructor(
                     ).show()
                 }
             } catch (error: CancellationException) {
+                _importState.value = KickFollowImportState.Idle
                 throw error
             } catch (error: Exception) {
                 if (isManualImportNeeded(error)) {

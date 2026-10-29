@@ -9,6 +9,7 @@ import androidx.lifecycle.viewModelScope
 import com.xtrakick.app.model.ui.Game
 import com.xtrakick.app.model.ui.LocalFollowGame
 import com.xtrakick.app.repository.KickPublicApiRepository
+import com.xtrakick.app.repository.KickRepository
 import com.xtrakick.app.repository.LocalFollowGameRepository
 import com.xtrakick.app.util.AppConstants
 import com.xtrakick.app.util.HttpEngineUtils
@@ -33,6 +34,7 @@ import kotlin.coroutines.suspendCoroutine
 
 @HiltViewModel
 class GamePagerViewModel @Inject constructor(
+    private val kickRepository: KickRepository,
     private val kickPublicApiRepository: KickPublicApiRepository,
     private val localFollowsGame: LocalFollowGameRepository,
     private val httpEngine: Lazy<HttpEngine>?,
@@ -55,12 +57,36 @@ class GamePagerViewModel @Inject constructor(
             if (!args.gameSlug.isNullOrBlank() || !args.gameName.isNullOrBlank() || !args.boxArt.isNullOrBlank()) {
                 _game.value = Game(
                     gameId = args.gameId,
+                    gameSlug = args.gameSlug,
                     gameName = args.gameName,
                     boxArtUrl = args.boxArt
                 )
-                return
             }
-            viewModelScope.launch {
+        }
+        viewModelScope.launch {
+            val slug = args.gameSlug?.takeIf { it.isNotBlank() }
+                ?: kickRepository.resolveCategorySlug(args.gameId, args.gameName)
+                ?: KickApiHelper.toCategorySlug(args.gameName)
+            if (!slug.isNullOrBlank()) {
+                val subcategory = try {
+                    kickRepository.getSubcategory(slug)
+                } catch (_: Exception) {
+                    null
+                }
+                if (subcategory != null) {
+                    val fetchedGame = kickRepository.toGame(subcategory)
+                    _game.value = Game(
+                        gameId = fetchedGame.gameId ?: args.gameId ?: _game.value?.gameId,
+                        gameSlug = fetchedGame.gameSlug ?: slug,
+                        gameName = fetchedGame.gameName ?: args.gameName ?: _game.value?.gameName,
+                        boxArtUrl = fetchedGame.boxArtUrl ?: args.boxArt ?: _game.value?.boxArtUrl,
+                        viewersCount = fetchedGame.viewersCount,
+                        broadcastersCount = fetchedGame.broadcastersCount
+                    )
+                    return@launch
+                }
+            }
+            if (_game.value == null) {
                 val queryId = args.gameId.takeIf { args.gameSlug.isNullOrBlank() }
                 _game.value = try {
                     kickPublicApiRepository.getGames(

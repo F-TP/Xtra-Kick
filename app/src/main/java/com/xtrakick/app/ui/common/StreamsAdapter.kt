@@ -1,5 +1,6 @@
 package com.xtrakick.app.ui.common
 
+import android.annotation.SuppressLint
 import android.util.TypedValue
 import android.view.LayoutInflater
 import android.view.View
@@ -42,6 +43,7 @@ class StreamsAdapter(
             (oldItem.channelId ?: oldItem.channelLogin ?: oldItem.id) ==
                 (newItem.channelId ?: newItem.channelLogin ?: newItem.id)
 
+        @SuppressLint("DiffUtilEquals")
         override fun areContentsTheSame(oldItem: Stream, newItem: Stream): Boolean =
             oldItem.channelName == newItem.channelName &&
                     oldItem.viewerCount == newItem.viewerCount &&
@@ -49,8 +51,19 @@ class StreamsAdapter(
                     oldItem.title == newItem.title &&
                     oldItem.thumbnailUrl == newItem.thumbnailUrl &&
                     oldItem.profileImageUrl == newItem.profileImageUrl &&
-                    oldItem.startedAt == newItem.startedAt
-    }) {
+                    oldItem.startedAt == newItem.startedAt &&
+                    oldItem.tags == newItem.tags
+    }) , ActiveTagsAdapter {
+
+    override var activeTags: Set<String> = emptySet()
+        set(value) {
+            if (field != value) {
+                field = value
+                if (itemCount > 0) {
+                    notifyItemRangeChanged(0, itemCount)
+                }
+            }
+        }
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): PagingViewHolder {
         val binding = FragmentStreamsListItemBinding.inflate(LayoutInflater.from(parent.context), parent, false)
@@ -207,14 +220,10 @@ class StreamsAdapter(
                             text.id = id
                             ids.add(id)
                             text.text = tag
-                            context.obtainStyledAttributes(intArrayOf(com.google.android.material.R.attr.textAppearanceBodyMedium)).use {
-                                TextViewCompat.setTextAppearance(text, it.getResourceId(0, 0))
-                            }
+                            TagFilterHelper.applyTagStyle(text, tag, activeTags)
                             text.setOnClickListener {
                                 selectTag(tag)
                             }
-                            val padding = TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, 5f, context.resources.displayMetrics).toInt()
-                            text.setPadding(padding, 0, padding, 0)
                             tagsLayout.addView(text)
                         }
                         tagsFlowLayout.referencedIds = ids.toIntArray()

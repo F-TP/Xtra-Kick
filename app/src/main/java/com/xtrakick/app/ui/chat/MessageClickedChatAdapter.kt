@@ -403,23 +403,20 @@ class MessageClickedChatAdapter(
             val resolvedBackgroundColor = resolveMessageBackgroundColor(textView.context, currentPosition, backgroundRes)
             val dividerColors = resolveDividerColor(currentPosition, resolvedBackgroundColor)
             textView.apply {
+                movementMethod = if (chatMessage.isReply) null else LinkMovementMethod.getInstance()
+                maxLines = if (chatMessage.isReply) 2 else Int.MAX_VALUE
+                ellipsize = if (chatMessage.isReply) TextUtils.TruncateAt.END else null
                 text = formattedMessage
                 textSize = messageTextSize
                 alpha = if (chatMessage.isDeleted) 0.62f else 1f
                 setBackgroundColor(resolvedBackgroundColor)
                 setLineSpacing(0f, 1.12f)
                 if (chatMessage.isReply) {
-                    movementMethod = null
-                    maxLines = 2
-                    ellipsize = TextUtils.TruncateAt.END
                     TooltipCompat.setTooltipText(this, chatMessage.replyParent?.message ?: chatMessage.replyParent?.systemMsg)
                     setOnClickListener {
                         chatMessage.replyParent?.takeIf(ChatAdapterUtils::hasUserIdentity)?.let { replyClick(it) }
                     }
                 } else {
-                    movementMethod = LinkMovementMethod.getInstance()
-                    maxLines = Int.MAX_VALUE
-                    ellipsize = null
                     TooltipCompat.setTooltipText(this, chatMessage.message ?: chatMessage.systemMsg)
                     setOnClickListener {
                         if (selectionStart == -1 && selectionEnd == -1 && chatMessage != selectedMessage && ChatAdapterUtils.hasUserIdentity(chatMessage)) {

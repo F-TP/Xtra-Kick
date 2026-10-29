@@ -9,6 +9,7 @@ import android.os.Build
 import android.os.Bundle
 import android.os.IBinder
 import android.os.SystemClock
+import android.text.format.DateUtils
 import android.util.Log
 import android.view.SurfaceHolder
 import android.view.View
@@ -64,6 +65,7 @@ class IvsPlayerFragment : PlayerFragment() {
     private var downscaleRecoveryTicks = 0
     private var lastQualityNudgeTimeMs = 0L
     private var qualityAppliedForCurrentStream = false
+    private var pendingSeekPosition: Long? = null
 
     private fun isQualityLockEnabled(): Boolean {
         return prefs.getBoolean(AppConstants.PLAYER_LOCK_QUALITY, false)
@@ -112,6 +114,11 @@ class IvsPlayerFragment : PlayerFragment() {
 
     override fun onResume() {
         super.onResume()
+        if (viewModel.restoreQuality) {
+            viewModel.restoreQuality = false
+            val targetQuality = viewModel.previousQuality ?: viewModel.qualities.keys.firstOrNull { it != AUDIO_ONLY_QUALITY }
+            changeQuality(targetQuality)
+        }
         if (player != null && viewModel.quality != null && viewModel.quality != AUTO_QUALITY && !backgroundSaverApplied) {
             val lockQuality = isQualityLockEnabled()
             if (lockQuality && player?.isAutoQualityMode == true) {
@@ -192,11 +199,30 @@ class IvsPlayerFragment : PlayerFragment() {
 
                     override fun onDurationChanged(duration: Long) {
                         binding.playerControls.progressBar.setDuration(duration.coerceAtLeast(0L))
+                        if (duration > 0L) {
+                            binding.playerControls.duration.text = DateUtils.formatElapsedTime(duration / 1000)
+                            pendingSeekPosition?.let { pos ->
+                                pendingSeekPosition = null
+                                seek(pos.coerceIn(0L, duration))
+                            }
+                        }
                         updateProgress()
                     }
 
                     override fun onStateChanged(state: Player.State) {
                         binding.bufferingIndicator.isVisible = state == Player.State.BUFFERING
+                        if (state == Player.State.READY || state == Player.State.PLAYING) {
+                            pendingSeekPosition?.let { pos ->
+                                val dur = player?.duration ?: 0L
+                                if (dur > 0L) {
+                                    pendingSeekPosition = null
+                                    seek(pos.coerceIn(0L, dur))
+                                } else if (state == Player.State.PLAYING) {
+                                    pendingSeekPosition = null
+                                    seek(pos)
+                                }
+                            }
+                        }
                         if (state != Player.State.PLAYING) {
                             resetCatchupState()
                         }
@@ -550,9 +576,50 @@ class IvsPlayerFragment : PlayerFragment() {
 
     override fun seek(position: Long) {
         runIvsOp("fragment-seek") { it.seekTo(position) }
+        activeChatFragment()?.seekTo(position)
+    }
+
+    override fun getDuration(): Long? = player?.duration?.takeIf { it > 0L }
+
+    override fun switchLiveToVod(vodUrl: String, targetPositionMs: Long, startedAtStr: String?) {
+        if (viewModel.isLiveRewound) {
+            seek(targetPositionMs)
+            return
+        }
+        if (currentUrl != null) {
+            viewModel.liveStreamUrl = currentUrl
+        }
+        viewModel.isLiveRewound = true
+        player?.setRebufferToLive(false)
+        pendingSeekPosition = targetPositionMs
+        startStream(vodUrl)
+        updateLiveRewindUi(isRewound = true)
+        val effectiveStart = startedAtStr ?: requireArguments().getString(KEY_STARTED_AT) ?: viewModel.stream.value?.startedAt
+        activeChatFragment()?.startLiveRewind(effectiveStart, targetPositionMs)
+    }
+
+    override fun returnLiveEdge() {
+        val liveUrl = viewModel.liveStreamUrl ?: requireArguments().getString(KEY_RESOLVED_STREAM_URL)
+        viewModel.isLiveRewound = false
+        pendingSeekPosition = null
+        player?.setRebufferToLive(true)
+        if (!liveUrl.isNullOrBlank()) {
+            startStream(liveUrl)
+        } else {
+            reloadKickStreamWithFreshResolvedUrl(reason = "return-to-live")
+        }
+        updateLiveRewindUi(isRewound = false)
+        activeChatFragment()?.returnToLiveChat()
     }
 
     override fun seekToLivePosition() {
+        if (viewModel.isLiveRewound) {
+            returnLiveEdge()
+            context?.let {
+                Toast.makeText(it, R.string.syncing_to_live, Toast.LENGTH_SHORT).show()
+            }
+            return
+        }
         val ivsPlayer = player ?: return
         // A fresh load starts a couple segments back, so reloading near-live lands
         // FURTHER from the edge (e.g. 1.7s -> 2.4s). Skip unless genuinely behind.
@@ -591,7 +658,7 @@ class IvsPlayerFragment : PlayerFragment() {
 
     override fun updateProgress() {
         with(binding.playerControls) {
-            val latency = player?.liveLatency?.takeIf { it > 0L }
+            val latency = if (viewModel.isLiveRewound) null else player?.liveLatency?.takeIf { it > 0L }
             val catchupEnabled = prefs.getBoolean(AppConstants.PLAYER_IVS_LATENCY_CATCHUP, true)
             val latencyConfig = LiveLatencySettings.resolve(prefs)
             val targetOffsetMs = latencyConfig.targetOffsetMs
@@ -695,12 +762,21 @@ class IvsPlayerFragment : PlayerFragment() {
                 resetCatchupState()
             }
 
+            val currentPosition = ivsPlayer?.position ?: 0L
+            if (viewModel.isLiveRewound && currentPosition > 0L) {
+                activeChatFragment()?.updatePosition(currentPosition)
+            }
+
             if (root.isVisible && !progressBar.isPressed) {
-                val currentPosition = ivsPlayer?.position ?: 0L
+                val dur = ivsPlayer?.duration ?: 0L
                 progressBar.setPosition(currentPosition)
                 progressBar.setBufferedPosition(ivsPlayer?.bufferedPosition ?: 0L)
+                if (dur > 0L) {
+                    progressBar.setDuration(dur)
+                    duration.text = DateUtils.formatElapsedTime(dur / 1000)
+                }
                 position.text = if (currentPosition > 0L) {
-                    android.text.format.DateUtils.formatElapsedTime(currentPosition / 1000)
+                    DateUtils.formatElapsedTime(currentPosition / 1000)
                 } else {
                     null
                 }
@@ -789,6 +865,7 @@ class IvsPlayerFragment : PlayerFragment() {
     override fun changeQuality(selectedQuality: String?) {
         if (selectedQuality == AUDIO_ONLY_QUALITY) {
             startAudioOnly()
+            viewModel.restoreQuality = false
             return
         }
         val wasAudioOnly = viewModel.quality == AUDIO_ONLY_QUALITY
@@ -903,6 +980,7 @@ class IvsPlayerFragment : PlayerFragment() {
     }
 
     override fun startAudioOnly() {
+        super.startAudioOnly()
         if (viewModel.quality != AUDIO_ONLY_QUALITY) {
             backgroundAudioTransitionRequested = true
             viewModel.restoreQuality = true

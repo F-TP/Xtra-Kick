@@ -1,11 +1,16 @@
 package com.xtrakick.app.ui.chat
 
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.graphics.drawable.Animatable
 import android.graphics.drawable.Drawable
 import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import android.widget.Toast
+import androidx.core.content.ContextCompat
+import androidx.core.view.isVisible
 import com.xtrakick.app.util.bundleOf
 import coil3.asDrawable
 import coil3.imageLoader
@@ -40,9 +45,11 @@ class ImageClickedDialog : BottomSheetDialogFragment() {
         private const val EMOTE_ID = "emote_id"
 
         fun newInstance(url: String?, name: String?, format: String?, isAnimated: Boolean?, source: Int?, thirdParty: Boolean?, emoteId: String?): ImageClickedDialog {
+            val resolvedUrl = url?.takeIf { it.isNotBlank() }
+                ?: emoteId?.takeIf { it.isNotBlank() }?.let { "https://files.kick.com/emotes/$it/fullsize" }
             return ImageClickedDialog().apply {
                 arguments = bundleOf(
-                    IMAGE_URL to url,
+                    IMAGE_URL to resolvedUrl,
                     IMAGE_NAME to name,
                     IMAGE_FORMAT to format,
                     IMAGE_ANIMATED to isAnimated,
@@ -109,19 +116,41 @@ class ImageClickedDialog : BottomSheetDialogFragment() {
                         override fun onLoadCleared(placeholder: Drawable?) {}
                     })
             }
-            args.getString(IMAGE_NAME)?.let {
-                imageName.visibility = View.VISIBLE
-                imageName.text = it
+            val emoteName = args.getString(IMAGE_NAME)?.takeIf { it.isNotBlank() }
+            val emoteUrl = args.getString(IMAGE_URL)?.takeIf { it.isNotBlank() }
+
+            imageName.isVisible = emoteName != null
+            btnCopyName.isVisible = emoteName != null
+            if (emoteName != null) {
+                imageName.text = emoteName
+                val copyName = { copyToClipboard("emote_name", emoteName, getString(R.string.copied_username, emoteName)) }
+                btnCopyName.setOnClickListener { copyName() }
+                imageName.setOnClickListener { copyName() }
             }
-            args.getInt(IMAGE_SOURCE, -1).takeIf { it != -1 }?.let {
-                imageSource.visibility = View.VISIBLE
-                imageSource.text = when (it) {
-                    Emote.PERSONAL_STV -> getString(R.string.personal_stv_emote)
-                    Emote.CHANNEL_STV -> getString(R.string.channel_stv_emote)
-                    Emote.GLOBAL_STV -> getString(R.string.global_stv_emote)
-                    else -> null
+
+            btnCopyLink.isVisible = emoteUrl != null
+            if (emoteUrl != null) {
+                btnCopyLink.setOnClickListener {
+                    copyToClipboard("emote_url", emoteUrl, getString(R.string.link_copied_to_clipboard))
                 }
-            }        }
+            }
+
+            val sourceText = when (args.getInt(IMAGE_SOURCE, -1)) {
+                Emote.PERSONAL_STV -> getString(R.string.personal_stv_emote)
+                Emote.CHANNEL_STV -> getString(R.string.channel_stv_emote)
+                Emote.GLOBAL_STV -> getString(R.string.global_stv_emote)
+                else -> null
+            }
+            imageSource.isVisible = sourceText != null
+            imageSource.text = sourceText
+        }
+    }
+
+    private fun copyToClipboard(label: String, text: String, message: String) {
+        val clipboard = ContextCompat.getSystemService(requireContext(), ClipboardManager::class.java)
+        clipboard?.setPrimaryClip(ClipData.newPlainText(label, text))
+        Toast.makeText(requireContext(), message, Toast.LENGTH_SHORT).show()
+        dismissAllowingStateLoss()
     }
 
     override fun onDestroyView() {

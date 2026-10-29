@@ -108,6 +108,25 @@ class PlayerViewModel @Inject constructor(
     fun hasKickClipCapability(): Boolean = kickRepository.hasKickClipCapability()
 
     var currentVideoVodId: String? = null
+    var cachedLiveVodInfo: KickRepository.LiveVodInfo? = null
+    var cachedLiveVodUrl: String? = null
+    var liveStreamUrl: String? = null
+    var isLiveRewound: Boolean = false
+
+    suspend fun getLiveVodInfo(channelSlug: String, livestreamId: String? = null): KickRepository.LiveVodInfo? = withContext(Dispatchers.IO) {
+        cachedLiveVodInfo?.takeIf { it.url.isNotBlank() }?.let { return@withContext it }
+        val info = kickRepository.getLiveVodInfo(channelSlug, livestreamId)
+        info?.takeIf { it.url.isNotBlank() }?.also {
+            cachedLiveVodInfo = it
+            cachedLiveVodUrl = it.url
+        }
+    }
+
+    suspend fun getLiveVodUrl(channelSlug: String, livestreamId: String? = null): String? = withContext(Dispatchers.IO) {
+        cachedLiveVodUrl?.takeIf { it.isNotBlank() }?.let { return@withContext it }
+        val info = getLiveVodInfo(channelSlug, livestreamId)
+        info?.url
+    }
 
     suspend fun getLivestreamVodId(channelLogin: String): String? =
         kickRepository.getLivestreamVodId(channelLogin)
@@ -651,7 +670,7 @@ class PlayerViewModel @Inject constructor(
         }
     }
 
-    fun saveFollowChannel(userId: String?, channelId: String?, channelLogin: String?, channelName: String?, setting: Int, notificationsEnabled: Boolean, startedAt: String?, networkLibrary: String?, kickWebHeaders: Map<String, String>, enableIntegrity: Boolean, kickFollow: Boolean = true) {
+    fun saveFollowChannel(userId: String?, channelId: String?, channelLogin: String?, channelName: String?, setting: Int, notificationsEnabled: Boolean, startedAt: String?, networkLibrary: String?, kickWebHeaders: Map<String, String>, enableIntegrity: Boolean, kickFollow: Boolean = true, channelLogo: String? = null) {
         viewModelScope.launch {
             try {
                 val candidateKeys = listOfNotNull(channelId, channelLogin, userId).map { it.trim() }.filter { it.isNotBlank() }
@@ -662,7 +681,17 @@ class PlayerViewModel @Inject constructor(
                     } else {
                         AppConstants.FOLLOW_SOURCE_MASK_LOCAL
                     }
-                    val logo = stream.value?.channelLogo ?: stream.value?.user?.profileImageUrl
+                    val logo = stream.value?.channelLogo
+                        ?: stream.value?.user?.profileImageUrl
+                        ?: channelLogo
+                        ?: channelLogin?.let { slug ->
+                            try {
+                                val resp = kickRepository.getChannel(slug)
+                                resp.user?.profilePic ?: resp.user?.profilePicV2
+                            } catch (_: Exception) {
+                                null
+                            }
+                        }
                     localFollowsChannel.saveFollow(LocalFollowChannel(followId, channelLogin, channelName, logo, mask))
                     _isFollowing.value = true
                     follow.value = Pair(true, null)

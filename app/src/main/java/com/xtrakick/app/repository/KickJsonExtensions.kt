@@ -45,6 +45,8 @@ internal fun JsonObject.firstBooleanOrNull(vararg keys: String): Boolean? {
     return null
 }
 
+internal fun JsonObject.booleanOrNull(key: String): Boolean? = firstBooleanOrNull(key)
+
 internal fun JsonObject.objOrNull(key: String): JsonObject? {
     return this[key] as? JsonObject
 }

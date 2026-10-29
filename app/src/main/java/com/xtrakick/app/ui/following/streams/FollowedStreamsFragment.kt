@@ -24,6 +24,7 @@ import com.xtrakick.app.R
 import com.xtrakick.app.databinding.CommonRecyclerViewLayoutBinding
 import com.xtrakick.app.databinding.SortBarBinding
 import com.xtrakick.app.model.ui.Stream
+import com.xtrakick.app.ui.common.ActiveTagsAdapter
 import com.xtrakick.app.ui.common.BaseNetworkFragment
 import com.xtrakick.app.ui.common.IntegrityDialog
 import com.xtrakick.app.ui.common.Scrollable
@@ -58,20 +59,14 @@ class FollowedStreamsFragment : BaseNetworkFragment(), Scrollable, Sortable, Int
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
         listAdapter = if (requireContext().prefs().getString(AppConstants.COMPACT_STREAMS, "disabled") != "disabled") {
-            StreamsCompactListAdapter(this, {
-                findNavController().navigate(
-                    TopStreamsFragmentDirections.actionGlobalTopFragment(
-                        tags = arrayOf(it)
-                    )
-                )
+            StreamsCompactListAdapter(this, { tag ->
+                scrollToTopAfterSort = true
+                viewModel.toggleTagFilter(tag)
             })
         } else {
-            StreamsListAdapter(this, {
-                findNavController().navigate(
-                    TopStreamsFragmentDirections.actionGlobalTopFragment(
-                        tags = arrayOf(it)
-                    )
-                )
+            StreamsListAdapter(this, { tag ->
+                scrollToTopAfterSort = true
+                viewModel.toggleTagFilter(tag)
             })
         }
         binding.recyclerView.adapter = listAdapter
@@ -145,6 +140,13 @@ class FollowedStreamsFragment : BaseNetworkFragment(), Scrollable, Sortable, Int
             }
         }
         viewLifecycleOwner.lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
+                viewModel.activeTags.collectLatest { tags ->
+                    (listAdapter as? ActiveTagsAdapter)?.activeTags = tags
+                }
+            }
+        }
+        viewLifecycleOwner.lifecycleScope.launch {
             repeatOnLifecycle(Lifecycle.State.RESUMED) {
                 while (true) {
                     val rawInterval = requireContext().prefs()
@@ -173,8 +175,10 @@ class FollowedStreamsFragment : BaseNetworkFragment(), Scrollable, Sortable, Int
     override fun setupSortBar(sortBar: SortBarBinding) {
         sortBar.root.visibility = View.VISIBLE
         sortBar.root.setOnClickListener {
-            FollowedStreamsSortDialog.newInstance(viewModel.sort.value)
-                .show(childFragmentManager, null)
+            FollowedStreamsSortDialog.newInstance(
+                viewModel.sort.value,
+                viewModel.activeTags.value.toTypedArray(),
+            ).show(childFragmentManager, null)
         }
         viewLifecycleOwner.lifecycleScope.launch {
             repeatOnLifecycle(Lifecycle.State.STARTED) {
@@ -183,12 +187,27 @@ class FollowedStreamsFragment : BaseNetworkFragment(), Scrollable, Sortable, Int
                 }
             }
         }
+        viewLifecycleOwner.lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
+                viewModel.filtersText.collectLatest { filter ->
+                    sortBar.filtersText.text = filter
+                    sortBar.filtersText.isVisible = !filter.isNullOrBlank()
+                }
+            }
+        }
     }
 
-    override fun onChange(sort: String, sortText: CharSequence, changed: Boolean, saveDefault: Boolean) {
+    override fun onChange(
+        sort: String,
+        sortText: CharSequence,
+        changed: Boolean,
+        saveDefault: Boolean,
+        tags: Array<String>,
+    ) {
         if (changed) {
             scrollToTopAfterSort = true
         }
+        viewModel.setTagFilters(tags.toSet())
         if (changed || saveDefault) {
             viewModel.setSort(sort, persist = saveDefault)
         }

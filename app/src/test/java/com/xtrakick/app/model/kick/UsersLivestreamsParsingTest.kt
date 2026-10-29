@@ -50,7 +50,7 @@ class UsersLivestreamsParsingTest {
         assertEquals("https://example.com/thumb.jpg", legacy.thumbnail)
         assertEquals("https://example.com/avatar.jpg", legacy.profilePicture)
         assertEquals("en", legacy.language)
-        assertNull(legacy.customTags)
+        assertEquals(listOf("english"), legacy.customTags)
         assertEquals(12L, legacy.category?.id)
         assertEquals("Gaming", legacy.category?.name)
     }
