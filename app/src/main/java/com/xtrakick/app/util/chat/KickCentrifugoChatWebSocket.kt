@@ -114,7 +114,7 @@ class KickCentrifugoChatWebSocket(
         override suspend fun onConnect(webSocket: WebSocket) {
             val token = runCatching { fetchAuthToken() }.getOrNull()
             if (token.isNullOrBlank()) {
-                DiagnosticLogger.w(tag, "failed to obtain fresh centrifugo token on connect")
+                DiagnosticLogger.wIfForeground(tag, "failed to obtain fresh centrifugo token on connect")
                 webSocket.disconnect()
                 return
             }

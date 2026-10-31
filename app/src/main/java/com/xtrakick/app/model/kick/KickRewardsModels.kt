@@ -29,6 +29,7 @@ data class KickDailyChallenge(
     val unboxAnimationUrl: String? = null,
     val activePeriodEndsAtEpochMs: Long? = null,
     val dropTable: List<KickChallengeDropTableItem> = emptyList(),
+    val winnerThumbnailUrl: String? = null,
 ) {
     /** Watch-time minutes still missing before the daily becomes claimable. */
     val remainingMinutes: Long?
@@ -61,6 +62,7 @@ data class KickDailyRewardWinner(
     val id: String,
     val cardUrl: String?,
     val rarity: String?,
+    val thumbnailUrl: String? = null,
 )
 
 data class KickDropReward(
@@ -104,14 +106,24 @@ object KickRewardsParsing {
             .orEmpty()
             .mapNotNull { item ->
                 val id = item.scalar("id") ?: return@mapNotNull null
-                KickDailyRouletteItem(id, item.scalar("item_url"))
+                val itemUrl = item.scalar("item_url")
+                    ?: item.scalar("thumbnail_url")
+                    ?: item.scalar("card_url")
+                    ?: item.scalar("image_url")
+                KickDailyRouletteItem(id, itemUrl)
             }
-        val winner = data.objectAt("winner")?.let { item ->
+        val winnerObj = data.objectAt("winner") ?: data.objectAt("reward")
+        val winner = winnerObj?.let { item ->
             val id = item.scalar("id") ?: return@let null
+            val parsedCard = item.scalar("card_url")
+            val parsedThumbnail = item.scalar("thumbnail_url")
+                ?: item.scalar("image_url")
+                ?: item.scalar("item_url")
             KickDailyRewardWinner(
                 id = id,
-                cardUrl = item.scalar("card_url"),
+                cardUrl = parsedCard ?: parsedThumbnail,
                 rarity = item.scalar("rarity"),
+                thumbnailUrl = parsedThumbnail ?: parsedCard,
             )
         }
         return KickDailyClaimResult(
@@ -202,6 +214,11 @@ object KickRewardsParsing {
             )
         }
 
+        val parsedCard = winner?.scalar("card_url")
+        val parsedThumbnail = winner?.scalar("thumbnail_url")
+            ?: winner?.scalar("image_url")
+            ?: winner?.scalar("item_url")
+
         return KickDailyChallenge(
             id = id,
             status = scalar("status"),
@@ -216,18 +233,25 @@ object KickRewardsParsing {
                     ?: currentWinner.scalar("label")
             },
             winnerRarity = winner?.scalar("rarity"),
-            winnerCardUrl = winner?.scalar("card_url"),
+            winnerCardUrl = parsedCard ?: parsedThumbnail,
             name = scalar("name") ?: scalar("title"),
             featured = booleanValue("featured") ?: false,
             description = scalar("description"),
-            idleAnimationUrl = animations?.scalar("idle_url")?.let {
-                if (it.endsWith(".gif", ignoreCase = true)) it else "$it.gif"
+            idleAnimationUrl = animations?.scalar("idle_url")?.let { url ->
+                if (url.endsWith(".gif", ignoreCase = true) ||
+                    url.endsWith(".webp", ignoreCase = true) ||
+                    url.endsWith(".png", ignoreCase = true)
+                ) url else "$url.gif"
             },
-            unboxAnimationUrl = animations?.scalar("unbox_url")?.let {
-                if (it.endsWith(".gif", ignoreCase = true)) it else "$it.gif"
+            unboxAnimationUrl = animations?.scalar("unbox_url")?.let { url ->
+                if (url.endsWith(".gif", ignoreCase = true) ||
+                    url.endsWith(".webp", ignoreCase = true) ||
+                    url.endsWith(".png", ignoreCase = true)
+                ) url else "$url.gif"
             },
             activePeriodEndsAtEpochMs = activePeriod?.scalar("ends_at")?.let(::parseIsoTimestampMs),
             dropTable = parsedDropTable,
+            winnerThumbnailUrl = parsedThumbnail ?: parsedCard,
         )
     }
 

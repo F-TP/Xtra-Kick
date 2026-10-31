@@ -120,6 +120,8 @@
     <string name="order">Düzen</string>
     <string name="descending">Azalan</string>
     <string name="ascending">Artan</string>
+    <string name="newest_first">En yeni başta</string>
+    <string name="oldest_first">En eski başta</string>
     <string name="logout_title">Çıkış yapılsın mı?</string>
     <string name="logout_msg">%s olarak giriş yapıldı</string>
     <string name="logout_success_toast">Çıkış yapıldı</string>
@@ -753,6 +755,7 @@ Bunlar, dosyaları saklayarak sildiğiniz indirmelerdir. Android bu klasörü do
     <string name="update_dialog_default_description">Xtra\'nın hata düzeltmeleri ve performans iyileştirmeleri içeren yeni bir sürümü yüklenmeye hazır.</string>
     <string name="notification_live_channel_title">Canlı bildirimleri</string>
     <string name="live_notification">%s yayında</string>
+    <string name="live_notification_category">%1$s %2$s yayını yapıyor</string>
     <string name="privacy">Gizlilik</string>
     <string name="usage_stats_title">Anonim kullanım istatistikleri</string>
     <string name="usage_stats_summary">Günde bir kez anonim bağlantı sinyali gönderir. Hiçbir hesap veya etkinlik verisi dahil edilmez.</string>
@@ -760,10 +763,17 @@ Bunlar, dosyaları saklayarak sildiğiniz indirmelerdir. Android bu klasörü do
     <string name="live_notifications_summary">Takip edilen kanallar canlı yayına geçtiğinde anlık bildirimler gönderir. Çoğu kullanıcının ihtiyaç duyduğu tek şey budur.</string>
     <string name="live_notifications_polling_backup">Arka plan yoklama yedeği</string>
     <string name="live_notifications_polling_backup_summary">Yalnızca agresif pil tasarrufu olan telefonlarda anlık bildirimler geç geldiğinde veya hiç gelmediğinde gereklidir. Aksi takdirde kapalı tutun: Daha fazla pil tüketir ve bazen bildirimleri tekrarlayabilir.</string>
-    <string name="live_notification_channels">Bildirim kanalları</string>
+    <string name="live_notification_channels">Canlı bildirimleri</string>
     <string name="live_notification_channels_enable_all">Tümünü etkinleştir</string>
+    <string name="live_notification_channels_enable_all_message">Tüm %1$d kanal için canlı yayın bildirimleri açılsın mı?</string>
+    <string name="live_notification_channels_enable_all_message_generic">Tüm kanallar için canlı yayın bildirimleri açılsın mı?</string>
     <string name="live_notification_channels_disable_all">Tümünü devre dışı bırak</string>
     <string name="live_notification_channels_disable_all_message">Tüm kanallar için canlı yayın bildirimleri kapatılsın mı?</string>
+    <string name="live_notification_channels_disable_all_count_message">Etkinleştirilmiş %1$d kanal için canlı yayın bildirimleri kapatılsın mı?</string>
+    <string name="live_notification_channels_enabled_all_snackbar">Tüm kanallar için canlı bildirimler etkinleştirildi</string>
+    <string name="live_notification_channels_disabled_all_snackbar">Tüm kanallar için canlı bildirimler devre dışı bırakıldı</string>
+    <string name="live_notification_channels_restored_snackbar">Önceki bildirim ayarları geri yüklendi</string>
+    <string name="undo">Geri al</string>
     <string name="live_notification_channels_empty">Henüz kanal yok. Buradan yönetmek için kanalları takip edin veya bir kanal sayfasından bildirimleri açın.</string>
     <string name="live_notification_channels_empty_search">Aramanızla eşleşen kanal bulunamadı.</string>
     <string name="live_notification_channels_empty_enabled">Hiçbir kanalın bildirimi açık değil. Burada görmek için bir kanalın anahtarını açın.</string>
@@ -796,6 +806,7 @@ Bunlar, dosyaları saklayarak sildiğiniz indirmelerdir. Android bu klasörü do
     <string name="daily_reward_load_failed">Günlük ödül yüklenemedi. Tekrar deneyin.</string>
     <string name="daily_reward_claim_failed">Ödül alınamadı. Zaten alınmış olabilir.</string>
     <string name="daily_reward_reset">Günlük Ödül %s zamanında sıfırlanır</string>
+    <string name="seasonal_crate_reset">Sezonluk Sandık %s zamanında sıfırlanır</string>
     <string name="event_reward_ends">Etkinlik bitişi: %s</string>
     <string name="daily_reward_winner">Günlük ödül kazananı</string>
     <string name="daily_reward_rarity">%s ödül</string>
@@ -1185,7 +1196,6 @@ Bunlar, dosyaları saklayarak sildiğiniz indirmelerdir. Android bu klasörü do
     <string name="notification_banner_prompt">Takip ettiğiniz yayıncılar canlı yayına başladığında anında bildirim alın</string>
     <string name="action_enable">Etkinleştir</string>
     <string name="action_not_now">Şimdi değil</string>
-    <string name="notification_action_audio_only">Yalnızca Ses</string>
     <string name="chat_guest_login_prompt">Sohbet etmek ve ödülleri almak için giriş yapın</string>
     <string name="live_widget_title">Canlı Kanallar</string>
     <string name="live_widget_empty">Şu anda hiçbir takip edilen yayıncı canlı değil</string>

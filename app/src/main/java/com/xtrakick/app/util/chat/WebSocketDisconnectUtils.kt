@@ -50,4 +50,15 @@ object WebSocketDisconnectUtils {
             message.contains("ECONNRESET", ignoreCase = true) ||
             message.contains("EPIPE", ignoreCase = true)
     }
+
+    private val EPHEMERAL_PORT_REGEX = Regex("""\(port \d+\)""")
+
+    /**
+     * Normalizes disconnect messages so transient retry errors with variable local ports
+     * are recognized as identical for debouncing and logging.
+     */
+    @JvmStatic
+    fun normalizeDisconnectReason(message: String): String {
+        return message.replace(EPHEMERAL_PORT_REGEX, "(port ***)")
+    }
 }

@@ -35,6 +35,15 @@ interface NotificationUsersDao {
     @Query("DELETE FROM notifications WHERE channelId IN (:keys)")
     fun deleteByKeys(keys: List<String>): Int
 
+    /** Atomically replace all notification subscriptions. */
+    @Transaction
+    fun replaceAll(items: List<NotificationUser>) {
+        deleteAll()
+        if (items.isNotEmpty()) {
+            insertList(items)
+        }
+    }
+
     /** Re-key a legacy row atomically so a crash can't drop the notification entry. */
     @Transaction
     fun rekey(item: NotificationUser, newItem: NotificationUser) {

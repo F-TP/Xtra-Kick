@@ -120,6 +120,8 @@
     <string name="order">Ordem</string>
     <string name="descending">Decrescente</string>
     <string name="ascending">Crescente</string>
+    <string name="newest_first">Mais recentes primeiro</string>
+    <string name="oldest_first">Mais antigos primeiro</string>
     <string name="logout_title">Sair?</string>
     <string name="logout_msg">Conectado como %s</string>
     <string name="logout_success_toast">Você saiu da conta</string>
@@ -753,6 +755,7 @@ São downloads que você removeu mantendo os arquivos. O Android oculta esta pas
     <string name="update_dialog_default_description">Uma nova versão do Xtra está pronta para instalar, com correções de bugs e melhorias de desempenho.</string>
     <string name="notification_live_channel_title">Notificações de transmissões ao vivo</string>
     <string name="live_notification">%s está ao vivo</string>
+    <string name="live_notification_category">%1$s está transmitindo %2$s</string>
     <string name="privacy">Privacidade</string>
     <string name="usage_stats_title">Estatísticas de uso anônimas</string>
     <string name="usage_stats_summary">Envia uma notificação diária anônima. Nenhum dado da conta ou de atividade é incluído.</string>
@@ -760,10 +763,17 @@ São downloads que você removeu mantendo os arquivos. O Android oculta esta pas
     <string name="live_notifications_summary">Alertas push instantâneos quando canais seguidos entram ao vivo. É tudo de que a maioria das pessoas precisa.</string>
     <string name="live_notifications_polling_backup">Verificação periódica em segundo plano</string>
     <string name="live_notifications_polling_backup_summary">Necessária apenas se os alertas push chegarem com atraso ou não chegarem, por exemplo, em celulares com economia de bateria agressiva. Deixe desativada nos outros casos: ela consome mais bateria e pode repetir um alerta ocasionalmente.</string>
-    <string name="live_notification_channels">Canais de notificação</string>
+    <string name="live_notification_channels">Notificações ao vivo</string>
     <string name="live_notification_channels_enable_all">Ativar todos</string>
+    <string name="live_notification_channels_enable_all_message">Ativar as notificações ao vivo de todos os %1$d canais?</string>
+    <string name="live_notification_channels_enable_all_message_generic">Ativar as notificações ao vivo de todos os canais?</string>
     <string name="live_notification_channels_disable_all">Desativar todos</string>
     <string name="live_notification_channels_disable_all_message">Desativar as notificações ao vivo de todos os canais?</string>
+    <string name="live_notification_channels_disable_all_count_message">Desativar as notificações ao vivo de todos os %1$d canais ativados?</string>
+    <string name="live_notification_channels_enabled_all_snackbar">Notificações ao vivo ativadas para todos os canais</string>
+    <string name="live_notification_channels_disabled_all_snackbar">Notificações ao vivo desativadas para todos os canais</string>
+    <string name="live_notification_channels_restored_snackbar">Configuração anterior de notificações restaurada</string>
+    <string name="undo">Desfazer</string>
     <string name="live_notification_channels_empty">Você ainda não tem canais. Siga canais ou ative as notificações na página de um canal para gerenciá-los aqui.</string>
     <string name="live_notification_channels_empty_search">Nenhum canal corresponde à sua busca.</string>
     <string name="live_notification_channels_empty_enabled">Nenhum canal está com as notificações ativadas. Ative uma opção para vê-los aqui.</string>
@@ -796,6 +806,7 @@ São downloads que você removeu mantendo os arquivos. O Android oculta esta pas
     <string name="daily_reward_load_failed">Não foi possível carregar a recompensa diária. Tente novamente.</string>
     <string name="daily_reward_claim_failed">Não foi possível resgatar a recompensa. Talvez ela já tenha sido resgatada.</string>
     <string name="daily_reward_reset">A recompensa diária é reiniciada às %s</string>
+    <string name="seasonal_crate_reset">A caixa sazonal é reiniciada às %s</string>
     <string name="event_reward_ends">O evento termina em %s</string>
     <string name="daily_reward_winner">Vencedor da recompensa diária</string>
     <string name="daily_reward_rarity">Recompensa %s</string>
@@ -1185,7 +1196,6 @@ São downloads que você removeu mantendo os arquivos. O Android oculta esta pas
     <string name="notification_banner_prompt">Receba alertas instantâneos quando os streamers que você segue entrarem ao vivo</string>
     <string name="action_enable">Ativar</string>
     <string name="action_not_now">Agora não</string>
-    <string name="notification_action_audio_only">Somente áudio</string>
     <string name="chat_guest_login_prompt">Entre na sua conta para conversar e resgatar recompensas</string>
     <string name="live_widget_title">Canais ao vivo</string>
     <string name="live_widget_empty">Nenhum streamer que você segue está ao vivo no momento</string>

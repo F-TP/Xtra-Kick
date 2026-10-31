@@ -81,15 +81,24 @@ class RewardClaimWorker @AssistedInject constructor(
     }
 
     private suspend fun markDailyClaimed(prefs: SharedPreferences, challenge: KickDailyChallenge) {
+        val isStandardDaily = challenge.recurrence.equals("daily", ignoreCase = true) && !challenge.featured
         val reset = KickRewardsPolicy.resetTimeMs(challenge, System.currentTimeMillis())
+        val nameKey = if (isStandardDaily) AppConstants.REWARD_LAST_DAILY_NAME else "${AppConstants.REWARD_LAST_DAILY_NAME}_${challenge.id}"
+        val rarityKey = if (isStandardDaily) AppConstants.REWARD_LAST_DAILY_RARITY else "${AppConstants.REWARD_LAST_DAILY_RARITY}_${challenge.id}"
+        val cardKey = if (isStandardDaily) AppConstants.REWARD_LAST_DAILY_CARD_URL else "${AppConstants.REWARD_LAST_DAILY_CARD_URL}_${challenge.id}"
+
         prefs.edit {
-            putLong(AppConstants.REWARD_DAILY_CLAIMED_UNTIL, reset)
-            challenge.winnerName?.let { putString(AppConstants.REWARD_LAST_DAILY_NAME, it) }
-            challenge.winnerRarity?.let { putString(AppConstants.REWARD_LAST_DAILY_RARITY, it) }
-            challenge.winnerCardUrl?.let { putString(AppConstants.REWARD_LAST_DAILY_CARD_URL, it) }
+            challenge.winnerName?.let { putString(nameKey, it) }
+            challenge.winnerRarity?.let { putString(rarityKey, it) }
+            challenge.winnerCardUrl?.let { putString(cardKey, it) }
+            if (isStandardDaily) {
+                putLong(AppConstants.REWARD_DAILY_CLAIMED_UNTIL, reset)
+            }
         }
-        Log.i(TAG, "daily already claimed, sleeping until $reset")
-        RewardClaimScheduler.followUp(applicationContext, reset - System.currentTimeMillis())
+        if (isStandardDaily) {
+            Log.i(TAG, "daily already claimed, sleeping until $reset")
+            RewardClaimScheduler.followUp(applicationContext, reset - System.currentTimeMillis())
+        }
     }
 
     private suspend fun claimDailyNow(prefs: SharedPreferences, challenge: KickDailyChallenge) {
@@ -110,19 +119,23 @@ class RewardClaimWorker @AssistedInject constructor(
         val name = outcome.winnerName?.takeIf { it.isNotBlank() }
         val rarity = claimResult.winner?.rarity?.takeIf { it.isNotBlank() }
             ?: outcome.winnerRarity?.takeIf { it.isNotBlank() }
-        val isDaily = outcome.recurrence.equals("daily", ignoreCase = true)
-        val reset = if (isDaily) KickRewardsPolicy.resetTimeMs(outcome, System.currentTimeMillis()) else null
+        val isStandardDaily = outcome.recurrence.equals("daily", ignoreCase = true) && !outcome.featured
+        val reset = if (isStandardDaily) KickRewardsPolicy.resetTimeMs(outcome, System.currentTimeMillis()) else null
+        val nameKey = if (isStandardDaily) AppConstants.REWARD_LAST_DAILY_NAME else "${AppConstants.REWARD_LAST_DAILY_NAME}_${challenge.id}"
+        val rarityKey = if (isStandardDaily) AppConstants.REWARD_LAST_DAILY_RARITY else "${AppConstants.REWARD_LAST_DAILY_RARITY}_${challenge.id}"
+        val cardKey = if (isStandardDaily) AppConstants.REWARD_LAST_DAILY_CARD_URL else "${AppConstants.REWARD_LAST_DAILY_CARD_URL}_${challenge.id}"
+
         prefs.edit {
             reset?.let { putLong(AppConstants.REWARD_DAILY_CLAIMED_UNTIL, it) }
+            putString(nameKey, name)
+            rarity?.let { putString(rarityKey, it) }
+            claimResult.winner?.cardUrl?.let { putString(cardKey, it) }
             putLong(AppConstants.REWARD_LAST_CLAIM_AT, System.currentTimeMillis())
             remove(AppConstants.REWARD_DAILY_BACKOFF_UNTIL)
-            putString(AppConstants.REWARD_LAST_DAILY_NAME, name)
-            rarity?.let { putString(AppConstants.REWARD_LAST_DAILY_RARITY, it) }
-            claimResult.winner?.cardUrl?.let { putString(AppConstants.REWARD_LAST_DAILY_CARD_URL, it) }
         }
-        Log.i(TAG, "reward claimed name=$name rarity=$rarity isDaily=$isDaily reset=$reset")
+        Log.i(TAG, "reward claimed name=$name rarity=$rarity isStandardDaily=$isStandardDaily reset=$reset")
         RewardClaimNotifier.dailyClaimed(applicationContext, name, rarity)
-        if (isDaily && reset != null) {
+        if (isStandardDaily && reset != null) {
             RewardClaimScheduler.followUp(applicationContext, reset - System.currentTimeMillis())
         }
     }

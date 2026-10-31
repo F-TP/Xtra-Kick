@@ -509,8 +509,13 @@ class ChatFragment : BaseNetworkFragment(), MessageClickedDialog.OnButtonClickLi
             userName = name,
             color = color,
         )
-        MessageClickedDialog.newInstance(messagingEnabled, requireArguments().getString(KEY_CHANNEL_ID), requireArguments().getString(KEY_CHANNEL_LOGIN))
-            .show(childFragmentManager, "messageDialog")
+        val isContentLive = requireArguments().getBoolean(KEY_IS_LIVE, false) && !isLiveRewound
+        MessageClickedDialog.newInstance(
+            messagingEnabled,
+            requireArguments().getString(KEY_CHANNEL_ID),
+            requireArguments().getString(KEY_CHANNEL_LOGIN),
+            isLive = isContentLive,
+        ).show(childFragmentManager, "messageDialog")
     }
 
     private fun buildPinnedNameSpan(
@@ -2430,8 +2435,14 @@ class ChatFragment : BaseNetworkFragment(), MessageClickedDialog.OnButtonClickLi
                                 (requireContext().getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager).hideSoftInputFromWindow(editText.windowToken, 0)
                                 editText.clearFocus()
                                 tappedMessageDialogSeed = tappedMessage
-                                val canMessage = isLive && AuthStateHelper.isKickLoggedIn(requireContext())
-                                MessageClickedDialog.newInstance(canMessage, channelId, requireArguments().getString(KEY_CHANNEL_LOGIN)).show(this@ChatFragment.childFragmentManager, "messageDialog")
+                                val isContentLive = isLive && !isLiveRewound
+                                val canMessage = isContentLive && AuthStateHelper.isKickLoggedIn(requireContext())
+                                MessageClickedDialog.newInstance(
+                                    canMessage,
+                                    channelId,
+                                    requireArguments().getString(KEY_CHANNEL_LOGIN),
+                                    isLive = isContentLive,
+                                ).show(this@ChatFragment.childFragmentManager, "messageDialog")
                             }
                         },
                         replyClickListener = {

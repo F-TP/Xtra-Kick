@@ -53,4 +53,18 @@ class WebSocketDisconnectUtilsTest {
         assertFalse(WebSocketDisconnectUtils.isTransportError("java.net.UnknownHostException"))
         assertFalse(WebSocketDisconnectUtils.isTransportError("End of input at character 0"))
     }
+
+    @Test
+    fun normalizesEphemeralPortsInDisconnectMessages() {
+        val msg1 = "failed to connect to host/2606:4700::1 (port 443) from /2001:db8::1 (port 45786) after 20000ms"
+        val msg2 = "failed to connect to host/2606:4700::1 (port 443) from /2001:db8::1 (port 38870) after 20000ms"
+        val norm1 = WebSocketDisconnectUtils.normalizeDisconnectReason(msg1)
+        val norm2 = WebSocketDisconnectUtils.normalizeDisconnectReason(msg2)
+
+        org.junit.Assert.assertEquals(norm1, norm2)
+        org.junit.Assert.assertEquals(
+            "failed to connect to host/2606:4700::1 (port ***) from /2001:db8::1 (port ***) after 20000ms",
+            norm1
+        )
+    }
 }

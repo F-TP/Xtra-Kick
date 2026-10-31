@@ -484,10 +484,9 @@ class KickDailyRewardDialog : BottomSheetDialogFragment() {
         currentBinding.winnerRarityText.isVisible = label.isNotBlank()
         currentBinding.winnerRarityText.text = label
 
-        val isDaily = dailyChallenge.recurrence.equals("daily", ignoreCase = true)
-        val savedCardUrl = if (isDaily) {
-            context?.prefs()?.getString(AppConstants.REWARD_LAST_DAILY_CARD_URL, null)
-        } else null
+        val isStandardDaily = dailyChallenge.recurrence.equals("daily", ignoreCase = true) && !dailyChallenge.featured
+        val prefKey = if (isStandardDaily) AppConstants.REWARD_LAST_DAILY_CARD_URL else "${AppConstants.REWARD_LAST_DAILY_CARD_URL}_${dailyChallenge.id}"
+        val savedCardUrl = context?.prefs()?.getString(prefKey, null)
         shareCardUrl = safeRewardImageUrl(dailyChallenge.winnerCardUrl)
             ?: safeRewardImageUrl(savedCardUrl)
         currentBinding.shareButton.isVisible = shareCardUrl != null && hasShareUsername()
@@ -497,9 +496,11 @@ class KickDailyRewardDialog : BottomSheetDialogFragment() {
         val currentBinding = _binding ?: return
         val resetAt = dailyChallenge?.endsAtEpochMs ?: return
         val formatted = SimpleDateFormat("MMM d, hh:mm a", Locale.US).format(Date(resetAt))
-        val isDaily = dailyChallenge.recurrence.equals("daily", ignoreCase = true)
-        currentBinding.resetText.text = if (isDaily) {
+        val isStandardDaily = dailyChallenge.recurrence.equals("daily", ignoreCase = true) && !dailyChallenge.featured
+        currentBinding.resetText.text = if (isStandardDaily) {
             getString(R.string.daily_reward_reset, formatted)
+        } else if (dailyChallenge.featured) {
+            getString(R.string.seasonal_crate_reset, formatted)
         } else {
             getString(R.string.event_reward_ends, formatted)
         }
@@ -636,7 +637,7 @@ class KickDailyRewardDialog : BottomSheetDialogFragment() {
             withContext(Dispatchers.Main) {
                 Glide.with(this@KickDailyRewardDialog)
                     .load(buildKickGlideUrl(unboxUrl))
-                    .fitCenter()
+                    .dontTransform()
                     .into(activeImageView)
             }
             delay(1200L) // Wait for crate lid to pop open
@@ -670,7 +671,7 @@ class KickDailyRewardDialog : BottomSheetDialogFragment() {
                     .load(buildKickGlideUrl(itemUrl))
                     .fallback(R.drawable.ic_kick_gem)
                     .error(R.drawable.ic_kick_gem)
-                    .fitCenter()
+                    .dontTransform()
                     .into(slotBinding.slotImage)
 
                 rouletteStrip.addView(slotBinding.root)
@@ -821,7 +822,7 @@ class KickDailyRewardDialog : BottomSheetDialogFragment() {
             .load(buildKickGlideUrl(url))
             .fallback(R.drawable.ic_kick_gem)
             .error(R.drawable.ic_kick_gem)
-            .fitCenter()
+            .dontTransform()
 
         if (isWinner) {
             imageView.alpha = 0f
@@ -878,24 +879,23 @@ class KickDailyRewardDialog : BottomSheetDialogFragment() {
 
     private fun recordClaim(context: Context, activeChallenge: KickDailyChallenge, result: KickDailyClaimResult) {
         val now = System.currentTimeMillis()
-        if (activeChallenge.recurrence.equals("daily", ignoreCase = true)) {
-            val resetAt = KickRewardsPolicy.resetTimeMs(activeChallenge, now)
-            context.prefs().edit {
+        val isStandardDaily = activeChallenge.recurrence.equals("daily", ignoreCase = true) && !activeChallenge.featured
+        val rarityKey = if (isStandardDaily) AppConstants.REWARD_LAST_DAILY_RARITY else "${AppConstants.REWARD_LAST_DAILY_RARITY}_${activeChallenge.id}"
+        val cardKey = if (isStandardDaily) AppConstants.REWARD_LAST_DAILY_CARD_URL else "${AppConstants.REWARD_LAST_DAILY_CARD_URL}_${activeChallenge.id}"
+
+        context.prefs().edit {
+            putLong(AppConstants.REWARD_LAST_CLAIM_AT, now)
+            result.winner?.rarity?.let { putString(rarityKey, it) }
+            result.winner?.cardUrl?.let { putString(cardKey, it) }
+            if (isStandardDaily) {
+                val resetAt = KickRewardsPolicy.resetTimeMs(activeChallenge, now)
                 putLong(AppConstants.REWARD_DAILY_CLAIMED_UNTIL, resetAt)
-                putLong(AppConstants.REWARD_LAST_CLAIM_AT, now)
                 remove(AppConstants.REWARD_DAILY_BACKOFF_UNTIL)
-                result.winner?.rarity?.let { putString(AppConstants.REWARD_LAST_DAILY_RARITY, it) }
-                result.winner?.cardUrl?.let { putString(AppConstants.REWARD_LAST_DAILY_CARD_URL, it) }
             }
-            if (context.prefs().getBoolean(AppConstants.REWARD_AUTO_CLAIM_ENABLED, false)) {
-                RewardClaimScheduler.followUp(context, resetAt - now)
-            }
-        } else {
-            context.prefs().edit {
-                putLong(AppConstants.REWARD_LAST_CLAIM_AT, now)
-                result.winner?.rarity?.let { putString(AppConstants.REWARD_LAST_DAILY_RARITY, it) }
-                result.winner?.cardUrl?.let { putString(AppConstants.REWARD_LAST_DAILY_CARD_URL, it) }
-            }
+        }
+        if (isStandardDaily && context.prefs().getBoolean(AppConstants.REWARD_AUTO_CLAIM_ENABLED, false)) {
+            val resetAt = KickRewardsPolicy.resetTimeMs(activeChallenge, now)
+            RewardClaimScheduler.followUp(context, resetAt - now)
         }
     }
 
@@ -959,10 +959,9 @@ class KickDailyRewardDialog : BottomSheetDialogFragment() {
                 itemBinding.rewardImage.scaleY = 1f
 
                 val isClaimed = ch.status.equals(KickRewardsPolicy.STATUS_CLAIMED, ignoreCase = true)
-                val isDaily = ch.recurrence.equals("daily", ignoreCase = true)
-                val savedCardUrl = if (isDaily) {
-                    context?.prefs()?.getString(AppConstants.REWARD_LAST_DAILY_CARD_URL, null)
-                } else null
+                val isStandardDaily = ch.recurrence.equals("daily", ignoreCase = true) && !ch.featured
+                val prefKey = if (isStandardDaily) AppConstants.REWARD_LAST_DAILY_CARD_URL else "${AppConstants.REWARD_LAST_DAILY_CARD_URL}_${ch.id}"
+                val savedCardUrl = context?.prefs()?.getString(prefKey, null)
 
                 val imageUrl = if (isClaimed) {
                     safeRewardImageUrl(ch.winnerCardUrl) ?: safeRewardImageUrl(savedCardUrl)
@@ -973,7 +972,7 @@ class KickDailyRewardDialog : BottomSheetDialogFragment() {
                 if (imageUrl != null) {
                     Glide.with(this@KickDailyRewardDialog)
                         .load(buildKickGlideUrl(imageUrl))
-                        .fitCenter()
+                        .dontTransform()
                         .into(itemBinding.rewardImage)
                 } else {
                     Glide.with(this@KickDailyRewardDialog).clear(itemBinding.rewardImage)

@@ -190,6 +190,77 @@ class KickRewardsParsingTest {
     }
 
     @Test
+    fun parsesTrickOrTreatWithEmptyCardUrlAndThumbnailUrlFallback() {
+        val root = json.parseToJsonElement(
+            """
+            {"data":[{
+              "active_period":{"ends_at":"2026-11-01T00:00:00Z","starts_at":"2026-10-24T00:00:00Z"},
+              "animations":{
+                "idle_url":"https://static.kick.com/rewards/halloween-2610/idle",
+                "unbox_url":"https://static.kick.com/rewards/halloween-2610/unbox"
+              },
+              "claimed_at":"2026-10-29T17:14:38.405311Z",
+              "condition":{"progress":180,"threshold":180,"type":"watch_time_minutes"},
+              "description":"Claim your Trick or Treat for a chance to win big! Exclusive prizes are up for grabs.",
+              "drop_table":[{"rarity":"common","weighting":500},{"rarity":"uncommon","weighting":300}],
+              "featured":true,
+              "id":"01a16227-e181-727c-ac25-a441263e2e4a",
+              "name":"Trick or Treat",
+              "recurrence":"daily",
+              "status":"claimed",
+              "window":{"ends_at":"2026-10-30T00:00:00Z","starts_at":"2026-10-29T00:00:00Z"},
+              "winner":{
+                "card_url":"",
+                "id":"01a16236-6075-7169-8586-62b8aadc0403",
+                "rarity":"rare",
+                "thumbnail_url":"https://content.kick.com/public/rewards/thumbnails/01a16236-22b5-7b17-9e40-26f7299f9403.webp"
+              }
+            }]}
+            """.trimIndent(),
+        )
+
+        val challenge = KickRewardsParsing.parseChallenges(root).single()
+        assertEquals("01a16227-e181-727c-ac25-a441263e2e4a", challenge.id)
+        assertEquals("Trick or Treat", challenge.name)
+        assertEquals(true, challenge.featured)
+        assertEquals("claimed", challenge.status)
+        assertEquals("rare", challenge.winnerRarity)
+        assertEquals(
+            "https://content.kick.com/public/rewards/thumbnails/01a16236-22b5-7b17-9e40-26f7299f9403.webp",
+            challenge.winnerCardUrl,
+        )
+        assertEquals(
+            "https://content.kick.com/public/rewards/thumbnails/01a16236-22b5-7b17-9e40-26f7299f9403.webp",
+            challenge.winnerThumbnailUrl,
+        )
+    }
+
+    @Test
+    fun parsesClaimResultWithEmptyCardUrlAndThumbnailUrlFallback() {
+        val root = json.parseToJsonElement(
+            """
+            {"data":{
+              "challenge_id":"01a16227-e181-727c-ac25-a441263e2e4a",
+              "roulette":[{"id":"r1","thumbnail_url":"https://content.kick.com/reel1.webp"}],
+              "winner":{
+                "card_url":"",
+                "id":"01a16236-6075-7169-8586-62b8aadc0403",
+                "rarity":"rare",
+                "thumbnail_url":"https://content.kick.com/public/rewards/thumbnails/pumpkin.webp"
+              }
+            }}
+            """.trimIndent(),
+        )
+
+        val result = KickRewardsParsing.parseDailyClaim(root)
+        assertEquals("01a16227-e181-727c-ac25-a441263e2e4a", result.challengeId)
+        assertEquals("https://content.kick.com/reel1.webp", result.roulette.single().itemUrl)
+        assertEquals("https://content.kick.com/public/rewards/thumbnails/pumpkin.webp", result.winner?.cardUrl)
+        assertEquals("https://content.kick.com/public/rewards/thumbnails/pumpkin.webp", result.winner?.thumbnailUrl)
+        assertEquals("rare", result.winner?.rarity)
+    }
+
+    @Test
     fun isoTimestampVariantsAllParseAndGarbageYieldsNull() {
         assertEquals(1_793_289_720_000L > 0L, KickRewardsParsing.parseIsoTimestampMs("2026-08-27T00:02:00Z")!! > 0L)
         assertEquals(

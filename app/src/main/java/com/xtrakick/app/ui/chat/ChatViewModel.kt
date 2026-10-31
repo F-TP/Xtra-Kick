@@ -3524,7 +3524,7 @@ class ChatViewModel @Inject constructor(
                 )
             }
             val shouldEmitDisconnect = shouldEmitKickRealtimeDisconnect(message)
-            if (!isHostResolutionFailure && !isTransientGatewayFailure && shouldEmitDisconnect) {
+            if (!isHostResolutionFailure && !isTransientGatewayFailure && !isTransportError && shouldEmitDisconnect) {
                 onMessage(
                     ChatMessage(
                         systemMsg = ContextCompat.getString(applicationContext, R.string.chat_disconnect).format(channelLogin, message),
@@ -3680,12 +3680,13 @@ class ChatViewModel @Inject constructor(
 
     private fun shouldEmitKickRealtimeDisconnect(message: String): Boolean {
         val now = System.currentTimeMillis()
-        val sameAsLast = kickRealtimeLastDisconnectMessage == message
+        val normalized = WebSocketDisconnectUtils.normalizeDisconnectReason(message)
+        val sameAsLast = kickRealtimeLastDisconnectMessage == normalized
         val recent = now - kickRealtimeLastDisconnectAtMs < 15_000L
         if (sameAsLast && recent) {
             return false
         }
-        kickRealtimeLastDisconnectMessage = message
+        kickRealtimeLastDisconnectMessage = normalized
         kickRealtimeLastDisconnectAtMs = now
         return true
     }

@@ -4,7 +4,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Test
 
 /**
- * Pure-function tests for the Notification channels search + "Enabled only" filter.
+ * Pure-function tests for the Live notifications search + "Enabled only" filter.
  * The filter derives from the loaded list without touching it, so toggling it
  * on and back off must always restore every row (regression coverage for a
  * report where the top channel seemed to vanish after toggling).

@@ -27,6 +27,7 @@ import androidx.navigation.fragment.findNavController
 import androidx.navigation.ui.AppBarConfiguration
 import androidx.navigation.ui.setupWithNavController
 import androidx.recyclerview.widget.LinearLayoutManager
+import com.google.android.material.snackbar.Snackbar
 import com.xtrakick.app.R
 import com.xtrakick.app.databinding.FragmentNotificationChannelsBinding
 import com.xtrakick.app.ui.channel.ChannelPagerFragmentDirections
@@ -83,11 +84,26 @@ class NotificationChannelsFragment : Fragment() {
         val navController = findNavController()
         binding.toolbar.setupWithNavController(navController, AppBarConfiguration(setOf()))
         setupSearch()
+        binding.toolbar.setOnMenuItemClickListener { menuItem ->
+            when (menuItem.itemId) {
+                R.id.action_undo -> {
+                    viewModel.undo()
+                    true
+                }
+                R.id.action_enable_all -> {
+                    confirmEnableAll()
+                    true
+                }
+                R.id.action_disable_all -> {
+                    confirmDisableAll()
+                    true
+                }
+                else -> false
+            }
+        }
         binding.enabledOnlyChip.setOnCheckedChangeListener { _, checked ->
             viewModel.setEnabledOnly(checked)
         }
-        binding.enableAllChip.setOnClickListener { viewModel.enableAll() }
-        binding.disableAllChip.setOnClickListener { confirmDisableAll() }
         viewLifecycleOwner.lifecycleScope.launch {
             viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
                 launch {
@@ -145,6 +161,28 @@ class NotificationChannelsFragment : Fragment() {
                     }
                 }
                 launch {
+                    viewModel.canUndo.collect { canUndo ->
+                        binding.toolbar.menu.findItem(R.id.action_undo)?.isVisible = canUndo
+                    }
+                }
+                launch {
+                    viewModel.feedbackEvent.collect { feedback ->
+                        val message = when (feedback) {
+                            is NotificationChannelsViewModel.BulkActionFeedback.EnabledAll ->
+                                getString(R.string.live_notification_channels_enabled_all_snackbar)
+                            is NotificationChannelsViewModel.BulkActionFeedback.DisabledAll ->
+                                getString(R.string.live_notification_channels_disabled_all_snackbar)
+                            is NotificationChannelsViewModel.BulkActionFeedback.Undone ->
+                                getString(R.string.live_notification_channels_restored_snackbar)
+                        }
+                        val snackbar = Snackbar.make(binding.root, message, Snackbar.LENGTH_LONG)
+                        if (viewModel.canUndo.value) {
+                            snackbar.setAction(R.string.undo) { viewModel.undo() }
+                        }
+                        snackbar.show()
+                    }
+                }
+                launch {
                     viewModel.updateError.collect { message ->
                         message?.let {
                             Toast.makeText(requireContext(), it, Toast.LENGTH_SHORT).show()
@@ -188,11 +226,36 @@ class NotificationChannelsFragment : Fragment() {
         })
     }
 
+    private fun confirmEnableAll() {
+        val count = viewModel.channels.value?.size ?: 0
+        val message = if (count > 0) {
+            getString(R.string.live_notification_channels_enable_all_message, count)
+        } else {
+            getString(R.string.live_notification_channels_enable_all_message_generic)
+        }
+        requireActivity().getAlertDialogBuilder()
+            .setTitle(getString(R.string.live_notification_channels_enable_all))
+            .setMessage(message)
+            .setPositiveButton(getString(R.string.live_notification_channels_enable_all)) { _, _ ->
+                viewModel.enableAll()
+            }
+            .setNegativeButton(getString(android.R.string.cancel), null)
+            .show()
+    }
+
     private fun confirmDisableAll() {
+        val count = viewModel.channels.value?.count { it.enabled } ?: 0
+        val message = if (count > 0) {
+            getString(R.string.live_notification_channels_disable_all_count_message, count)
+        } else {
+            getString(R.string.live_notification_channels_disable_all_message)
+        }
         requireActivity().getAlertDialogBuilder()
             .setTitle(getString(R.string.live_notification_channels_disable_all))
-            .setMessage(getString(R.string.live_notification_channels_disable_all_message))
-            .setPositiveButton(getString(R.string.yes)) { _, _ -> viewModel.disableAll() }
+            .setMessage(message)
+            .setPositiveButton(getString(R.string.live_notification_channels_disable_all)) { _, _ ->
+                viewModel.disableAll()
+            }
             .setNegativeButton(getString(android.R.string.cancel), null)
             .show()
     }

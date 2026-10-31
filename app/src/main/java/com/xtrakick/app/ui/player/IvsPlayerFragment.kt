@@ -1299,7 +1299,7 @@ class IvsPlayerFragment : PlayerFragment() {
         requireArguments().putBoolean(KEY_FORCE_STANDARD_LIVE_ENGINE, true)
         (activity as? MainActivity)?.startStream(
             stream = getCurrentStream(),
-            resolvedUrl = resolvedUrl,
+            resolvedUrl = null,
             forceStandardLiveEngine = true
         )
     }

@@ -263,13 +263,7 @@ class IvsPlayerService : Service() {
         releasePlaybackLocks()
         stopKickViewerWatch()
         clearActiveLiveChannel()
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
-            stopForeground(STOP_FOREGROUND_REMOVE)
-        } else {
-            @Suppress("DEPRECATION")
-            stopForeground(true)
-        }
-        notificationManager?.cancel(NOTIFICATION_ID)
+        dismissMediaNotificationAndSession()
         stopSelf()
     }
 
@@ -1095,6 +1089,7 @@ class IvsPlayerService : Service() {
     fun isPlaybackRequested(): Boolean = playbackRequested
 
     fun play() {
+        session?.isActive = true
         playbackRequested = true
         isPaused = false
         suspendedByFocusLoss = false
@@ -1178,8 +1173,7 @@ class IvsPlayerService : Service() {
             evictPreloadedSources()
         }
         releasePlaybackLocks()
-        updatePlaybackState()
-        updateNotification()
+        dismissMediaNotificationAndSession()
         stopSelf()
     }
 
@@ -1197,19 +1191,23 @@ class IvsPlayerService : Service() {
                 if (multiPovDelegate?.isPlaying() == true) PlaybackState.STATE_PLAYING else PlaybackState.STATE_PAUSED
             }
             error -> PlaybackState.STATE_ERROR
+            currentUrl == null && !playbackRequested -> PlaybackState.STATE_STOPPED
             isPaused -> PlaybackState.STATE_PAUSED
             ivsPlayer.state == Player.State.PLAYING -> PlaybackState.STATE_PLAYING
             ivsPlayer.state == Player.State.BUFFERING -> PlaybackState.STATE_BUFFERING
             ivsPlayer.state == Player.State.READY && playbackRequested -> PlaybackState.STATE_PLAYING
             ivsPlayer.state == Player.State.READY -> PlaybackState.STATE_PAUSED
-            ivsPlayer.state == Player.State.ENDED -> PlaybackState.STATE_STOPPED
+            ivsPlayer.state == Player.State.ENDED || ivsPlayer.state == Player.State.IDLE -> PlaybackState.STATE_STOPPED
             else -> if (playbackRequested) PlaybackState.STATE_PLAYING else PlaybackState.STATE_PAUSED
         }
+        val isStopped = state == PlaybackState.STATE_STOPPED
+        session?.isActive = !isStopped
         session?.setPlaybackState(
             PlaybackState.Builder().apply {
                 setState(
                     state,
                     when {
+                        isStopped -> PlaybackState.PLAYBACK_POSITION_UNKNOWN
                         live && showSeekbar && liveDuration > 0L -> liveDuration
                         live -> -1L
                         else -> ivsPlayer.position
@@ -1219,15 +1217,19 @@ class IvsPlayerService : Service() {
                     } else 0f
                 )
                 setActions(
-                    PlaybackState.ACTION_STOP or
-                        PlaybackState.ACTION_PLAY or
-                        PlaybackState.ACTION_PAUSE or
-                        PlaybackState.ACTION_SKIP_TO_NEXT or
-                        PlaybackState.ACTION_SKIP_TO_PREVIOUS or
-                        PlaybackState.ACTION_FAST_FORWARD or
-                        PlaybackState.ACTION_REWIND or
-                        PlaybackState.ACTION_PLAY_PAUSE or
-                        (if (!live || (showSeekbar && liveDuration > 0L)) PlaybackState.ACTION_SEEK_TO else 0L)
+                    if (isStopped) {
+                        0L
+                    } else {
+                        PlaybackState.ACTION_STOP or
+                            PlaybackState.ACTION_PLAY or
+                            PlaybackState.ACTION_PAUSE or
+                            PlaybackState.ACTION_SKIP_TO_NEXT or
+                            PlaybackState.ACTION_SKIP_TO_PREVIOUS or
+                            PlaybackState.ACTION_FAST_FORWARD or
+                            PlaybackState.ACTION_REWIND or
+                            PlaybackState.ACTION_PLAY_PAUSE or
+                            (if (!live || (showSeekbar && liveDuration > 0L)) PlaybackState.ACTION_SEEK_TO else 0L)
+                    }
                 )
             }.build()
         )
@@ -1310,7 +1312,9 @@ class IvsPlayerService : Service() {
     }
 
     private fun sendNotification(bitmap: Bitmap?) {
+        if (currentUrl == null && multiPovDelegate == null) return
         val ivsPlayer = player ?: return
+        session?.isActive = true
         val isPlaying = if (multiPovDelegate != null) {
             multiPovDelegate?.isPlaying() == true
         } else {
@@ -1391,6 +1395,27 @@ class IvsPlayerService : Service() {
         } else {
             startForeground(NOTIFICATION_ID, notification)
         }
+    }
+
+    private fun dismissMediaNotificationAndSession() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+            stopForeground(STOP_FOREGROUND_REMOVE)
+        } else {
+            @Suppress("DEPRECATION")
+            stopForeground(true)
+        }
+        notificationManager?.cancel(NOTIFICATION_ID)
+        session?.setPlaybackState(
+            PlaybackState.Builder()
+                .setState(PlaybackState.STATE_STOPPED, PlaybackState.PLAYBACK_POSITION_UNKNOWN, 0f)
+                .setActions(0L)
+                .build()
+        )
+        session?.isActive = false
+        lastNotifiedTitle = null
+        lastNotifiedChannel = null
+        lastNotifiedPlaying = null
+        lastNotifiedArtworkUrl = null
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -1610,7 +1635,7 @@ class IvsPlayerService : Service() {
         loadedArtworkUrl = null
         applicationHandler?.removeCallbacksAndMessages(null)
         wifiLockSafetyRunnable = null
-        notificationManager?.cancel(NOTIFICATION_ID)
+        dismissMediaNotificationAndSession()
         session?.release()
         abandonAudioFocus()
         releaseDynamicsProcessing()

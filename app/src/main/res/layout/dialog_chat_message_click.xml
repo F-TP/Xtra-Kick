@@ -106,7 +106,7 @@
                                 android:layout_weight="1"
                                 android:ellipsize="end"
                                 android:maxLines="1"
-                                android:textAppearance="?attr/textAppearanceHeadlineSmall"
+                                android:textAppearance="?attr/textAppearanceTitleMedium"
                                 android:textColor="@android:color/white"
                                 android:textStyle="bold"
                                 tools:text="Silas_2"

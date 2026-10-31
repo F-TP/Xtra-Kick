@@ -3659,7 +3659,7 @@ class KickRepository @Inject constructor(
             )
         }.onFailure {
             if (it is CancellationException) throw it
-            DiagnosticLogger.w("KickCentrifugo", "failed to resolve Centrifugo chat connection: ${it.message}")
+            DiagnosticLogger.wIfForeground("KickCentrifugo", "failed to resolve Centrifugo chat connection: ${it.message}")
         }.getOrNull()
     }
 
@@ -3678,7 +3678,7 @@ class KickRepository @Inject constructor(
             root.optJSONObject("data")?.optString("token")?.takeIf { it.isNotBlank() }
         }.onFailure {
             if (it is CancellationException) throw it
-            DiagnosticLogger.w("KickCentrifugo", "failed to fetch Centrifugo token: ${it.message}")
+            DiagnosticLogger.wIfForeground("KickCentrifugo", "failed to fetch Centrifugo token: ${it.message}")
         }.getOrNull()
     }
 
@@ -3694,7 +3694,7 @@ class KickRepository @Inject constructor(
             root.optJSONObject("data")?.optString("token")?.takeIf { it.isNotBlank() }
         }.onFailure {
             if (it is CancellationException) throw it
-            DiagnosticLogger.w("KickCentrifugo", "failed to fetch Centrifugo channel token: ${it.message}")
+            DiagnosticLogger.wIfForeground("KickCentrifugo", "failed to fetch Centrifugo channel token: ${it.message}")
         }.getOrNull()
     }
 

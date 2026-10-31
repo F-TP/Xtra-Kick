@@ -12,6 +12,8 @@ import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
 import androidx.core.text.HtmlCompat
+import com.bumptech.glide.Glide
+import com.bumptech.glide.load.resource.bitmap.CircleCrop
 import com.xtrakick.app.db.ShownNotificationsDao
 import com.xtrakick.app.model.ShownNotification
 import com.xtrakick.app.model.kick.api.livestream.Livestream
@@ -30,6 +32,7 @@ import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
 import dagger.hilt.android.qualifiers.ApplicationContext
+import java.util.concurrent.TimeUnit
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -292,8 +295,8 @@ class ShownNotificationsRepository @Inject constructor(
         shownNotificationsDao.deleteAll()
     }
 
-    fun showLiveNotifications(context: Context, streams: List<Stream>) {
-        if (streams.isEmpty()) return
+    suspend fun showLiveNotifications(context: Context, streams: List<Stream>) = withContext(Dispatchers.IO) {
+        if (streams.isEmpty()) return@withContext
 
         val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         val channelId = context.getString(R.string.notification_live_channel_id)
@@ -309,23 +312,51 @@ class ShownNotificationsRepository @Inject constructor(
             }
         }
 
+        val iconSize = runCatching {
+            context.resources.getDimensionPixelSize(android.R.dimen.notification_large_icon_width).takeIf { it > 0 }
+        }.getOrNull() ?: 128
+        val uiNameDisplay = context.prefs().getString(AppConstants.UI_NAME_DISPLAY, "1")
+
         streams.forEach { stream ->
             val notificationId = notificationIdFor(stream)
+
+            val channelDisplayName = if (stream.channelLogin != null && !stream.channelLogin.equals(stream.channelName, true)) {
+                when (uiNameDisplay) {
+                    "0" -> "${stream.channelName}(${stream.channelLogin})"
+                    "1" -> stream.channelName
+                    else -> stream.channelLogin
+                }
+            } else {
+                stream.channelName
+            } ?: stream.channelLogin.orEmpty()
+
+            val titleText = stream.gameName?.takeIf { it.isNotBlank() }?.let { category ->
+                ContextCompat.getString(context, R.string.live_notification_category).format(channelDisplayName, category)
+            } ?: ContextCompat.getString(context, R.string.live_notification).format(channelDisplayName)
+
+            val avatarUrl = stream.channelLogo ?: stream.profileImageUrl
+            val avatarBitmap = if (!avatarUrl.isNullOrBlank()) {
+                runCatching {
+                    Glide.with(context)
+                        .asBitmap()
+                        .load(avatarUrl)
+                        .transform(CircleCrop())
+                        .submit(iconSize, iconSize)
+                        .get(3, TimeUnit.SECONDS)
+                }.getOrNull()
+            } else null
+
             val notification = NotificationCompat.Builder(context, channelId).apply {
                 setGroup(GROUP_KEY)
-                setContentTitle(ContextCompat.getString(context, R.string.live_notification).format(
-                    if (stream.channelLogin != null && !stream.channelLogin.equals(stream.channelName, true)) {
-                        when (context.prefs().getString(AppConstants.UI_NAME_DISPLAY, "1")) {
-                            "0" -> "${stream.channelName}(${stream.channelLogin})"
-                            "1" -> stream.channelName
-                            else -> stream.channelLogin
-                        }
-                    } else {
-                        stream.channelName
-                    }
-                ))
-                setContentText(stream.title)
+                setContentTitle(titleText)
+                if (!stream.title.isNullOrBlank()) {
+                    setContentText(stream.title)
+                    setStyle(NotificationCompat.BigTextStyle().bigText(stream.title))
+                }
                 setSmallIcon(R.drawable.notification_icon)
+                if (avatarBitmap != null) {
+                    setLargeIcon(avatarBitmap)
+                }
                 setAutoCancel(true)
                 setContentIntent(
                     PendingIntent.getActivity(
@@ -338,23 +369,6 @@ class ShownNotificationsRepository @Inject constructor(
                         },
                         PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
                     )
-                )
-                val audioIntent = Intent(context, MainActivity::class.java).apply {
-                    flags = Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
-                    action = MainActivity.INTENT_LIVE_NOTIFICATION
-                    putExtra(MainActivity.KEY_VIDEO, stream)
-                    putExtra(MainActivity.KEY_AUDIO_ONLY, true)
-                }
-                val audioPendingIntent = PendingIntent.getActivity(
-                    context,
-                    notificationId + 100_000,
-                    audioIntent,
-                    PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
-                )
-                addAction(
-                    R.drawable.ic_volume_high,
-                    context.getString(R.string.notification_action_audio_only),
-                    audioPendingIntent
                 )
             }.build()
             notificationManager.notify(notificationId, notification)
@@ -429,19 +443,24 @@ class ShownNotificationsRepository @Inject constructor(
             listOf(it, it.lowercase())
         }).distinct()
 
+        var liveStreamObj = resolution?.livestream
         var liveStartedAt = event.startTime
             ?.takeUnless { it.isBlank() }
             ?.let { runCatching { KickApiHelper.parseIso8601DateUTC(it) }.getOrNull() }
-            ?: resolution?.livestream?.createdAt
+            ?: liveStreamObj?.createdAt
                 ?.takeUnless { it.isBlank() }
                 ?.let { KickApiHelper.parseIso8601DateUTC(it) }
         if (liveStartedAt == null) {
             // The channel endpoint sometimes omits a live livestream object.
-            liveStartedAt = runCatching {
+            val fallbackLivestream = runCatching {
                 kickRepository.getChannelLivestream(cleanSlug)
-            }.getOrNull()?.createdAt
-                ?.takeUnless { it.isBlank() }
-                ?.let { KickApiHelper.parseIso8601DateUTC(it) }
+            }.getOrNull()
+            if (fallbackLivestream != null) {
+                liveStreamObj = fallbackLivestream
+                liveStartedAt = fallbackLivestream.createdAt
+                    ?.takeUnless { it.isBlank() }
+                    ?.let { KickApiHelper.parseIso8601DateUTC(it) }
+            }
         }
 
         if (isActivelyWatching(canonicalId, cleanSlug, readActiveLiveChannel())) {
@@ -481,20 +500,24 @@ class ShownNotificationsRepository @Inject constructor(
         val displayName = resolution?.user?.username?.takeIf { it.isNotBlank() }
             ?: follow?.userName?.takeIf { it.isNotBlank() }
             ?: cleanSlug
+        val categoryName = liveStreamObj?.category?.name
+        val categoryId = liveStreamObj?.category?.id?.toString()
+        val categorySlug = liveStreamObj?.category?.slug
         val stream = Stream(
             source = AppConstants.KICK,
             channelId = canonicalId,
             channelLogin = cleanSlug,
             channelName = displayName,
             title = cleanTitle,
+            gameId = categoryId,
+            gameSlug = categorySlug,
+            gameName = categoryName,
             profileImageUrl = effectiveAvatar,
         )
         val sessionTime = liveStartedAt ?: nowMs
         shownNotificationsDao.insertList(aliasKeys.map { ShownNotification(it, sessionTime) })
         Log.i(TAG, "posting live event for $userIdStr/$cleanSlug from $source (canonical=$canonicalId)")
-        withContext(Dispatchers.Main) {
-            showLiveNotifications(context, listOf(stream))
-        }
+        showLiveNotifications(context, listOf(stream))
     }
 
     companion object {

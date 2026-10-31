@@ -244,6 +244,12 @@ class NotificationUsersRepository @Inject constructor(
         runCatching { fcmSyncManager.get().syncSubscriptions() }
     }
 
+    suspend fun restoreUsers(channelIds: Collection<String>) = withContext(Dispatchers.IO) {
+        val users = channelIds.map { NotificationUser(it) }
+        notificationUsersDao.replaceAll(users)
+        runCatching { fcmSyncManager.get().syncSubscriptions() }
+    }
+
     suspend fun deleteUser(item: NotificationUser) = withContext(Dispatchers.IO) {
         notificationUsersDao.delete(item)
         runCatching { fcmSyncManager.get().syncSubscriptions() }

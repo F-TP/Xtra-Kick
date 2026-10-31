@@ -141,18 +141,16 @@
             android:layout_weight="1"
             android:orientation="vertical">
 
-            <LinearLayout
+            <androidx.constraintlayout.widget.ConstraintLayout
                 android:id="@+id/channelRow"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginBottom="2dp"
-                android:gravity="center_vertical">
+                android:layout_marginBottom="2dp">
 
                 <TextView
                     android:id="@+id/channel"
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
-                    android:layout_weight="1"
                     android:ellipsize="end"
                     android:gravity="center_vertical|start"
                     android:maxLines="1"
@@ -160,6 +158,13 @@
                     android:textSize="18sp"
                     android:textStyle="bold"
                     android:visibility="gone"
+                    app:layout_constrainedWidth="true"
+                    app:layout_constraintHorizontal_bias="0.0"
+                    app:layout_constraintHorizontal_chainStyle="packed"
+                    app:layout_constraintStart_toStartOf="parent"
+                    app:layout_constraintEnd_toStartOf="@id/viewersLayout"
+                    app:layout_constraintTop_toTopOf="parent"
+                    app:layout_constraintBottom_toBottomOf="parent"
                     tools:text="channel"
                     tools:visibility="visible" />
 
@@ -167,12 +172,17 @@
                     android:id="@+id/viewersLayout"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:layout_marginStart="10dp"
+                    android:layout_marginStart="8dp"
                     android:background="?attr/selectableItemBackgroundBorderless"
                     android:clickable="true"
                     android:focusable="true"
                     android:gravity="center_vertical"
-                    android:padding="2dp">
+                    android:padding="2dp"
+                    app:layout_constrainedWidth="true"
+                    app:layout_constraintStart_toEndOf="@id/channel"
+                    app:layout_constraintEnd_toEndOf="parent"
+                    app:layout_constraintTop_toTopOf="parent"
+                    app:layout_constraintBottom_toBottomOf="parent">
 
                     <ImageView
                         android:id="@+id/viewersIcon"
@@ -197,30 +207,26 @@
 
                 </LinearLayout>
 
-            </LinearLayout>
+            </androidx.constraintlayout.widget.ConstraintLayout>
 
             <TextView
                 android:id="@+id/title"
-                android:layout_width="wrap_content"
-                android:layout_height="20dp"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
                 android:layout_marginBottom="1dp"
                 android:ellipsize="end"
                 android:gravity="center_vertical|start"
-                android:maxLines="1"
+                android:maxLines="2"
                 android:textColor="@android:color/white"
-                android:textSize="15sp"
+                android:textSize="14sp"
                 android:visibility="gone"
-                app:autoSizeMaxTextSize="15sp"
-                app:autoSizeMinTextSize="7sp"
-                app:autoSizeStepGranularity="1sp"
-                app:autoSizeTextType="uniform"
                 tools:text="title"
                 tools:visibility="visible" />
 
             <TextView
                 android:id="@+id/category"
-                android:layout_width="wrap_content"
-                android:layout_height="15dp"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
                 android:layout_marginBottom="1dp"
                 android:ellipsize="end"
                 android:gravity="center_vertical|start"
@@ -228,10 +234,6 @@
                 android:textColor="@android:color/white"
                 android:textSize="12sp"
                 android:visibility="gone"
-                app:autoSizeMaxTextSize="12sp"
-                app:autoSizeMinTextSize="6sp"
-                app:autoSizeStepGranularity="1sp"
-                app:autoSizeTextType="uniform"
                 tools:text="game"
                 tools:visibility="visible" />
 
@@ -455,6 +457,7 @@
                 android:textSize="12sp" />
 
         </LinearLayout>
+
 
     </LinearLayout>
 

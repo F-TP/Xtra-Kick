@@ -11,6 +11,8 @@ import android.app.PendingIntent
 import android.app.PictureInPictureParams
 import android.app.RemoteAction
 import android.content.BroadcastReceiver
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
@@ -101,6 +103,7 @@ import com.xtrakick.app.util.NotificationPermissionHelper
 import com.xtrakick.app.util.getAlertDialogBuilder
 import com.xtrakick.app.util.isKeyboardShown
 import com.xtrakick.app.util.prefs
+import com.xtrakick.app.util.safeGetBoolean
 import com.xtrakick.app.util.tokenPrefs
 import com.google.android.material.bottomsheet.BottomSheetDialogFragment
 import com.google.android.material.color.MaterialColors
@@ -1472,6 +1475,18 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                 if (!titleText.isNullOrBlank() && prefs.getBoolean(AppConstants.PLAYER_TITLE, true)) {
                     title.visibility = View.VISIBLE
                     title.text = titleText
+                    title.setOnClickListener {
+                        showController(force = true)
+                        title.maxLines = if (title.maxLines <= 2) 6 else 2
+                    }
+                    title.setOnLongClickListener {
+                        context?.let { ctx ->
+                            val clipboard = ctx.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
+                            clipboard?.setPrimaryClip(ClipData.newPlainText("Stream Title", title.text))
+                            Toast.makeText(ctx, ctx.getString(R.string.copied_username, title.text), Toast.LENGTH_SHORT).show()
+                        }
+                        true
+                    }
                 }
                 val gameName = requireArguments().getString(KEY_GAME_NAME)
                 if (!gameName.isNullOrBlank() && prefs.getBoolean(AppConstants.PLAYER_CATEGORY, true)) {
@@ -2241,6 +2256,11 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                     }
                     aspectRatio.visibility = View.GONE
                     toggleChat.visibility = View.GONE
+                    if (prefs.getBoolean(AppConstants.PLAYER_SHOW_LATENCY, true) && !latencyText.text.isNullOrBlank()) {
+                        latencyLayout.visibility = View.VISIBLE
+                    } else {
+                        latencyLayout.visibility = View.GONE
+                    }
                     updateChannelName(
                         requireArguments().getString(KEY_CHANNEL_LOGIN),
                         requireArguments().getString(KEY_CHANNEL_NAME)
@@ -2320,6 +2340,9 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                             toggleChat.setImageResource(R.drawable.baseline_speaker_notes_black_24)
                             toggleChat.setOnClickListener { showChat() }
                         }
+                    }
+                    if (prefs.getBoolean(AppConstants.PLAYER_SHOW_LATENCY, true) && !latencyText.text.isNullOrBlank()) {
+                        latencyLayout.visibility = View.VISIBLE
                     }
                 }
             }
@@ -2694,11 +2717,15 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
     fun updateViewerCount(viewerCount: Int?) {
         with(binding.playerControls) {
             if (viewerCount != null) {
+                viewersLayout.visibility = View.VISIBLE
                 viewersText.text = KickApiHelper.formatCount(viewerCount, requireContext().prefs().getBoolean(AppConstants.UI_TRUNCATEVIEWCOUNT, true))
                 if (prefs.getBoolean(AppConstants.PLAYER_VIEWERICON, true)) {
                     viewersIcon.visibility = View.VISIBLE
+                } else {
+                    viewersIcon.visibility = View.GONE
                 }
             } else {
+                viewersLayout.visibility = View.GONE
                 viewersText.text = null
                 viewersIcon.visibility = View.GONE
             }
@@ -2948,7 +2975,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                 rewind.visibility = View.VISIBLE
                 fastForward.visibility = View.VISIBLE
                 seekLive.visibility = View.VISIBLE
-                if (!originalTitle.isNullOrBlank() && prefs.getBoolean(AppConstants.PLAYER_TITLE, true)) {
+                if (!originalTitle.isNullOrBlank() && prefs.safeGetBoolean(AppConstants.PLAYER_TITLE, true)) {
                     title.text = "$originalTitle • ${getString(R.string.recording)}"
                     title.visibility = View.VISIBLE
                 }
@@ -2959,8 +2986,8 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                 duration.visibility = View.GONE
                 rewind.visibility = View.GONE
                 fastForward.visibility = View.GONE
-                seekLive.visibility = if (prefs.getBoolean(AppConstants.PLAYER_SEEKLIVE, false)) View.VISIBLE else View.GONE
-                if (!originalTitle.isNullOrBlank() && prefs.getBoolean(AppConstants.PLAYER_TITLE, true)) {
+                seekLive.visibility = if (prefs.safeGetBoolean(AppConstants.PLAYER_SEEKLIVE, false)) View.VISIBLE else View.GONE
+                if (!originalTitle.isNullOrBlank() && prefs.safeGetBoolean(AppConstants.PLAYER_TITLE, true)) {
                     title.text = originalTitle
                     title.visibility = View.VISIBLE
                 }
@@ -3481,8 +3508,6 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
         // Only genuine PiP sessions (active >= MIN_PIP_DURATION_MS) can be dismissed.
         // A momentary auto-enter PiP transition when locking the screen is not genuine PiP.
         if (!isGenuinePip()) return false
-        // If the activity is still in PiP and not finishing, PiP remains active (e.g. screen lock).
-        if (act.isInPictureInPictureMode && !act.isFinishing) return false
         return !prefs.getBoolean(AppConstants.PLAYER_BACKGROUND_AUDIO_PIP_CLOSED, false)
     }
 

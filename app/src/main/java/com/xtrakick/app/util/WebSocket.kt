@@ -113,36 +113,60 @@ class WebSocket(
 
     suspend fun connect(): Boolean = withContext(Dispatchers.IO) {
         val urlWithoutScheme = url.substringAfter("://")
-        val host = urlWithoutScheme.substringBefore("/")
+        val hostWithPort = urlWithoutScheme.substringBefore("/")
         val path = urlWithoutScheme.substringAfter('/', "")
-        val socketFactory = when {
-            Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q -> SSLSocketFactory.getDefault()
-            Build.VERSION.SDK_INT >= Build.VERSION_CODES.N -> SSLContext.getDefault().socketFactory
-            else -> {
-                val sslContext = SSLContext.getInstance("TLSv1.3")
-                sslContext.init(null, arrayOf(trustManager), null)
-                sslContext.socketFactory
-            }
+        val host = if (hostWithPort.contains(":")) hostWithPort.substringBefore(":") else hostWithPort
+        val isWss = url.startsWith("wss://", ignoreCase = true)
+        val defaultPort = if (isWss) 443 else 80
+        val port = if (hostWithPort.contains(":")) {
+            hostWithPort.substringAfter(":").toIntOrNull() ?: defaultPort
+        } else {
+            defaultPort
         }
-        val transport = Socket()
+
+        val transport = DualStackSocketConnector.connect(
+            host = host,
+            port = port,
+            totalTimeoutMs = 20_000,
+            attemptDelayMs = 250L,
+            onSocketStarted = { currentSocket ->
+                socket = currentSocket
+            }
+        )
         socket = transport
         ensureActive()
-        transport.connect(InetSocketAddress(host, 443), 20_000)
-        val tlsSocket = (socketFactory as SSLSocketFactory).createSocket(transport, host, 443, true) as SSLSocket
-        socket = tlsSocket
-        ensureActive()
-        tlsSocket.sslParameters = tlsSocket.sslParameters.apply {
-            endpointIdentificationAlgorithm = "HTTPS"
+
+        val finalSocket = if (isWss) {
+            val socketFactory = when {
+                Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q -> SSLSocketFactory.getDefault()
+                Build.VERSION.SDK_INT >= Build.VERSION_CODES.N -> SSLContext.getDefault().socketFactory
+                else -> {
+                    val sslContext = SSLContext.getInstance("TLSv1.3")
+                    sslContext.init(null, arrayOf(trustManager), null)
+                    sslContext.socketFactory
+                }
+            }
+            val tlsSocket = (socketFactory as SSLSocketFactory).createSocket(transport, host, port, true) as SSLSocket
+            socket = tlsSocket
+            ensureActive()
+            tlsSocket.sslParameters = tlsSocket.sslParameters.apply {
+                endpointIdentificationAlgorithm = "HTTPS"
+            }
+            tlsSocket.soTimeout = 20_000
+            tlsSocket.startHandshake()
+            tlsSocket
+        } else {
+            transport.soTimeout = 20_000
+            transport
         }
-        tlsSocket.soTimeout = 20_000
-        tlsSocket.startHandshake()
+
         inputStream = socket?.inputStream
         outputStream = socket?.outputStream
         val handshakeInput = requireNotNull(inputStream)
         val writer = BufferedWriter(OutputStreamWriter(outputStream))
         val key = Base64.encodeToString(Random.nextBytes(16), Base64.NO_WRAP)
         writer.write("GET /$path HTTP/1.1\r\n")
-        writer.write("Host: $host\r\n")
+        writer.write("Host: $hostWithPort\r\n")
         writer.write("Upgrade: websocket\r\n")
         writer.write("Connection: Upgrade\r\n")
         writer.write("Sec-WebSocket-Key: $key\r\n")
@@ -203,7 +227,7 @@ class WebSocket(
         if (sendPings) {
             startPingTimer()
         }
-        tlsSocket.soTimeout = 0
+        finalSocket.soTimeout = 0
         setConnectedState(true)
         listener.onConnect(this@WebSocket)
         return@withContext false

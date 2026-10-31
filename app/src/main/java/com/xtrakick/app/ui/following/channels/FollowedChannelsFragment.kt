@@ -138,6 +138,8 @@ class FollowedChannelsFragment : PagedListFragment(), Scrollable, Sortable, Foll
             when {
                 viewModel.sort == FollowedChannelsSortDialog.SORT_SOURCE && viewModel.order == FollowedChannelsSortDialog.ORDER_ASC -> R.string.source_kick_first
                 viewModel.sort == FollowedChannelsSortDialog.SORT_SOURCE -> R.string.source_local_first
+                viewModel.sort == FollowedChannelsSortDialog.SORT_FOLLOWED_AT && viewModel.order == FollowedChannelsSortDialog.ORDER_ASC -> R.string.oldest_first
+                viewModel.sort == FollowedChannelsSortDialog.SORT_FOLLOWED_AT -> R.string.newest_first
                 viewModel.order == FollowedChannelsSortDialog.ORDER_ASC -> R.string.ascending
                 else -> R.string.descending
             }

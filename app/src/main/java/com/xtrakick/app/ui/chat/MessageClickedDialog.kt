@@ -4,10 +4,13 @@ import android.annotation.SuppressLint
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
+import android.content.res.Configuration
 import android.os.Bundle
 import android.text.format.DateUtils
 import android.util.TypedValue
 import android.view.Gravity
+import android.view.View
+import android.view.ViewGroup
 import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
@@ -60,15 +63,37 @@ class MessageClickedDialog : BottomSheetDialogFragment(), IntegrityDialog.Callba
         private const val KEY_MESSAGING = "messaging"
         private const val KEY_CHANNEL_ID = "channelId"
         private const val KEY_CHANNEL_LOGIN = "channelLogin"
+        private const val KEY_IS_LIVE = "is_live"
 
-        fun newInstance(messagingEnabled: Boolean, channelId: String?, channelLogin: String?): MessageClickedDialog {
+        fun newInstance(
+            messagingEnabled: Boolean,
+            channelId: String?,
+            channelLogin: String?,
+            isLive: Boolean = true,
+        ): MessageClickedDialog {
             return MessageClickedDialog().apply {
                 arguments = bundleOf(
                     KEY_MESSAGING to messagingEnabled,
                     KEY_CHANNEL_ID to channelId,
-                    KEY_CHANNEL_LOGIN to channelLogin
+                    KEY_CHANNEL_LOGIN to channelLogin,
+                    KEY_IS_LIVE to isLive,
                 )
             }
+        }
+
+        internal fun formatHistoryTimestamp(timestamp: Long, locale: Locale = Locale.getDefault()): String {
+            if (timestamp < 100_000_000_000L) {
+                val totalSeconds = (timestamp / 1000L).coerceAtLeast(0L)
+                val hours = totalSeconds / 3600
+                val minutes = (totalSeconds % 3600) / 60
+                val seconds = totalSeconds % 60
+                return if (hours > 0) {
+                    String.format(locale, "%d:%02d:%02d", hours, minutes, seconds)
+                } else {
+                    String.format(locale, "%02d:%02d", minutes, seconds)
+                }
+            }
+            return SimpleDateFormat("EEEE, MMMM d, yyyy", locale).format(Date(timestamp))
         }
     }
 
@@ -391,13 +416,28 @@ class MessageClickedDialog : BottomSheetDialogFragment(), IntegrityDialog.Callba
 
     private fun updateHistoryVisibility() {
         val hasMessages = adapter?.messages?.isNotEmpty() == true
+        val isLive = arguments?.getBoolean(KEY_IS_LIVE, true) ?: true
         binding.historyHeaderLayout.isVisible = hasMessages
+        binding.liveLabel.isVisible = isLive
         binding.messageLayout.isVisible = hasMessages
         binding.historyDate.isVisible = hasMessages && !binding.historyDate.text.isNullOrBlank()
     }
 
-    private fun formatHistoryDate(timestamp: Long): String {
-        return SimpleDateFormat("EEEE, MMMM d, yyyy", Locale.getDefault()).format(Date(timestamp))
+    private fun formatHistoryDate(timestamp: Long): String = formatHistoryTimestamp(timestamp)
+
+    override fun onConfigurationChanged(newConfig: Configuration) {
+        super.onConfigurationChanged(newConfig)
+        dialog?.findViewById<View>(com.google.android.material.R.id.design_bottom_sheet)?.let { sheet ->
+            sheet.layoutParams = sheet.layoutParams.apply {
+                width = ViewGroup.LayoutParams.MATCH_PARENT
+                height = ViewGroup.LayoutParams.WRAP_CONTENT
+            }
+            val behavior = BottomSheetBehavior.from(sheet)
+            behavior.skipCollapsed = true
+            behavior.state = BottomSheetBehavior.STATE_EXPANDED
+            sheet.requestLayout()
+        }
+        view?.requestLayout()
     }
 
     fun updateUserMessages(userId: String) {

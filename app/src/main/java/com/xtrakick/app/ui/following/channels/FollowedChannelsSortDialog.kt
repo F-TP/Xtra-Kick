@@ -68,12 +68,19 @@ class FollowedChannelsSortDialog : BottomSheetDialogFragment() {
                 else -> R.id.oldest_first
             }
             fun updateOrderLabels(sortId: Int) {
-                if (sortId == R.id.by_source) {
-                    oldestFirst.setText(R.string.source_kick_first)
-                    newestFirst.setText(R.string.source_local_first)
-                } else {
-                    oldestFirst.setText(R.string.ascending)
-                    newestFirst.setText(R.string.descending)
+                when (sortId) {
+                    R.id.by_source -> {
+                        oldestFirst.setText(R.string.source_kick_first)
+                        newestFirst.setText(R.string.source_local_first)
+                    }
+                    R.id.time_followed -> {
+                        oldestFirst.setText(R.string.oldest_first)
+                        newestFirst.setText(R.string.newest_first)
+                    }
+                    else -> {
+                        oldestFirst.setText(R.string.ascending)
+                        newestFirst.setText(R.string.descending)
+                    }
                 }
             }
 

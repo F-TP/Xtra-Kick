@@ -120,6 +120,8 @@
     <string name="order">Reihenfolge</string>
     <string name="descending">Absteigend</string>
     <string name="ascending">Aufsteigend</string>
+    <string name="newest_first">Neueste zuerst</string>
+    <string name="oldest_first">Älteste zuerst</string>
     <string name="logout_title">Abmelden?</string>
     <string name="logout_msg">Angemeldet als %s</string>
     <string name="logout_success_toast">Abgemeldet</string>
@@ -751,6 +753,7 @@
     <string name="update_dialog_default_description">Eine neue Version von Xtra steht mit Fehlerbehebungen und Leistungsverbesserungen zur Installation bereit.</string>
     <string name="notification_live_channel_title">Live-Benachrichtigungen</string>
     <string name="live_notification">%s ist live</string>
+    <string name="live_notification_category">%1$s streamt %2$s</string>
     <string name="privacy">Datenschutz</string>
     <string name="usage_stats_title">Anonyme Nutzungsstatistiken</string>
     <string name="usage_stats_summary">Sendet einmal täglich ein anonymes Signal. Es werden keine Konto- oder Aktivitätsdaten übertragen.</string>
@@ -758,10 +761,17 @@
     <string name="live_notifications_summary">Sofortige Push-Benachrichtigungen, wenn gefolgte Kanäle live gehen. Das reicht für die meisten Nutzer völlig aus.</string>
     <string name="live_notifications_polling_backup">Backup-Abfrage im Hintergrund</string>
     <string name="live_notifications_polling_backup_summary">Nur erforderlich, wenn Push-Benachrichtigungen verspätet oder gar nicht ankommen (z. B. bei aggressivem Energiesparmodus). Sonst deaktiviert lassen: verbraucht mehr Akku und kann gelegentlich doppelte Benachrichtigungen senden.</string>
-    <string name="live_notification_channels">Benachrichtigungskanäle</string>
+    <string name="live_notification_channels">Live-Benachrichtigungen</string>
     <string name="live_notification_channels_enable_all">Alle aktivieren</string>
+    <string name="live_notification_channels_enable_all_message">Live-Benachrichtigungen für alle %1$d Kanäle aktivieren?</string>
+    <string name="live_notification_channels_enabled_all_snackbar">Live-Benachrichtigungen für alle Kanäle aktiviert</string>
+    <string name="live_notification_channels_enable_all_message_generic">Live-Benachrichtigungen für alle Kanäle aktivieren?</string>
     <string name="live_notification_channels_disable_all">Alle deaktivieren</string>
     <string name="live_notification_channels_disable_all_message">Live-Benachrichtigungen für alle Kanäle deaktivieren?</string>
+    <string name="live_notification_channels_disable_all_count_message">Live-Benachrichtigungen für alle %1$d aktivierten Kanäle deaktivieren?</string>
+    <string name="live_notification_channels_disabled_all_snackbar">Live-Benachrichtigungen für alle Kanäle deaktiviert</string>
+    <string name="live_notification_channels_restored_snackbar">Vorherige Benachrichtigungseinstellungen wiederhergestellt</string>
+    <string name="undo">Rückgängig</string>
     <string name="live_notification_channels_empty">Noch keine Kanäle. Folge Kanälen oder aktiviere Benachrichtigungen auf einer Kanalseite, um sie hier zu verwalten.</string>
     <string name="live_notification_channels_empty_search">Keine Kanäle entsprechen deiner Suche.</string>
     <string name="live_notification_channels_empty_enabled">Für keinen Kanal sind Benachrichtigungen aktiviert. Schalte einen Kanal ein, um ihn hier zu sehen.</string>
@@ -794,6 +804,7 @@
     <string name="daily_reward_load_failed">Tägliche Belohnung konnte nicht geladen werden. Versuche es erneut.</string>
     <string name="daily_reward_claim_failed">Belohnung konnte nicht abgeholt werden. Möglicherweise wurde sie bereits eingelöst.</string>
     <string name="daily_reward_reset">Tägliche Belohnung wird um %s zurückgesetzt</string>
+    <string name="seasonal_crate_reset">Saisonale Kiste wird um %s zurückgesetzt</string>
     <string name="event_reward_ends">Event endet um %s</string>
     <string name="daily_reward_winner">Gewinner der täglichen Belohnung</string>
     <string name="daily_reward_rarity">%s Belohnung</string>
@@ -1183,7 +1194,6 @@
     <string name="notification_banner_prompt">Erhalte sofortige Benachrichtigungen, wenn deine gefolgten Streamer live sind</string>
     <string name="action_enable">Aktivieren</string>
     <string name="action_not_now">Jetzt nicht</string>
-    <string name="notification_action_audio_only">Nur Audio</string>
     <string name="chat_guest_login_prompt">Melde dich an, um zu chatten und Belohnungen einzulösen</string>
     <string name="live_widget_title">Live-Kanäle</string>
     <string name="live_widget_empty">Derzeit ist kein gefolgter Streamer live</string>

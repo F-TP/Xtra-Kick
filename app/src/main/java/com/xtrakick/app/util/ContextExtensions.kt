@@ -29,6 +29,17 @@ fun Context.prefs(): SharedPreferences = PreferenceManager.getDefaultSharedPrefe
 
 fun Context.tokenPrefs(): SharedPreferences = getSharedPreferences("prefs2", Context.MODE_PRIVATE)
 
+/**
+ * Reads a boolean preference safely, handling legacy/backup corruptions where a boolean
+ * value was mistakenly stored or restored as a String (avoiding ClassCastException).
+ */
+fun SharedPreferences.safeGetBoolean(key: String, defValue: Boolean): Boolean =
+    try {
+        getBoolean(key, defValue)
+    } catch (_: ClassCastException) {
+        runCatching { getString(key, null) }.getOrNull()?.toBooleanStrictOrNull() ?: defValue
+    }
+
 private val MATERIAL3_THEMES = arrayOf(
     // Dark (0)
     arrayOf(

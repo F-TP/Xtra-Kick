@@ -36,6 +36,9 @@ object DiagnosticLogger {
     @Volatile
     private var isAppInForeground: Boolean = false
 
+    val isForeground: Boolean
+        get() = isAppInForeground
+
     fun init(application: Application) {
         this.context = application
     }
@@ -63,6 +66,19 @@ object DiagnosticLogger {
         val safeTag = tag ?: "Xtra"
         Log.w(safeTag, message, throwable)
         writeIfEnabled(LEVEL_WARNING, safeTag, message, throwable)
+    }
+
+    /**
+     * Emits a warning to file diagnostics only when the app is in the foreground.
+     * When backgrounded, downgrades to logcat [i] to avoid flooding diagnostic exports
+     * with transient background-restriction failures (e.g. Doze, socket reconnects).
+     */
+    fun wIfForeground(tag: String?, message: String, throwable: Throwable? = null) {
+        if (isAppInForeground) {
+            w(tag, message, throwable)
+        } else {
+            i(tag, message, throwable)
+        }
     }
 
     fun e(tag: String?, message: String, throwable: Throwable? = null) {

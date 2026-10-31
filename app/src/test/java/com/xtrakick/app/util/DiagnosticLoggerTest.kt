@@ -36,4 +36,13 @@ class DiagnosticLoggerTest {
         assertFalse(DiagnosticLogger.isNetworkException(IllegalStateException("state error")))
         assertFalse(DiagnosticLogger.isNetworkException(NullPointerException("null value")))
     }
+
+    @Test
+    fun updateAppStateTogglesIsForeground() {
+        DiagnosticLogger.updateAppState(isForeground = true)
+        assertTrue(DiagnosticLogger.isForeground)
+
+        DiagnosticLogger.updateAppState(isForeground = false)
+        assertFalse(DiagnosticLogger.isForeground)
+    }
 }

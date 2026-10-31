@@ -124,6 +124,8 @@
     <string name="order">Order</string>
     <string name="descending">Descending</string>
     <string name="ascending">Ascending</string>
+    <string name="newest_first">Newest first</string>
+    <string name="oldest_first">Oldest first</string>
     <string name="logout_title">Log out?</string>
     <string name="logout_msg">Logged in as %s</string>
     <string name="logout_success_toast">Logged out</string>
@@ -758,6 +760,7 @@ These are downloads you removed while keeping the files. Android hides this fold
     <string name="update_dialog_default_description">A new version of Xtra is ready to install with bug fixes and performance improvements.</string>
     <string name="notification_live_channel_title">Live notifications</string>
     <string name="live_notification">%s is live</string>
+    <string name="live_notification_category">%1$s is streaming %2$s</string>
     <string name="privacy">Privacy</string>
     <string name="usage_stats_title">Anonymous usage statistics</string>
     <string name="usage_stats_summary">Sends one anonymous daily ping. No account or activity data is included.</string>
@@ -765,10 +768,17 @@ These are downloads you removed while keeping the files. Android hides this fold
     <string name="live_notifications_summary">Instant push alerts when followed channels go live. This is all most people need.</string>
     <string name="live_notifications_polling_backup">Background polling backup</string>
     <string name="live_notifications_polling_backup_summary">Only needed if push alerts arrive late or never, e.g. on phones with aggressive battery saving. Keep off otherwise: it uses more battery and can occasionally repeat an alert.</string>
-    <string name="live_notification_channels">Notification channels</string>
+    <string name="live_notification_channels">Live notifications</string>
     <string name="live_notification_channels_enable_all">Enable all</string>
+    <string name="live_notification_channels_enable_all_message">Turn on live notifications for all %1$d channels?</string>
+    <string name="live_notification_channels_enable_all_message_generic">Turn on live notifications for every channel?</string>
     <string name="live_notification_channels_disable_all">Disable all</string>
     <string name="live_notification_channels_disable_all_message">Turn off live notifications for every channel?</string>
+    <string name="live_notification_channels_disable_all_count_message">Turn off live notifications for all %1$d enabled channels?</string>
+    <string name="live_notification_channels_enabled_all_snackbar">Enabled live notifications for all channels</string>
+    <string name="live_notification_channels_disabled_all_snackbar">Disabled live notifications for all channels</string>
+    <string name="live_notification_channels_restored_snackbar">Restored previous notification settings</string>
+    <string name="undo">Undo</string>
     <string name="live_notification_channels_empty">No channels yet. Follow channels, or enable notifications from a channel page, to manage them here.</string>
     <string name="live_notification_channels_empty_search">No channels match your search.</string>
     <string name="live_notification_channels_empty_enabled">No channels have notifications enabled. Turn a switch on to see them here.</string>
@@ -802,6 +812,7 @@ These are downloads you removed while keeping the files. Android hides this fold
     <string name="daily_reward_load_failed">Couldn\'t load the daily reward. Try again.</string>
     <string name="daily_reward_claim_failed">Couldn\'t claim the reward. It may already have been claimed.</string>
     <string name="daily_reward_reset">Daily Reward resets at %s</string>
+    <string name="seasonal_crate_reset">Seasonal Crate resets at %s</string>
     <string name="event_reward_ends">Event ends %s</string>
     <string name="daily_reward_winner">Daily reward winner</string>
     <string name="daily_reward_rarity">%s reward</string>
@@ -1197,7 +1208,6 @@ These are downloads you removed while keeping the files. Android hides this fold
     <string name="notification_banner_prompt">Get instant alerts when your followed streamers go live</string>
     <string name="action_enable">Enable</string>
     <string name="action_not_now">Not now</string>
-    <string name="notification_action_audio_only">Audio-Only</string>
     <string name="chat_guest_login_prompt">Log in to chat &amp; claim rewards</string>
     <string name="live_widget_title">Live Channels</string>
     <string name="live_widget_empty">No followed streamers are live right now</string>

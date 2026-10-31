@@ -19,9 +19,12 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
@@ -94,6 +97,39 @@ class NotificationChannelsViewModel @Inject constructor(
         }
     }
 
+    sealed interface BulkActionFeedback {
+        data class EnabledAll(val count: Int) : BulkActionFeedback
+        data class DisabledAll(val count: Int) : BulkActionFeedback
+        data class Undone(val count: Int) : BulkActionFeedback
+    }
+
+    private val undoStack = ArrayDeque<Set<String>>()
+
+    private val _canUndo = MutableStateFlow(false)
+    val canUndo: StateFlow<Boolean> = _canUndo.asStateFlow()
+
+    private val _feedbackEvent = MutableSharedFlow<BulkActionFeedback>(extraBufferCapacity = 1)
+    val feedbackEvent: SharedFlow<BulkActionFeedback> = _feedbackEvent.asSharedFlow()
+
+    private fun pushUndoSnapshot(enabledIds: Set<String>) {
+        synchronized(undoStack) {
+            if (undoStack.lastOrNull() == enabledIds) return
+            if (undoStack.size >= MAX_UNDO_STEPS) {
+                undoStack.removeFirst()
+            }
+            undoStack.addLast(enabledIds)
+            _canUndo.value = true
+        }
+    }
+
+    private fun extractEnabledIds(channels: List<ChannelUi>): Set<String> {
+        val set = hashSetOf<String>()
+        for (channel in channels) {
+            if (channel.enabled) set.add(channel.id)
+        }
+        return set
+    }
+
     private val _updateError = MutableStateFlow<String?>(null)
     val updateError: StateFlow<String?> = _updateError.asStateFlow()
 
@@ -108,7 +144,11 @@ class NotificationChannelsViewModel @Inject constructor(
     private val toggleJobs = mutableMapOf<String, Job>()
 
     fun setEnabled(entry: ChannelUi, enabled: Boolean) {
-        _channels.value = _channels.value?.map {
+        val current = _channels.value
+        if (current != null) {
+            pushUndoSnapshot(extractEnabledIds(current))
+        }
+        _channels.value = current?.map {
             if (it.id == entry.id && it.followed == entry.followed) it.copy(enabled = enabled) else it
         }
         toggleJobs.remove(entry.id)?.cancel()
@@ -152,7 +192,12 @@ class NotificationChannelsViewModel @Inject constructor(
     }
 
     fun enableAll() {
-        _channels.value = _channels.value?.map { it.copy(enabled = true) }
+        val current = _channels.value ?: return
+        pushUndoSnapshot(extractEnabledIds(current))
+        toggleJobs.values.forEach { it.cancel() }
+        toggleJobs.clear()
+        _channels.value = current.map { it.copy(enabled = true) }
+        _feedbackEvent.tryEmit(BulkActionFeedback.EnabledAll(current.size))
         viewModelScope.launch {
             try {
                 val follows = localFollowChannelRepository.loadFollows()
@@ -171,7 +216,13 @@ class NotificationChannelsViewModel @Inject constructor(
     }
 
     fun disableAll() {
-        _channels.value = _channels.value?.map { it.copy(enabled = false) }
+        val current = _channels.value ?: return
+        val currentEnabledIds = extractEnabledIds(current)
+        pushUndoSnapshot(currentEnabledIds)
+        toggleJobs.values.forEach { it.cancel() }
+        toggleJobs.clear()
+        _channels.value = current.map { it.copy(enabled = false) }
+        _feedbackEvent.tryEmit(BulkActionFeedback.DisabledAll(currentEnabledIds.size))
         viewModelScope.launch {
             try {
                 notificationUsersRepository.deleteAllUsers()
@@ -179,6 +230,40 @@ class NotificationChannelsViewModel @Inject constructor(
                 throw error
             } catch (error: Exception) {
                 Log.w(TAG, "disable all failed", error)
+                _updateError.value = context.getString(R.string.live_notification_channels_update_failed)
+                refresh()
+            }
+        }
+    }
+
+    fun undo() {
+        val targetEnabledIds = synchronized(undoStack) {
+            val last = undoStack.removeLastOrNull()
+            _canUndo.value = undoStack.isNotEmpty()
+            last
+        } ?: return
+
+        toggleJobs.values.forEach { it.cancel() }
+        toggleJobs.clear()
+
+        val current = _channels.value ?: return
+        _channels.value = current.map { channel ->
+            val isEnabled = channel.id in targetEnabledIds ||
+                (channel.login != null && channel.login in targetEnabledIds)
+            channel.copy(enabled = isEnabled)
+        }
+        _feedbackEvent.tryEmit(BulkActionFeedback.Undone(targetEnabledIds.size))
+
+        viewModelScope.launch {
+            try {
+                notificationUsersRepository.restoreUsers(targetEnabledIds)
+                if (targetEnabledIds.isNotEmpty()) {
+                    onChannelsEnabled()
+                }
+            } catch (error: kotlinx.coroutines.CancellationException) {
+                throw error
+            } catch (error: Exception) {
+                Log.w(TAG, "undo failed", error)
                 _updateError.value = context.getString(R.string.live_notification_channels_update_failed)
                 refresh()
             }
@@ -466,6 +551,7 @@ class NotificationChannelsViewModel @Inject constructor(
 
     companion object {
         private const val TAG = "NotifChannels"
+        const val MAX_UNDO_STEPS = 10
 
         /**
          * Pure search + enabled-only filter over the loaded list. The filter never

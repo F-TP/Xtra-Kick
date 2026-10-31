@@ -232,4 +232,15 @@ class NotificationUsersRepositoryTest {
         assertTrue(isMigrated)
         assertEquals(2, dao.getAll().size)
     }
+
+    @Test
+    fun restoreUsersReplacesExistingRowsAtomically() = runBlocking {
+        dao.insert(NotificationUser("old1"))
+        dao.insert(NotificationUser("old2"))
+
+        repository.restoreUsers(listOf("restored1", "restored2", "restored3"))
+
+        val current = dao.getAll().map { it.channelId }
+        assertEquals(listOf("restored1", "restored2", "restored3"), current)
+    }
 }

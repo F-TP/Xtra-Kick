@@ -34,7 +34,8 @@ object KickRewardsPolicy {
     }
 
     fun selectDaily(challenges: List<KickDailyChallenge>): KickDailyChallenge? =
-        challenges.firstOrNull { it.recurrence.equals("daily", ignoreCase = true) }
+        challenges.firstOrNull { it.recurrence.equals("daily", ignoreCase = true) && !it.featured }
+            ?: challenges.firstOrNull { it.recurrence.equals("daily", ignoreCase = true) }
 
     private fun statusPriority(status: String?): Int = when {
         status.equals(STATUS_CLAIMABLE, ignoreCase = true) -> 0

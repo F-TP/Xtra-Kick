@@ -189,24 +189,24 @@ class SettingsViewModel @Inject constructor(
         val orphans = mutableListOf<SharedLeftover>()
         val treeUriString = applicationContext.prefs().getString(AppConstants.DOWNLOAD_SHARED_PATH, null)
             ?.takeIf { it.isNotBlank() } ?: run {
-                DiagnosticLogger.w("LeftoverScan", "shared scan skipped: no shared path pref")
+                DiagnosticLogger.i("LeftoverScan", "shared scan skipped: no shared path pref")
                 return orphans
             }
         val treeUri = runCatching { treeUriString.toUri() }.getOrNull() ?: run {
-            DiagnosticLogger.w("LeftoverScan", "shared scan skipped: bad tree uri")
+            DiagnosticLogger.i("LeftoverScan", "shared scan skipped: bad tree uri")
             return orphans
         }
         if (!applicationContext.hasPersistedUriPermission(treeUriString, read = true)) {
-            DiagnosticLogger.w("LeftoverScan", "shared scan skipped: persistable permission missing or revoked for $treeUriString")
+            DiagnosticLogger.i("LeftoverScan", "shared scan skipped: persistable permission missing or revoked for $treeUriString")
             return orphans
         }
         val referenced = referencedSharedDocIds()
         val rootDocId = runCatching { DocumentsContract.getTreeDocumentId(treeUri) }.getOrNull() ?: run {
-            DiagnosticLogger.w("LeftoverScan", "shared scan skipped: not a tree uri")
+            DiagnosticLogger.i("LeftoverScan", "shared scan skipped: not a tree uri")
             return orphans
         }
         val topLevel = queryChildDocs(treeUri, rootDocId)
-        DiagnosticLogger.w("LeftoverScan", "shared scan: tree=$treeUriString children=${topLevel.size} referenced=${referenced.size}")
+        DiagnosticLogger.i("LeftoverScan", "shared scan: tree=$treeUriString children=${topLevel.size} referenced=${referenced.size}")
         topLevel.forEach { (docId, mimeType, size) ->
             // Only download-shaped entries qualify: the folder is user-visible and
             // may hold personal files, which must never be flagged. Matches the

@@ -46,6 +46,14 @@ class KickRewardsPolicyTest {
     }
 
     @Test
+    fun selectDailyPrefersStandardDailyOverFeaturedDaily() {
+        val featuredDaily = challenge(status = "in_progress", recurrence = "daily").copy(id = "feat", featured = true)
+        val standardDaily = challenge(status = "claimable", recurrence = "daily").copy(id = "std", featured = false)
+
+        assertEquals(standardDaily, KickRewardsPolicy.selectDaily(listOf(featuredDaily, standardDaily)))
+    }
+
+    @Test
     fun selectDailyReturnsNullWhenNoDailyExists() {
         assertNull(KickRewardsPolicy.selectDaily(listOf(challenge(recurrence = "weekly"))))
         assertNull(KickRewardsPolicy.selectDaily(emptyList()))
